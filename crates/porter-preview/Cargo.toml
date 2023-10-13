@@ -1,0 +1,12 @@
+[package]
+name = "porter-preview"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wgpu = { version = "0.17", default-features = false, features = ["wgsl"] }
+porter-utils = { path = "../porter-utils" }
+porter-gpu = { path = "../porter-gpu" }
+porter-model = { path = "../porter-model" }
+porter-math = { path = "../porter-math" }
+porter-texture = { path = "../porter-texture" }

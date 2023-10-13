@@ -1,0 +1,12 @@
+[package]
+name = "porter-texture"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wgpu = { version = "0.17", default-features = false, features = ["wgsl"] }
+png = "0.17"
+tiff = "0.9"
+porter-utils = { path = "../porter-utils" }
+porter-gpu = { path = "../porter-gpu" }
+bincode = { version = "2.0.0-rc.3", default-features = false, features = ["std", "derive"] }

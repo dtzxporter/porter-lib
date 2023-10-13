@@ -1,0 +1,24 @@
+[package]
+name = "porter-ui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rfd = { version = "0.12", default-features = false, features = ["gtk3", "common-controls-v6"] }
+iced = { version = "0.12", default-features = false, features = ["image", "canvas", "advanced", "wgpu"] }
+bincode = { version = "2.0.0-rc.3", default-features = false, features = ["std", "derive"] }
+porter-texture = { path = "../porter-texture" }
+porter-model = { path = "../porter-model" }
+porter-animation = { path = "../porter-animation" }
+porter-preview = { path = "../porter-preview" }
+porter-threads = { path = "../porter-threads" }
+porter-audio = { path = "../porter-audio" }
+image = { version = "0.24", default-features = false }
+bitflags = "2.4"
+directories = "5.0"
+unicode-segmentation = "1.10"
+lyon_algorithms = "1.0"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+raw-window-handle = { version = "0.5", default-features = false }
+windows-sys = { version = "0.48", default-features = false, features = ["Win32_Foundation", "Win32_UI_Input_KeyboardAndMouse"] }
