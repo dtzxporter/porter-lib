@@ -14,12 +14,10 @@ mod porter_overlay;
 mod porter_preview_asset;
 mod porter_set_parent_windows;
 mod porter_settings;
-mod porter_splash;
 mod porter_text;
 mod porter_theme;
 mod porter_ui;
 mod porter_viewport;
-mod resources;
 
 pub mod porter_easing;
 pub mod porter_spinner;
@@ -31,7 +29,6 @@ pub use porter_main_builder::*;
 pub use porter_main_column::*;
 pub use porter_preview_asset::*;
 pub use porter_settings::*;
-pub use porter_splash::*;
 pub use porter_ui::*;
 
 pub use iced::Color;
@@ -44,7 +41,6 @@ pub(crate) use porter_set_parent_windows::*;
 pub(crate) use porter_text::*;
 pub(crate) use porter_theme::*;
 pub(crate) use porter_viewport::*;
-pub(crate) use resources::*;
 
 use std::backtrace::Backtrace;
 
