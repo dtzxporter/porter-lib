@@ -47,6 +47,7 @@ use crate::DOUBLE_CLICK_DURATION;
 use crate::ROW_HEIGHT;
 use crate::ROW_OVERSCAN;
 use crate::ROW_PADDING;
+use crate::SEARCH_REALTIME_MAX;
 
 impl PorterMain {
     pub fn on_ui_event(&mut self, event: Event) -> Command<Message> {
@@ -61,11 +62,14 @@ impl PorterMain {
             Event::Mouse(mouse::Event::ButtonPressed(button)) => self.on_mouse_button_press(button),
             Event::Mouse(mouse::Event::ButtonReleased(_)) => self.on_mouse_button_released(),
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => self.on_mouse_wheel(delta),
-            Event::Window(window::Event::Resized {
-                width: _,
-                height: _,
-            }) => self.on_window_resize(),
-            Event::Window(window::Event::FileDropped(file)) => self.on_file_dropped(file),
+            Event::Window(
+                _,
+                window::Event::Resized {
+                    width: _,
+                    height: _,
+                },
+            ) => self.on_window_resize(),
+            Event::Window(_, window::Event::FileDropped(file)) => self.on_file_dropped(file),
             _ => Command::none(),
         }
     }
@@ -491,15 +495,13 @@ impl PorterMain {
     }
 
     pub fn on_search_input(&mut self, input: String) -> Command<Message> {
-        self.search_value = input.clone();
-        self.item_selection.clear();
+        self.search_value = input;
 
-        self.asset_manager.search_assets(input);
-
-        self.item_range = 0..ROW_OVERSCAN.min(self.asset_manager.len());
-        self.scroll_viewport_state = PorterViewport::zero();
-
-        scrollable::scroll_to(self.scroll_id.clone(), AbsoluteOffset { x: 0.0, y: 0.0 })
+        if self.asset_manager.loaded_len() > SEARCH_REALTIME_MAX && !self.search_value.is_empty() {
+            Command::none()
+        } else {
+            self.on_search_submit()
+        }
     }
 
     pub fn on_search_clear(&mut self) -> Command<Message> {
@@ -514,6 +516,17 @@ impl PorterMain {
         scrollable::scroll_to(self.scroll_id.clone(), AbsoluteOffset { x: 0.0, y: 0.0 })
     }
 
+    pub fn on_search_submit(&mut self) -> Command<Message> {
+        self.item_selection.clear();
+
+        self.asset_manager.search_assets(self.search_value.clone());
+
+        self.item_range = 0..ROW_OVERSCAN.min(self.asset_manager.len());
+        self.scroll_viewport_state = PorterViewport::zero();
+
+        scrollable::scroll_to(self.scroll_id.clone(), AbsoluteOffset { x: 0.0, y: 0.0 })
+    }
+
     pub fn on_cancel_export(&mut self) -> Command<Message> {
         self.asset_manager.cancel_export();
 
@@ -521,21 +534,7 @@ impl PorterMain {
     }
 
     pub fn on_donate(&mut self) -> Command<Message> {
-        let result = std::process::Command::new(if cfg!(target_os = "windows") {
-            "cmd"
-        } else if cfg!(target_os = "macos") {
-            "open"
-        } else {
-            "xdg-open"
-        })
-        .arg(if cfg!(target_os = "windows") {
-            format!("/c start {}", self.donate_url)
-        } else {
-            self.donate_url.clone()
-        })
-        .output();
-
-        debug_assert!(result.is_ok());
+        crate::open_url(&self.donate_url);
 
         Command::none()
     }

@@ -1,6 +1,7 @@
 use iced::advanced::*;
 use iced::Renderer;
 use iced::Theme;
+use iced::Vector;
 use iced::{event, mouse, Event, Length, Point, Rectangle};
 use iced::{Element, Size};
 
@@ -166,6 +167,7 @@ impl<'a, 'b, Message> overlay::Overlay<Message, Renderer> for PorterOverlayChild
         renderer: &Renderer,
         _bounds: iced::Size,
         position: Point,
+        _translation: Vector,
     ) -> layout::Node {
         let limits = layout::Limits::new(Size::ZERO, self.size)
             .width(Length::Fill)

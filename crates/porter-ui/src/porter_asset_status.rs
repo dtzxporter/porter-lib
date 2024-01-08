@@ -18,11 +18,21 @@ impl PorterAssetStatus {
         }
     }
 
+    /// Whether or not the status is loaded.
+    pub fn is_loaded(&self) -> bool {
+        self.status.load(Ordering::Relaxed) == 0
+    }
+
     /// Asset was exported.
     pub fn exported() -> Self {
         Self {
             status: AtomicUsize::new(1),
         }
+    }
+
+    /// Whether or not the status is exported.
+    pub fn is_exported(&self) -> bool {
+        self.status.load(Ordering::Relaxed) == 1
     }
 
     /// Asset had an error.
@@ -32,6 +42,11 @@ impl PorterAssetStatus {
         }
     }
 
+    /// Whether or not the status is error.
+    pub fn is_error(&self) -> bool {
+        self.status.load(Ordering::Relaxed) == 2
+    }
+
     /// Asset is a placeholder.
     pub fn placeholder() -> Self {
         Self {
@@ -39,11 +54,21 @@ impl PorterAssetStatus {
         }
     }
 
+    /// Whether or not the status is placeholder.
+    pub fn is_placeholder(&self) -> bool {
+        self.status.load(Ordering::Relaxed) == 3
+    }
+
     /// Asset is currently exporting.
     pub fn exporting() -> Self {
         Self {
             status: AtomicUsize::new(4),
         }
+    }
+
+    /// Whether or not the status is exporting.
+    pub fn is_exporting(&self) -> bool {
+        self.status.load(Ordering::Relaxed) == 4
     }
 
     /// Sets the status.

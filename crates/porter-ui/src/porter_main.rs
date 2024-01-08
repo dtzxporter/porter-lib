@@ -84,6 +84,9 @@ pub const COLUMN_MIN: f32 = 50.0;
 /// The maximum width of a column.
 pub const COLUMN_MAX: f32 = 1000.0;
 
+/// The maximum number of assets before search isn't realtime.
+pub const SEARCH_REALTIME_MAX: usize = 250000;
+
 /// Time in which a double click is registered.
 pub const DOUBLE_CLICK_DURATION: Duration = Duration::from_millis(250);
 
@@ -107,6 +110,10 @@ pub struct PorterMain {
     pub(crate) file_filters: Vec<(String, Vec<String>)>,
     pub(crate) multi_file: bool,
     pub(crate) preview_enabled: bool,
+    pub(crate) materials_enabled: bool,
+    pub(crate) sounds_enabled: bool,
+    pub(crate) raw_files_enabled: bool,
+    pub(crate) raw_files_forcable: bool,
     pub(crate) row_press: Option<usize>,
     pub(crate) row_press_last: Instant,
     pub(crate) loading: bool,
@@ -154,6 +161,7 @@ pub enum Message {
     LoadResult(Result<(), String>),
     SearchInput(String),
     SearchClear,
+    SearchSubmit,
     CancelExport,
     Donate,
     ToggleAbout,
@@ -178,10 +186,28 @@ impl Application for PorterMain {
     type Flags = PorterMainBuilder;
 
     fn new(flags: Self::Flags) -> (Self, Command<Self::Message>) {
+        let mut settings = PorterSettings::load(flags.name.clone());
+
+        if !flags.materials_enabled {
+            settings.set_load_materials(false);
+        }
+
+        if !flags.sounds_enabled {
+            settings.set_load_sounds(false);
+        }
+
+        if !flags.raw_files_enabled {
+            settings.set_load_raw_files(false);
+        }
+
+        if !flags.raw_files_forcable {
+            settings.set_force_raw_files(false);
+        }
+
         (
             Self {
                 title: flags.title,
-                name: flags.name.clone(),
+                name: flags.name,
                 donate_url: flags.donate_url,
                 item_range: 0..0,
                 item_selection: BTreeSet::new(),
@@ -189,6 +215,10 @@ impl Application for PorterMain {
                 file_filters: flags.file_filters,
                 multi_file: flags.multi_file,
                 preview_enabled: flags.preview,
+                materials_enabled: flags.materials_enabled,
+                sounds_enabled: flags.sounds_enabled,
+                raw_files_enabled: flags.raw_files_enabled,
+                raw_files_forcable: flags.raw_files_forcable,
                 row_press: None,
                 row_press_last: Instant::now(),
                 loading: false,
@@ -214,7 +244,7 @@ impl Application for PorterMain {
                 last_load: None,
                 file_dropped: Vec::new(),
                 reload_required: false,
-                settings: PorterSettings::load(flags.name),
+                settings,
             },
             Command::none(),
         )
@@ -242,6 +272,7 @@ impl Application for PorterMain {
             Message::LoadResult(result) => self.on_load_result(result),
             Message::SearchInput(input) => self.on_search_input(input),
             Message::SearchClear => self.on_search_clear(),
+            Message::SearchSubmit => self.on_search_submit(),
             Message::CancelExport => self.on_cancel_export(),
             Message::Donate => self.on_donate(),
             Message::ToggleSettings => self.on_toggle_settings(),
@@ -512,57 +543,77 @@ impl PorterMain {
 
     /// Constructs the search view element with text input, clear button, and assets loaded info.
     pub fn search(&self) -> Element<Message> {
-        container(
-            row(vec![
-                if self.loading || self.exporting {
-                    text_input("Search for assets...", self.search_value.as_str())
-                        .style(PorterTextInputStyle)
-                        .width(Length::Fixed(350.0))
-                        .into()
-                } else {
-                    text_input("Search for assets...", self.search_value.as_str())
-                        .id(self.search_id.clone())
-                        .on_input(Message::SearchInput)
-                        .style(PorterTextInputStyle)
-                        .width(Length::Fixed(350.0))
-                        .into()
-                },
-                button("Clear")
+        let mut search = vec![if self.loading || self.exporting {
+            text_input("Search for assets...", self.search_value.as_str())
+                .style(PorterTextInputStyle)
+                .width(Length::Fixed(350.0))
+                .into()
+        } else {
+            text_input("Search for assets...", self.search_value.as_str())
+                .id(self.search_id.clone())
+                .on_input(Message::SearchInput)
+                .on_submit(Message::SearchSubmit)
+                .style(PorterTextInputStyle)
+                .width(Length::Fixed(350.0))
+                .into()
+        }];
+
+        if self.asset_manager.loaded_len() > SEARCH_REALTIME_MAX {
+            search.push(
+                button("Search")
                     .padding([5.0, 8.0])
                     .style(PorterButtonStyle)
                     .on_press_maybe(
                         if self.search_value.is_empty() || self.loading || self.exporting {
                             None
                         } else {
-                            Some(Message::SearchClear)
+                            Some(Message::SearchSubmit)
                         },
                     )
                     .into(),
-                container(
-                    text(if self.loading {
-                        "Loading...".to_string()
-                    } else if self.search_value.is_empty() {
-                        format!("{} assets loaded", self.asset_manager.len())
+            );
+        }
+
+        search.extend([
+            button("Clear")
+                .padding([5.0, 8.0])
+                .style(PorterButtonStyle)
+                .on_press_maybe(
+                    if self.search_value.is_empty() || self.loading || self.exporting {
+                        None
                     } else {
-                        format!(
-                            "Showing {} assets out of {} loaded",
-                            self.asset_manager.len(),
-                            self.asset_manager.loaded_len()
-                        )
-                    })
-                    .style(PorterLabelStyle),
+                        Some(Message::SearchClear)
+                    },
                 )
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .align_x(Horizontal::Right)
-                .align_y(Vertical::Center)
                 .into(),
-            ])
+            container(
+                text(if self.loading {
+                    "Loading...".to_string()
+                } else if self.search_value.is_empty() {
+                    format!("{} assets loaded", self.asset_manager.len())
+                } else {
+                    format!(
+                        "Showing {} assets out of {} loaded",
+                        self.asset_manager.len(),
+                        self.asset_manager.loaded_len()
+                    )
+                })
+                .style(PorterLabelStyle),
+            )
             .width(Length::Fill)
             .height(Length::Fill)
-            .spacing(4.0)
-            .padding(8.0)
-            .align_items(Alignment::Center),
+            .align_x(Horizontal::Right)
+            .align_y(Vertical::Center)
+            .into(),
+        ]);
+
+        container(
+            row(search)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .spacing(4.0)
+                .padding(8.0)
+                .align_items(Alignment::Center),
         )
         .width(Length::Fill)
         .height(52.0)

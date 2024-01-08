@@ -30,8 +30,10 @@ impl PorterViewport {
         }
     }
 
-    /// Converts from an iced viewport, incredibly unsafe, but the author hasn't merged my changes yet to expose these vars...
+    /// Converts from an iced viewport.
     pub fn from_viewport(viewport: scrollable::Viewport) -> Self {
+        // SAFETY: `transmute` checks the size of the value before converting, but we need
+        // to make sure that the layout hasn't changed.
         unsafe { std::mem::transmute(viewport) }
     }
 }
@@ -40,6 +42,8 @@ impl std::ops::Deref for PorterViewport {
     type Target = scrollable::Viewport;
 
     fn deref(&self) -> &Self::Target {
+        // SAFETY: `transmute` checks the size of the value before converting, but we need
+        // to make sure that the layout hasn't changed.
         unsafe { std::mem::transmute(self) }
     }
 }

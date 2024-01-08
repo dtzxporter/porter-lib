@@ -153,7 +153,8 @@ impl<Message> Program<Message, Renderer> for PorterText {
                 shaping: Shaping::Basic,
             };
 
-            let paragraph = renderer.create_paragraph(text);
+            let paragraph =
+                <Renderer as iced::advanced::text::Renderer>::Paragraph::with_text(text);
             let measure_full = paragraph.min_bounds().width;
 
             let render_str = if measure_full > width {

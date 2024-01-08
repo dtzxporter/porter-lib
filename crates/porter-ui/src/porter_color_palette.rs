@@ -29,6 +29,11 @@ impl PorterColorPalette {
         Color::from_rgb8(216, 30, 91)
     }
 
+    /// Raw file asset color.
+    pub fn asset_type_raw_file() -> Color {
+        Color::from_rgb8(255, 255, 0)
+    }
+
     /// Info text color.
     pub fn asset_info() -> Color {
         Color::from_rgb8(0xC1, 0xC1, 0xC1)

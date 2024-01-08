@@ -32,6 +32,8 @@ bitflags! {
         const LOAD_MATERIALS = 1 << 2;
         const LOAD_ANIMATIONS = 1 << 3;
         const LOAD_SOUNDS = 1 << 4;
+        const LOAD_RAW_FILES = 1 << 5;
+        const LOAD_FORCE_RAW_FILES = 1 << 6;
     }
 }
 
@@ -148,6 +150,8 @@ impl PorterSettings {
             || self.load_images() != new_settings.load_images()
             || self.load_materials() != new_settings.load_materials()
             || self.load_sounds() != new_settings.load_sounds()
+            || self.load_raw_files() != new_settings.load_raw_files()
+            || self.force_raw_files() != new_settings.force_raw_files()
         {
             return true;
         }
@@ -210,6 +214,30 @@ impl PorterSettings {
     pub fn set_load_sounds(&mut self, value: bool) {
         self.load_settings
             .set(PorterLoadSettings::LOAD_SOUNDS, value)
+    }
+
+    /// Whether or not to load raw files.
+    pub fn load_raw_files(&self) -> bool {
+        self.load_settings
+            .contains(PorterLoadSettings::LOAD_RAW_FILES)
+    }
+
+    /// Sets whether or not to load raw files.
+    pub fn set_load_raw_files(&mut self, value: bool) {
+        self.load_settings
+            .set(PorterLoadSettings::LOAD_RAW_FILES, value)
+    }
+
+    /// Whether or not to force all assets as raw files.
+    pub fn force_raw_files(&self) -> bool {
+        self.load_settings
+            .contains(PorterLoadSettings::LOAD_FORCE_RAW_FILES)
+    }
+
+    /// Sets whether or not to force all assets as raw files.
+    pub fn set_force_raw_files(&mut self, value: bool) {
+        self.load_settings
+            .set(PorterLoadSettings::LOAD_FORCE_RAW_FILES, value)
     }
 
     /// The model file types to export to.
@@ -445,7 +473,9 @@ impl Default for PorterSettings {
     fn default() -> Self {
         Self {
             version: 1,
-            load_settings: PorterLoadSettings::all(),
+            load_settings: PorterLoadSettings::all()
+                & !PorterLoadSettings::LOAD_RAW_FILES
+                & !PorterLoadSettings::LOAD_FORCE_RAW_FILES,
             model_settings: PorterModelSettings::EXPORT_CAST,
             anim_settings: PorterAnimSettings::EXPORT_CAST,
             audio_settings: PorterAudioSettings::EXPORT_WAV_16PCM,

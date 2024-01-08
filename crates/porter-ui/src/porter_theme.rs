@@ -291,7 +291,6 @@ impl From<PorterTitleFont> for Font {
             weight: iced::font::Weight::Bold,
             stretch: Stretch::Normal,
             style: Style::Normal,
-            monospaced: false,
         }
     }
 }

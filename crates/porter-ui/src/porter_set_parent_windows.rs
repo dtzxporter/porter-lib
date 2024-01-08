@@ -13,12 +13,13 @@ mod win32 {
     use rfd::FileDialog;
     use rfd::MessageDialog;
 
-    use super::PorterSetParentWindows;
-
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetActiveWindow;
+
+    use super::PorterSetParentWindows;
 
     struct RawHandle(pub Win32WindowHandle);
 
+    // SAFETY: Any usize value can be a valid window handle on win32.
     unsafe impl HasRawWindowHandle for RawHandle {
         fn raw_window_handle(&self) -> RawWindowHandle {
             RawWindowHandle::Win32(self.0)
@@ -27,6 +28,7 @@ mod win32 {
 
     impl PorterSetParentWindows for FileDialog {
         fn set_parent_windows(self) -> Self {
+            // SAFETY: Since null can be used for all win32 api calls, there is no need to check the hwnd.
             let hwnd = unsafe { GetActiveWindow() };
             let mut window_handle = Win32WindowHandle::empty();
 
@@ -38,6 +40,7 @@ mod win32 {
 
     impl PorterSetParentWindows for MessageDialog {
         fn set_parent_windows(self) -> Self {
+            // SAFETY: Since null can be used for all win32 api calls, there is no need to check the hwnd.
             let hwnd = unsafe { GetActiveWindow() };
             let mut window_handle = Win32WindowHandle::empty();
 
