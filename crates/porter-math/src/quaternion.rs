@@ -79,6 +79,16 @@ impl Quaternion {
     }
 
     #[inline]
+    pub fn swap_bytes(self) -> Self {
+        Self {
+            x: f32::from_bits(self.x.to_bits().swap_bytes()),
+            y: f32::from_bits(self.y.to_bits().swap_bytes()),
+            z: f32::from_bits(self.z.to_bits().swap_bytes()),
+            w: f32::from_bits(self.w.to_bits().swap_bytes()),
+        }
+    }
+
+    #[inline]
     pub fn euler_angles(&self, measurment: Angles) -> Vector3 {
         self.matrix4x4().euler_angles(measurment)
     }

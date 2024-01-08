@@ -8,9 +8,9 @@ use std::path::Path;
 
 use lz4_flex::decompress_into;
 
-use crate::AsByteSlice;
 use crate::StringReadExt;
 use crate::StructReadExt;
+use crate::StructWriteExt;
 
 /// A database of asset hash:name pairs used to link a packed asset to it's source name.
 #[repr(transparent)]
@@ -40,7 +40,7 @@ impl NameDatabase {
     pub fn load<P: AsRef<Path>>(file: P) -> Result<Self, std::io::Error> {
         let mut file = File::open(file.as_ref())?;
 
-        let header = NameDatabaseHeader::from_io_read(&mut file)?;
+        let header: NameDatabaseHeader = file.read_struct()?;
 
         if header.magic != 0x42444E50 {
             return Err(std::io::Error::from(std::io::ErrorKind::InvalidData));
@@ -69,7 +69,7 @@ impl NameDatabase {
         }
 
         for _ in 0..header.entries {
-            keys.push(u64::from_io_read(&mut file)?);
+            keys.push(file.read_struct()?);
         }
 
         if keys.len() != values.len() {
@@ -109,7 +109,7 @@ impl NameDatabase {
             decompressed_size: decompressed.len() as u32,
         };
 
-        file.write_all(header.as_byte_slice())?;
+        file.write_struct(header)?;
         file.write_all(&compressed)?;
 
         Ok(())

@@ -1,8 +1,11 @@
 mod blend_shape;
 mod bone;
+mod constraint;
 mod error;
 mod face_buffer;
+mod ik_handle;
 mod material;
+mod material_remap;
 mod mesh;
 mod model;
 mod model_file_type;
@@ -14,9 +17,12 @@ mod vertex_weight;
 
 pub use blend_shape::*;
 pub use bone::*;
+pub use constraint::*;
 pub use error::*;
 pub use face_buffer::*;
+pub use ik_handle::*;
 pub use material::*;
+pub use material_remap::*;
 pub use mesh::*;
 pub use model::*;
 pub use model_file_type::*;

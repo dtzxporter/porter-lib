@@ -22,12 +22,12 @@ impl RenderSkeleton {
     ) -> Self {
         let mut vertex_buffer = Vec::new();
 
-        for bone in skeleton.iter().rev() {
+        for bone in skeleton.bones.iter().rev() {
             vertex_buffer.push(bone.world_position.unwrap_or_default());
 
             if bone.parent > -1 {
                 vertex_buffer.push(
-                    skeleton[bone.parent as usize]
+                    skeleton.bones[bone.parent as usize]
                         .world_position
                         .unwrap_or_default(),
                 );
@@ -105,7 +105,7 @@ impl RenderSkeleton {
         Self {
             vertex_buffer,
             render_pipeline,
-            bone_count: skeleton.len(),
+            bone_count: skeleton.bones.len(),
         }
     }
 

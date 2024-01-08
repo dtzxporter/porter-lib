@@ -13,6 +13,8 @@ pub enum CastId {
     Material = 0x6C74616D,
     File = 0x656C6966,
     BlendShape = 0x68736C62,
+    IKHandle = 0x64686B69,
+    Constraint = 0x74736E63,
 }
 
 /// The cast property type id.

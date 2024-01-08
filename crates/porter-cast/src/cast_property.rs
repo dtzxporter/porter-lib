@@ -5,8 +5,8 @@ use porter_math::Quaternion;
 use porter_math::Vector2;
 use porter_math::Vector3;
 
-use porter_utils::AsByteSlice;
 use porter_utils::StringWriteExt;
+use porter_utils::StructWriteExt;
 
 use crate::CastNode;
 use crate::CastPropertyId;
@@ -70,7 +70,7 @@ impl CastProperty {
             array_length: self.property_values.len() as u32,
         };
 
-        writer.write_all(header.as_byte_slice())?;
+        writer.write_struct(header)?;
         writer.write_all(self.property_name.as_bytes())?;
 
         for property_value in &self.property_values {
@@ -97,13 +97,13 @@ impl CastProperty {
                     writer.write_null_terminated_string(string)?;
                 }
                 CastPropertyValue::Vector2(vector2) => {
-                    writer.write_all(vector2.as_byte_slice())?;
+                    writer.write_struct(*vector2)?;
                 }
                 CastPropertyValue::Vector3(vector3) => {
-                    writer.write_all(vector3.as_byte_slice())?;
+                    writer.write_struct(*vector3)?;
                 }
                 CastPropertyValue::Vector4(vector4) => {
-                    writer.write_all(vector4.as_byte_slice())?;
+                    writer.write_struct(*vector4)?;
                 }
             }
         }

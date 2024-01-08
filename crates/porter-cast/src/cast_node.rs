@@ -4,7 +4,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use porter_utils::AsByteSlice;
+use porter_utils::StructWriteExt;
 
 use crate::CastId;
 use crate::CastProperty;
@@ -87,7 +87,7 @@ impl CastNode {
             child_count: self.children.len() as u32,
         };
 
-        writer.write_all(header.as_byte_slice())?;
+        writer.write_struct(header)?;
 
         for property in &self.properties {
             property.write(writer)?;

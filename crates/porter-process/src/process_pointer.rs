@@ -12,8 +12,8 @@ use crate::ProcessError;
 #[derive(Debug, Clone, Copy)]
 pub struct ProcessPointer<S, T>
 where
-    S: Copy,
-    T: Copy,
+    S: Copy + 'static,
+    T: Copy + 'static,
 {
     inner: S,
     _phantom: PhantomData<T>,
@@ -51,15 +51,15 @@ impl ProcessPointer<u32, &str> {
 
 impl<T> ProcessPointer<u64, T>
 where
-    T: Copy,
+    T: Copy + 'static,
 {
     /// Reads [`T`] from the given reader.
-    pub fn read<R: Read + Seek>(&self, mut reader: &mut R) -> Result<T, ProcessError> {
+    pub fn read<R: Read + Seek>(&self, reader: &mut R) -> Result<T, ProcessError> {
         let current_position = reader.stream_position()?;
 
         reader.seek(SeekFrom::Start(self.inner))?;
 
-        let value = T::from_io_read(&mut reader)?;
+        let value: T = reader.read_struct()?;
 
         let _ = reader.seek(SeekFrom::Start(current_position));
 
@@ -69,15 +69,15 @@ where
 
 impl<T> ProcessPointer<u32, T>
 where
-    T: Copy,
+    T: Copy + 'static,
 {
     /// Reads [`T`] from the given reader.
-    pub fn read<R: Read + Seek>(&self, mut reader: &mut R) -> Result<T, ProcessError> {
+    pub fn read<R: Read + Seek>(&self, reader: &mut R) -> Result<T, ProcessError> {
         let current_position = reader.stream_position()?;
 
         reader.seek(SeekFrom::Start(self.inner as u64))?;
 
-        let value = T::from_io_read(&mut reader)?;
+        let value: T = reader.read_struct()?;
 
         let _ = reader.seek(SeekFrom::Start(current_position));
 

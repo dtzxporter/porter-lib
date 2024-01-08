@@ -1,3 +1,5 @@
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
@@ -293,9 +295,9 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
     let root_hash = FbxPropertyValue::from(root.root_node());
 
     let mut joints_map: HashMap<usize, FbxPropertyValue> =
-        HashMap::with_capacity(model.skeleton.len());
+        HashMap::with_capacity(model.skeleton.bones.len());
 
-    if !model.skeleton.is_empty() {
+    if !model.skeleton.bones.is_empty() {
         let joints = root.objects_node().create("Model");
 
         joints.create_hash();
@@ -312,7 +314,7 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
 
         add_object_connection(root.connections_node(), joints_hash, root_hash);
 
-        for (bone_index, bone) in model.skeleton.iter().enumerate() {
+        for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
             let skeleton = root.objects_node().create("NodeAttribute");
 
             skeleton.create_hash();
@@ -1018,30 +1020,34 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
 
         add_object_connection(root.connections_node(), deformer_hash, geometry_hash);
 
-        let mut sub_deformers: HashMap<u16, Vec<(usize, f32)>> = HashMap::new();
+        let mut sub_deformers: HashMap<u16, BTreeMap<usize, f32>> = HashMap::new();
 
         for i in 0..mesh.vertices.len() {
             let vertex = mesh.vertices.vertex(i);
 
-            for w in 0..vertex.weight_count() {
+            for w in 0..mesh.vertices.maximum_influence() {
                 let weight = vertex.weight(w);
 
-                sub_deformers
-                    .entry(weight.bone)
-                    .or_default()
-                    .push((i, weight.value));
+                match sub_deformers.entry(weight.bone).or_default().entry(i) {
+                    Entry::Occupied(mut e) => {
+                        e.insert(e.get() + weight.value);
+                    }
+                    Entry::Vacant(e) => {
+                        e.insert(weight.value);
+                    }
+                }
             }
         }
 
         let mut bind_pose_ids: HashSet<u16> = sub_deformers.keys().copied().collect();
 
         for bone_id in sub_deformers.keys() {
-            let mut current_parent = model.skeleton[*bone_id as usize].parent;
+            let mut current_parent = model.skeleton.bones[*bone_id as usize].parent;
 
             while current_parent >= 0 {
                 bind_pose_ids.insert(current_parent as u16);
 
-                current_parent = model.skeleton[current_parent as usize].parent;
+                current_parent = model.skeleton.bones[current_parent as usize].parent;
             }
         }
 
@@ -1080,7 +1086,7 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
                 .create("Matrix")
                 .create_property(FbxPropertyType::Float64Array);
 
-            let global_matrix = model.skeleton[bone_id as usize].world_matrix();
+            let global_matrix = model.skeleton.bones[bone_id as usize].world_matrix();
 
             for i in 0..16 {
                 matrix.push(global_matrix[i] as f64);
@@ -1129,7 +1135,7 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
                 .create("Indexes")
                 .create_property(FbxPropertyType::Integer32Array);
 
-            for (index, _) in &weights {
+            for index in weights.keys() {
                 indices_buffer.push(*index as u32);
             }
 
@@ -1137,11 +1143,11 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
                 .create("Weights")
                 .create_property(FbxPropertyType::Float64Array);
 
-            for (_, weight) in weights {
-                value_buffer.push(weight as f64);
+            for weight in weights.values() {
+                value_buffer.push(*weight as f64);
             }
 
-            let transform_link_matrix = model.skeleton[bone_id as usize].world_matrix();
+            let transform_link_matrix = model.skeleton.bones[bone_id as usize].world_matrix();
             let transform_matrix = transform_link_matrix.inverse();
 
             let transform = sub_deformer

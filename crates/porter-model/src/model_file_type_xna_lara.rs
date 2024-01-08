@@ -3,7 +3,7 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
 
-use porter_math::normalize_f32x4;
+use porter_math::normalize_array_f32;
 
 use crate::Model;
 use crate::ModelError;
@@ -13,9 +13,9 @@ use crate::VertexColor;
 pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> {
     let mut xna = BufWriter::new(File::create(path.as_ref().with_extension("mesh.ascii"))?);
 
-    writeln!(xna, "{}", model.skeleton.len())?;
+    writeln!(xna, "{}", model.skeleton.bones.len())?;
 
-    for (bone_index, bone) in model.skeleton.iter().enumerate() {
+    for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
         let world_position = bone.world_position.unwrap_or_default();
 
         writeln!(
@@ -100,7 +100,7 @@ pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelEr
                 values[w] = weight.value;
             }
 
-            values = normalize_f32x4(values);
+            values = normalize_array_f32(values);
 
             writeln!(
                 xna,

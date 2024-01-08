@@ -3,10 +3,14 @@ use wgpu::*;
 
 use porter_gpu::gpu_instance;
 use porter_gpu::GPUInstance;
+
 use porter_math::Vector2;
 use porter_math::Vector3;
+
 use porter_utils::AsAligned;
 use porter_utils::AsThisSlice;
+
+use porter_texture::TextureExtensions;
 
 use crate::PreviewCamera;
 use crate::PreviewCameraUpAxis;
@@ -102,16 +106,10 @@ fn create_msaa_texture(instance: &GPUInstance, width: u32, height: u32) -> Textu
 /// Utility to create the output texture buffer.
 fn create_output_buffer(instance: &GPUInstance, width: u32, height: u32) -> Buffer {
     let output_format = TextureFormat::Rgba8Unorm;
-    let block_size = output_format.block_size(None).unwrap_or_default();
-    let block_dims = output_format.block_dimensions();
-
-    let bytes_per_row = block_size as u64 * (width as u64 / block_dims.0 as u64);
-    let size = bytes_per_row.as_aligned(COPY_BYTES_PER_ROW_ALIGNMENT as u64)
-        * (height as u64 / block_dims.1 as u64);
 
     instance.device().create_buffer(&BufferDescriptor {
         label: None,
-        size,
+        size: output_format.buffer_size_aligned(width, height),
         usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
         mapped_at_creation: false,
     })
@@ -316,8 +314,8 @@ impl PreviewRenderer {
 
     /// Resizes the renderer output.
     pub fn resize(&mut self, width: f32, height: f32) {
-        self.width = width;
-        self.height = height;
+        self.width = width.max(1.0);
+        self.height = height.max(1.0);
 
         self.output_texture =
             create_output_texture(self.instance, self.width as u32, self.height as u32);
@@ -325,10 +323,12 @@ impl PreviewRenderer {
         self.output_buffer =
             create_output_buffer(self.instance, self.width as u32, self.height as u32);
 
-        self.depth_texture = create_depth_texture(self.instance, self.width as u32, height as u32);
+        self.depth_texture =
+            create_depth_texture(self.instance, self.width as u32, self.height as u32);
         self.depth_texture_view = self.depth_texture.create_view(&Default::default());
 
-        self.msaa_texture = create_msaa_texture(self.instance, self.width as u32, height as u32);
+        self.msaa_texture =
+            create_msaa_texture(self.instance, self.width as u32, self.height as u32);
         self.msaa_texture_view = self.msaa_texture.create_view(&Default::default());
 
         self.camera.update(self.instance, self.width, self.height);
@@ -521,14 +521,16 @@ impl PreviewRenderer {
                         b: 0.066,
                         a: 1.0,
                     }),
-                    store: true,
+                    store: StoreOp::Store,
                 },
             })],
+            occlusion_query_set: None,
+            timestamp_writes: None,
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                 view: &self.depth_texture_view,
                 depth_ops: Some(Operations {
                     load: LoadOp::Clear(1.0),
-                    store: true,
+                    store: StoreOp::Store,
                 }),
                 stencil_ops: None,
             }),
@@ -560,10 +562,8 @@ impl PreviewRenderer {
         drop(render_pass);
 
         let output_format = TextureFormat::Rgba8Unorm;
-        let block_size = output_format.block_size(None).unwrap_or_default();
-        let block_dims = output_format.block_dimensions();
-
-        let bytes_per_row = block_size * (self.width as u32 / block_dims.0);
+        let block_dimensions = output_format.block_dimensions();
+        let bytes_per_row = output_format.bytes_per_row(self.width as u32);
 
         {
             encoder.copy_texture_to_buffer(
@@ -589,7 +589,7 @@ impl PreviewRenderer {
             )
         }
 
-        self.instance.queue().submit(Some(encoder.finish()));
+        let submission = self.instance.queue().submit(Some(encoder.finish()));
 
         let output_slice = self.output_buffer.slice(..);
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
@@ -598,7 +598,9 @@ impl PreviewRenderer {
             tx.send(result).unwrap();
         });
 
-        self.instance.device().poll(MaintainBase::Wait);
+        self.instance
+            .device()
+            .poll(MaintainBase::WaitForSubmissionIndex(submission));
 
         if rx.recv().unwrap().is_err() {
             return (0, 0, Vec::new());
@@ -606,8 +608,10 @@ impl PreviewRenderer {
 
         let buffer = output_slice.get_mapped_range();
 
-        let truncated_size =
-            bytes_per_row as usize * (self.height as usize / block_dims.1 as usize);
+        let nbh = (self.height as usize + (block_dimensions.1 as usize - 1))
+            / block_dimensions.1 as usize;
+
+        let truncated_size = bytes_per_row as usize * nbh;
         let aligned_bytes_per_row = bytes_per_row.as_aligned(COPY_BYTES_PER_ROW_ALIGNMENT) as usize;
 
         let pixels = if buffer.len() == truncated_size {

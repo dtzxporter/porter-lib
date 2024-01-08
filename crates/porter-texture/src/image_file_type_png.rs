@@ -1,12 +1,16 @@
+use std::io::Read;
 use std::io::Seek;
 use std::io::Write;
 
 use png::BitDepth;
 use png::ColorType;
 use png::Compression;
+use png::Decoder;
 use png::Encoder;
 use png::SrgbRenderingIntent;
+use png::Transformations;
 
+use crate::format_to_srgb;
 use crate::is_format_srgb;
 use crate::Image;
 use crate::ImageFileType;
@@ -29,6 +33,20 @@ const fn format_to_png(format: ImageFormat) -> Result<(ColorType, BitDepth, bool
                 ImageFileType::Png,
             ))
         }
+    })
+}
+
+/// Creates a proper image format from the png specification.
+const fn png_to_format(format: (ColorType, BitDepth)) -> Result<ImageFormat, TextureError> {
+    Ok(match format {
+        (ColorType::Grayscale, BitDepth::One) => ImageFormat::R1Unorm,
+        (ColorType::Grayscale, BitDepth::Eight) => ImageFormat::R8Unorm,
+        (ColorType::Grayscale, BitDepth::Sixteen) => ImageFormat::R16Unorm,
+        (ColorType::GrayscaleAlpha, BitDepth::Eight) => ImageFormat::R8G8Unorm,
+        (ColorType::GrayscaleAlpha, BitDepth::Sixteen) => ImageFormat::R16G16Unorm,
+        (ColorType::Rgba, BitDepth::Eight) => ImageFormat::R8G8B8A8Unorm,
+        (ColorType::Rgba, BitDepth::Sixteen) => ImageFormat::R16G16B16A16Unorm,
+        _ => return Err(TextureError::UnsupportedImageFormat(ImageFormat::Unknown)),
     })
 }
 
@@ -110,8 +128,32 @@ pub fn to_png<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), Text
     let mut encoder = encoder.write_header()?;
 
     if let Some(frame) = image.frames().next() {
-        encoder.write_image_data(frame.buffer())?;
+        let size = image.frame_size_with_mipmaps(frame.width(), frame.height(), 1);
+
+        encoder.write_image_data(&frame.buffer()[..size as usize])?;
     }
 
     Ok(())
+}
+
+/// Reads a png file from the input stream to an image.
+pub fn from_png<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
+    let mut decoder = Decoder::new(input);
+
+    decoder.set_transformations(Transformations::ALPHA);
+
+    let mut decoder = decoder.read_info()?;
+
+    let mut format = png_to_format(decoder.output_color_type())?;
+
+    if decoder.info().srgb.is_some() {
+        format = format_to_srgb(format);
+    }
+
+    let mut image = Image::new(decoder.info().width, decoder.info().height, format)?;
+    let frame = image.create_frame(decoder.info().width, decoder.info().height)?;
+
+    decoder.next_frame(frame.buffer_mut())?;
+
+    Ok(image)
 }

@@ -9,6 +9,7 @@ use porter_cast::CastNode;
 use porter_cast::CastPropertyId;
 use porter_cast::CastPropertyValue;
 
+use crate::ConstraintType;
 use crate::MaterialTextureRefUsage;
 use crate::Model;
 use crate::ModelError;
@@ -19,10 +20,13 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
 
     let model_node = root.create(CastId::Model);
 
-    if !model.skeleton.is_empty() {
+    if !model.skeleton.bones.is_empty() {
         let skeleton_node = model_node.create(CastId::Skeleton);
 
-        for (bone_index, bone) in model.skeleton.iter().enumerate() {
+        let mut bone_map: HashMap<usize, CastPropertyValue> =
+            HashMap::with_capacity(model.skeleton.bones.len());
+
+        for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
             let bone_node = skeleton_node.create(CastId::Bone);
 
             bone_node.create_property(CastPropertyId::String, "n").push(
@@ -62,6 +66,92 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                     .create_property(CastPropertyId::Vector3, "s")
                     .push(local_scale);
             }
+
+            bone_map.insert(bone_index, CastPropertyValue::from(bone_node));
+        }
+
+        for ik_handle in &*model.skeleton.ik_handles {
+            let handle_node = skeleton_node.create(CastId::IKHandle);
+
+            if let Some(name) = &ik_handle.name {
+                handle_node
+                    .create_property(CastPropertyId::String, "n")
+                    .push(name.as_str());
+            }
+
+            handle_node
+                .create_property(CastPropertyId::Integer64, "sb")
+                .push(bone_map[&ik_handle.start_bone].clone());
+
+            handle_node
+                .create_property(CastPropertyId::Integer64, "eb")
+                .push(bone_map[&ik_handle.end_bone].clone());
+
+            if let Some(target_bone) = &ik_handle.target_bone {
+                handle_node
+                    .create_property(CastPropertyId::Integer64, "tb")
+                    .push(bone_map[target_bone].clone());
+            }
+
+            if let Some(pole_vector_bone) = &ik_handle.pole_vector_bone {
+                handle_node
+                    .create_property(CastPropertyId::Integer64, "pv")
+                    .push(bone_map[pole_vector_bone].clone());
+            }
+
+            if let Some(pole_bone) = &ik_handle.pole_bone {
+                handle_node
+                    .create_property(CastPropertyId::Integer64, "pb")
+                    .push(bone_map[pole_bone].clone());
+            }
+
+            handle_node
+                .create_property(CastPropertyId::Byte, "tr")
+                .push(ik_handle.use_target_rotation as u8);
+        }
+
+        for constraint in &*model.skeleton.constraints {
+            let constraint_node = skeleton_node.create(CastId::Constraint);
+
+            if let Some(name) = &constraint.name {
+                constraint_node
+                    .create_property(CastPropertyId::String, "n")
+                    .push(name.as_str());
+            }
+
+            let ct = match constraint.constraint_type {
+                ConstraintType::Point => "pt",
+                ConstraintType::Orient => "or",
+                ConstraintType::Scale => "sc",
+            };
+
+            constraint_node
+                .create_property(CastPropertyId::String, "ct")
+                .push(ct);
+
+            constraint_node
+                .create_property(CastPropertyId::Integer64, "cb")
+                .push(bone_map[&constraint.constraint_bone].clone());
+
+            constraint_node
+                .create_property(CastPropertyId::Integer64, "tb")
+                .push(bone_map[&constraint.target_bone].clone());
+
+            constraint_node
+                .create_property(CastPropertyId::Byte, "mo")
+                .push(constraint.maintain_offset as u8);
+
+            constraint_node
+                .create_property(CastPropertyId::Byte, "sx")
+                .push(constraint.skip_x as u8);
+
+            constraint_node
+                .create_property(CastPropertyId::Byte, "sy")
+                .push(constraint.skip_y as u8);
+
+            constraint_node
+                .create_property(CastPropertyId::Byte, "sz")
+                .push(constraint.skip_z as u8);
         }
     }
 
@@ -159,8 +249,8 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             }
         }
 
-        if !model.skeleton.is_empty() {
-            let bone_count = model.skeleton.len();
+        if !model.skeleton.bones.is_empty() {
+            let bone_count = model.skeleton.bones.len();
 
             let vertex_weight_bones = if bone_count <= 0xFF {
                 mesh_node.create_property(CastPropertyId::Byte, "wb")

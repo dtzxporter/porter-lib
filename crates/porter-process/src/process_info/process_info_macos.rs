@@ -1,3 +1,4 @@
+use std::io::Cursor;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -186,7 +187,7 @@ impl ProcessInfoPlatform for ProcessInfo {
         let mut result = Vec::with_capacity(256);
 
         for info in process_info_buffer.chunks_exact(std::mem::size_of::<kinfo_proc>()) {
-            let kinfo = kinfo_proc::from_byte_slice(info)?;
+            let kinfo: kinfo_proc = Cursor::new(info).read_struct()?;
 
             if !filter.is_empty() && !filter.contains(&(kinfo.kp_proc.p_pid as u64)) {
                 continue;

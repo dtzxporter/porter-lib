@@ -8,8 +8,8 @@ use std::path::Path;
 use porter_math::Quaternion;
 use porter_math::Vector3;
 
-use porter_utils::AsByteSlice;
 use porter_utils::StringWriteExt;
+use porter_utils::StructWriteExt;
 
 use crate::Animation;
 use crate::AnimationError;
@@ -155,7 +155,7 @@ pub fn to_seanim<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), A
     header.bone_modifiers = bone_modifiers.len() as u8;
     header.notification_count = notification_count as u32;
 
-    seanim.write_all(header.as_byte_slice())?;
+    seanim.write_struct(header)?;
 
     for bone in &bone_names {
         seanim.write_null_terminated_string(bone)?;
@@ -230,9 +230,9 @@ pub fn to_seanim<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), A
                     }
 
                     if let KeyframeValue::Vector3(position) = keyframe.value {
-                        seanim.write_all(position.as_byte_slice())?;
+                        seanim.write_struct(position)?;
                     } else {
-                        seanim.write_all(Vector3::zero().as_byte_slice())?;
+                        seanim.write_struct(Vector3::zero())?;
                     }
                 }
             }
@@ -261,9 +261,9 @@ pub fn to_seanim<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), A
                     }
 
                     if let KeyframeValue::Quaternion(rotation) = keyframe.value {
-                        seanim.write_all(rotation.as_byte_slice())?;
+                        seanim.write_struct(rotation)?;
                     } else {
-                        seanim.write_all(Quaternion::identity().as_byte_slice())?;
+                        seanim.write_struct(Quaternion::identity())?;
                     }
                 }
             }
@@ -292,9 +292,9 @@ pub fn to_seanim<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), A
                     }
 
                     if let KeyframeValue::Vector3(scale) = keyframe.value {
-                        seanim.write_all(scale.as_byte_slice())?;
+                        seanim.write_struct(scale)?;
                     } else {
-                        seanim.write_all(Vector3::one().as_byte_slice())?;
+                        seanim.write_struct(Vector3::one())?;
                     }
                 }
             }

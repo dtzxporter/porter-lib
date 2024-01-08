@@ -42,6 +42,8 @@ impl ProcessInfoPlatform for ProcessInfo {
         let mut process_info_buffer: Vec<u8> = Vec::new();
 
         loop {
+            // SAFETY: The method checks that the correct size buffer was passed to it and we check if the size was
+            // invalid by checking for STATUS_INFO_LENGTH_MISMATCH.
             let status = unsafe {
                 NtQuerySystemInformation(
                     SystemProcessInformation,
@@ -62,7 +64,7 @@ impl ProcessInfoPlatform for ProcessInfo {
         let mut result = Vec::with_capacity(256);
 
         loop {
-            let sys_process_info = SYSTEM_PROCESS_INFORMATION::from_io_read(&mut reader)?;
+            let sys_process_info: SYSTEM_PROCESS_INFORMATION = reader.read_struct()?;
             let sys_process_next = sys_process_info.NextEntryOffset as i64
                 - std::mem::size_of::<SYSTEM_PROCESS_INFORMATION>() as i64;
 
@@ -88,6 +90,7 @@ impl ProcessInfoPlatform for ProcessInfo {
                     )
                 }
             } else {
+                // SAFETY: We checked if the buffer was null before calling this method.
                 let wcstr = unsafe {
                     U16CStr::from_ptr_mut(
                         sys_process_info.ImageName.Buffer,
@@ -107,7 +110,7 @@ impl ProcessInfoPlatform for ProcessInfo {
                 (name, path)
             };
 
-            let reserve = ReservedInfo::from_byte_slice(sys_process_info.Reserved1)?;
+            let reserve: ReservedInfo = Cursor::new(sys_process_info.Reserved1).read_struct()?;
 
             result.push(ProcessInfo {
                 pid: sys_process_info.UniqueProcessId as u64,

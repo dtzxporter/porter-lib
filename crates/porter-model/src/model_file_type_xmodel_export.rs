@@ -96,10 +96,10 @@ pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), Mo
     writeln!(
         xmodel,
         "MODEL\nVERSION 6\nNUMBONES {}",
-        model.skeleton.len()
+        model.skeleton.bones.len()
     )?;
 
-    for (bone_index, bone) in model.skeleton.iter().enumerate() {
+    for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
         writeln!(
             xmodel,
             "BONE {} {} \"{}\"",
@@ -113,7 +113,7 @@ pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), Mo
 
     writeln!(xmodel)?;
 
-    for (bone_index, bone) in model.skeleton.iter().enumerate() {
+    for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
         let rotation = bone.world_rotation.unwrap_or_default().matrix4x4();
         let position = bone.world_position.unwrap_or_default();
         let scale = bone.local_scale.unwrap_or_else(Vector3::one);
@@ -157,16 +157,11 @@ pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), Mo
                 )?;
             }
 
-            let weight_count = vertex.weight_count();
+            let weights = vertex.unique_weights();
 
-            writeln!(xmodel, "BONES {}", weight_count)?;
+            writeln!(xmodel, "BONES {}", weights.len())?;
 
-            for w in 0..weight_count {
-                let weight = vertex.weight(w);
-
-                let bone = weight.bone;
-                let value = weight.value;
-
+            for (bone, value) in weights {
                 writeln!(xmodel, "BONE {} {:.6}", bone, value)?;
             }
 

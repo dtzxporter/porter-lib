@@ -1,7 +1,7 @@
 use std::io::Error;
 use std::io::Write;
 
-use porter_utils::AsByteSlice;
+use porter_utils::StructWriteExt;
 
 use crate::CastNode;
 
@@ -42,7 +42,7 @@ impl CastFile {
             flags: 0,
         };
 
-        writer.write_all(header.as_byte_slice())?;
+        writer.write_struct(header)?;
 
         for root in &self.root_nodes {
             root.write(&mut writer)?;

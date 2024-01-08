@@ -7,3 +7,5 @@ edition = "2021"
 lz4_flex = { version = "0.11", default-features = false, features = ["safe-encode", "safe-decode"] }
 num_cpus = { version = "1.16" }
 sanitize-filename = { version = "0.5", default-features = false }
+memchr = "2.7"
+xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3"] }

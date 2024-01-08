@@ -25,7 +25,11 @@ impl ProcessReader {
 
 impl std::io::Read for ProcessReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        Ok(self.handle.read(self.offset, buf)?)
+        let read = self.handle.read(self.offset, buf)?;
+
+        self.offset += read as u64;
+
+        Ok(read)
     }
 }
 

@@ -1,3 +1,6 @@
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+
 use std::path::Path;
 
 use crate::model_file_type_cast;
@@ -8,13 +11,19 @@ use crate::model_file_type_semodel;
 use crate::model_file_type_smd;
 use crate::model_file_type_xmodel_export;
 use crate::model_file_type_xna_lara;
+use crate::sanitize_material_name;
 use crate::BlendShape;
+use crate::Face;
+use crate::FaceBuffer;
 use crate::Material;
+use crate::MaterialRemapFaces;
+use crate::MaterialRemapVertices;
 use crate::MaterialTextureRef;
 use crate::Mesh;
 use crate::ModelError;
 use crate::ModelFileType;
 use crate::Skeleton;
+use crate::VertexBuffer;
 
 /// A 3d model, with optional skeleton and materials.
 #[derive(Debug, Clone, Default)]
@@ -67,6 +76,224 @@ impl Model {
         }
 
         self.skeleton.scale(factor);
+    }
+
+    /// Remaps the model's meshes by their materials and faces.
+    ///
+    /// Note: This will reset the models blend shapes to ensure that they do not cause problems with the new meshes.
+    pub fn remap_meshes_by_vertices<R: AsRef<[MaterialRemapVertices]>>(&mut self, remaps: R) {
+        let remaps = remaps.as_ref();
+
+        #[allow(clippy::type_complexity)]
+        let mut remaps_per_material: HashMap<String, BTreeMap<usize, Vec<(usize, usize)>>> =
+            HashMap::new();
+
+        for remap in remaps {
+            remaps_per_material
+                .entry(sanitize_material_name(remap.material.clone()))
+                .or_default()
+                .entry(remap.mesh)
+                .or_default()
+                .push((remap.vertex_start, remap.length));
+        }
+
+        let old_meshes = std::mem::take(&mut self.meshes);
+
+        let mut new_meshes: HashMap<(String, bool, usize, usize), Mesh> =
+            HashMap::with_capacity(remaps_per_material.len());
+
+        for (material, opcodes) in remaps_per_material {
+            let material_index =
+                if let Some(index) = self.materials.iter().position(|x| x.name == material) {
+                    index as isize
+                } else {
+                    -1
+                };
+
+            for (mesh, verts) in opcodes {
+                let old_mesh = &old_meshes[mesh];
+
+                let new_mesh = new_meshes
+                    .entry((
+                        material.clone(),
+                        old_mesh.vertices.colors(),
+                        old_mesh.vertices.uv_layers(),
+                        old_mesh.vertices.maximum_influence(),
+                    ))
+                    .or_insert(
+                        Mesh::new(
+                            FaceBuffer::new(),
+                            VertexBuffer::builder()
+                                .colors(old_mesh.vertices.colors())
+                                .uv_layers(old_mesh.vertices.uv_layers())
+                                .maximum_influence(old_mesh.vertices.maximum_influence())
+                                .build(),
+                        )
+                        .name(old_mesh.name.clone()),
+                    );
+
+                if new_mesh.materials.is_empty() {
+                    new_mesh.materials.push(material_index);
+                }
+
+                let mut vertex_remap: BTreeMap<u32, u32> = BTreeMap::new();
+                let mut vertices: u32 = new_mesh.vertices.len() as u32;
+
+                for (vertex_start, vertex_len) in verts {
+                    for v in vertex_start..vertex_start + vertex_len {
+                        let old_vertex = old_mesh.vertices.vertex(v);
+
+                        new_mesh.vertices.create().copy_from(&old_vertex);
+
+                        vertex_remap.insert(v as u32, vertices);
+
+                        vertices += 1;
+                    }
+                }
+
+                for face in &old_mesh.faces {
+                    if face.i1 < vertices && face.i2 < vertices && face.i3 < vertices {
+                        let i1 = vertex_remap.get(&{ face.i1 }).copied().unwrap_or_default();
+                        let i2 = vertex_remap.get(&{ face.i2 }).copied().unwrap_or_default();
+                        let i3 = vertex_remap.get(&{ face.i3 }).copied().unwrap_or_default();
+
+                        new_mesh.faces.push(Face::new(i1, i2, i3));
+
+                        continue;
+                    }
+
+                    #[cfg(debug_assertions)]
+                    if face.i1 < vertices {
+                        println!(
+                            "Remap Warning: Dropping face due to mixed vertex materials: {:?}",
+                            face
+                        );
+                        continue;
+                    }
+
+                    #[cfg(debug_assertions)]
+                    if face.i2 < vertices {
+                        println!(
+                            "Remap Warning: Dropping face due to mixed vertex materials: {:?}",
+                            face
+                        );
+                        continue;
+                    }
+
+                    #[cfg(debug_assertions)]
+                    if face.i3 < vertices {
+                        println!(
+                            "Remap Warning: Dropping face due to mixed vertex materials: {:?}",
+                            face
+                        );
+                        continue;
+                    }
+                }
+            }
+        }
+
+        for mesh in new_meshes.into_values() {
+            self.meshes.push(mesh);
+        }
+
+        self.blend_shapes.clear();
+    }
+
+    /// Remaps the model's meshes by their materials and faces.
+    ///
+    /// Note: This will reset the models blend shapes to ensure that they do not cause problems with the new meshes.
+    pub fn remap_meshes_by_faces<R: AsRef<[MaterialRemapFaces]>>(&mut self, remaps: R) {
+        let remaps = remaps.as_ref();
+
+        #[allow(clippy::type_complexity)]
+        let mut remaps_per_material: HashMap<String, BTreeMap<usize, Vec<(usize, usize)>>> =
+            HashMap::new();
+
+        for remap in remaps {
+            remaps_per_material
+                .entry(sanitize_material_name(remap.material.clone()))
+                .or_default()
+                .entry(remap.mesh)
+                .or_default()
+                .push((remap.face_start, remap.length));
+        }
+
+        let old_meshes = std::mem::take(&mut self.meshes);
+
+        let mut new_meshes: HashMap<(String, bool, usize, usize), Mesh> =
+            HashMap::with_capacity(remaps_per_material.len());
+
+        for (material, opcodes) in remaps_per_material {
+            let material_index =
+                if let Some(index) = self.materials.iter().position(|x| x.name == material) {
+                    index as isize
+                } else {
+                    -1
+                };
+
+            for (mesh, faces) in opcodes {
+                let old_mesh = &old_meshes[mesh];
+
+                let new_mesh = new_meshes
+                    .entry((
+                        material.clone(),
+                        old_mesh.vertices.colors(),
+                        old_mesh.vertices.uv_layers(),
+                        old_mesh.vertices.maximum_influence(),
+                    ))
+                    .or_insert(
+                        Mesh::new(
+                            FaceBuffer::new(),
+                            VertexBuffer::builder()
+                                .colors(old_mesh.vertices.colors())
+                                .uv_layers(old_mesh.vertices.uv_layers())
+                                .maximum_influence(old_mesh.vertices.maximum_influence())
+                                .build(),
+                        )
+                        .name(old_mesh.name.clone()),
+                    );
+
+                if new_mesh.materials.is_empty() {
+                    new_mesh.materials.push(material_index);
+                }
+
+                let mut vertex_remap: BTreeMap<u32, u32> = BTreeMap::new();
+                let mut vertices: u32 = new_mesh.vertices.len() as u32;
+
+                for (face_start, length) in faces {
+                    for face in face_start..face_start + length {
+                        let face = &old_mesh.faces[face];
+
+                        let mut remap_index = |index: u32| {
+                            if let Some(vertex) = vertex_remap.get(&index) {
+                                *vertex
+                            } else {
+                                vertex_remap.insert(face.i1, vertices);
+
+                                let old_vertex = old_mesh.vertices.vertex(face.i1 as usize);
+
+                                new_mesh.vertices.create().copy_from(&old_vertex);
+
+                                vertices += 1;
+                                vertices - 1
+                            }
+                        };
+
+                        let i1 = remap_index(face.i1);
+                        let i2 = remap_index(face.i2);
+                        let i3 = remap_index(face.i3);
+
+                        new_mesh.faces.push(Face::new(i1, i2, i3));
+                    }
+                }
+            }
+        }
+
+        for mesh in new_meshes.into_values() {
+            self.meshes.push(mesh);
+        }
+
+        self.blend_shapes.clear();
     }
 
     /// Gets the base texture for each material in this model.
@@ -123,6 +350,16 @@ impl Model {
             ModelFileType::Cast => model_file_type_cast::to_cast(path, self),
             ModelFileType::Fbx => model_file_type_fbx::to_fbx(path, self),
             ModelFileType::Maya => model_file_type_maya::to_maya(path, self),
+        }
+    }
+
+    /// Validates the model has some form of valid data.
+    #[cfg(debug_assertions)]
+    pub fn validate(&self) {
+        self.skeleton.validate();
+
+        for mesh in &self.meshes {
+            mesh.validate(self.skeleton.bones.len());
         }
     }
 }

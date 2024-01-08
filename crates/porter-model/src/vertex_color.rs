@@ -1,3 +1,5 @@
+use porter_math::PackedU8Vector4;
+
 /// Represents the color of a vertex.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -19,5 +21,11 @@ impl VertexColor {
 impl From<VertexColor> for u32 {
     fn from(value: VertexColor) -> Self {
         u32::from_le_bytes([value.r, value.g, value.b, value.a])
+    }
+}
+
+impl From<PackedU8Vector4> for VertexColor {
+    fn from(value: PackedU8Vector4) -> Self {
+        Self::new(value.x, value.y, value.z, value.w)
     }
 }

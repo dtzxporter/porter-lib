@@ -26,7 +26,7 @@ impl Frame {
         })
     }
 
-    // Swaps out the internal buffer for the given one.
+    /// Swaps out the internal buffer for the given one.
     pub(crate) fn replace_buffer(&mut self, buffer: Vec<u8>) {
         self.buffer = buffer;
     }

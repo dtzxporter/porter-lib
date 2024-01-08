@@ -5,8 +5,8 @@ use std::path::Path;
 
 use porter_math::Vector3;
 
-use porter_utils::AsByteSlice;
 use porter_utils::StringWriteExt;
+use porter_utils::StructWriteExt;
 
 use crate::MaterialTextureRefUsage;
 use crate::Model;
@@ -74,13 +74,13 @@ pub fn to_semodel<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelErr
         file_data_presence_flags: 0,
         bone_data_presence_flags: 0,
         mesh_data_presence_flags: 0,
-        bone_count: model.skeleton.len() as u32,
+        bone_count: model.skeleton.bones.len() as u32,
         mesh_count: model.meshes.len() as u32,
         material_count: model.materials.len() as u32,
         reserved: [0; 3],
     };
 
-    if !model.skeleton.is_empty() {
+    if !model.skeleton.bones.is_empty() {
         header.file_data_presence_flags |= SEModelDataPresenceFlags::Bone as u8;
     }
 
@@ -96,7 +96,7 @@ pub fn to_semodel<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelErr
     let mut has_local_matrix = false;
     let mut has_scale = false;
 
-    for bone in &*model.skeleton {
+    for bone in &*model.skeleton.bones {
         if bone.local_position.is_some() || bone.local_rotation.is_some() {
             has_local_matrix = true;
         }
@@ -142,13 +142,13 @@ pub fn to_semodel<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelErr
         header.mesh_data_presence_flags |= SEModelMeshPresenceFlags::Color as u8;
     }
 
-    if !model.skeleton.is_empty() {
+    if !model.skeleton.bones.is_empty() {
         header.mesh_data_presence_flags |= SEModelMeshPresenceFlags::Weights as u8;
     }
 
-    semodel.write_all(header.as_byte_slice())?;
+    semodel.write_struct(header)?;
 
-    for (bone_index, bone) in model.skeleton.iter().enumerate() {
+    for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
         semodel.write_null_terminated_string(
             bone.name
                 .as_ref()
@@ -156,26 +156,22 @@ pub fn to_semodel<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelErr
         )?;
     }
 
-    for bone in &*model.skeleton {
+    for bone in &*model.skeleton.bones {
         semodel.write_all(&[0])?;
         semodel.write_all(&bone.parent.to_le_bytes())?;
 
         if has_world_matrix {
-            semodel.write_all(bone.world_position.unwrap_or_default().as_byte_slice())?;
-            semodel.write_all(bone.world_rotation.unwrap_or_default().as_byte_slice())?;
+            semodel.write_struct(bone.world_position.unwrap_or_default())?;
+            semodel.write_struct(bone.world_rotation.unwrap_or_default())?;
         }
 
         if has_local_matrix {
-            semodel.write_all(bone.local_position.unwrap_or_default().as_byte_slice())?;
-            semodel.write_all(bone.local_rotation.unwrap_or_default().as_byte_slice())?;
+            semodel.write_struct(bone.local_position.unwrap_or_default())?;
+            semodel.write_struct(bone.local_rotation.unwrap_or_default())?;
         }
 
         if has_scale {
-            semodel.write_all(
-                bone.local_scale
-                    .unwrap_or_else(Vector3::one)
-                    .as_byte_slice(),
-            )?;
+            semodel.write_struct(bone.local_scale.unwrap_or_else(Vector3::one))?;
         }
     }
 
@@ -188,42 +184,42 @@ pub fn to_semodel<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelErr
             face_count: mesh.faces.len() as u32,
         };
 
-        semodel.write_all(mesh_header.as_byte_slice())?;
+        semodel.write_struct(mesh_header)?;
 
         for i in 0..mesh.vertices.len() {
-            semodel.write_all(mesh.vertices.vertex(i).position().as_byte_slice())?;
+            semodel.write_struct(mesh.vertices.vertex(i).position())?;
         }
 
         for i in 0..mesh.vertices.len() {
             for uv in 0..mesh.vertices.uv_layers() {
-                semodel.write_all(mesh.vertices.vertex(i).uv(uv).as_byte_slice())?;
+                semodel.write_struct(mesh.vertices.vertex(i).uv(uv))?;
             }
         }
 
         for i in 0..mesh.vertices.len() {
-            semodel.write_all(mesh.vertices.vertex(i).normal().as_byte_slice())?;
+            semodel.write_struct(mesh.vertices.vertex(i).normal())?;
         }
 
         if has_colors {
             for i in 0..mesh.vertices.len() {
                 if mesh.vertices.colors() {
-                    semodel.write_all(mesh.vertices.vertex(i).color().as_byte_slice())?;
+                    semodel.write_struct(mesh.vertices.vertex(i).color())?;
                 } else {
-                    semodel.write_all(VertexColor::new(255, 255, 255, 255).as_byte_slice())?;
+                    semodel.write_struct(VertexColor::new(255, 255, 255, 255))?;
                 }
             }
         }
 
-        if !model.skeleton.is_empty() && mesh.vertices.maximum_influence() > 0 {
+        if !model.skeleton.bones.is_empty() && mesh.vertices.maximum_influence() > 0 {
             for i in 0..mesh.vertices.len() {
                 let vertex = mesh.vertices.vertex(i);
 
                 for w in 0..mesh.vertices.maximum_influence() {
                     let weight = vertex.weight(w);
 
-                    if model.skeleton.len() <= u8::MAX as usize {
+                    if model.skeleton.bones.len() <= u8::MAX as usize {
                         semodel.write_all(&(weight.bone as u8).to_le_bytes())?;
-                    } else if model.skeleton.len() <= u16::MAX as usize {
+                    } else if model.skeleton.bones.len() <= u16::MAX as usize {
                         semodel.write_all(&(weight.bone).to_le_bytes())?;
                     } else {
                         semodel.write_all(&(weight.bone as u32).to_le_bytes())?;

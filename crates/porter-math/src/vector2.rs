@@ -3,6 +3,8 @@ use std::ops;
 
 use static_assertions::assert_eq_size;
 
+use crate::Vector3;
+
 /// A 2d XY vector.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
@@ -123,6 +125,14 @@ impl Vector2 {
     pub fn lerp(&self, rhs: Self, time: f32) -> Self {
         *self + (rhs - *self) * time
     }
+
+    #[inline]
+    pub fn swap_bytes(self) -> Self {
+        Self {
+            x: f32::from_bits(self.x.to_bits().swap_bytes()),
+            y: f32::from_bits(self.y.to_bits().swap_bytes()),
+        }
+    }
 }
 
 impl cmp::PartialEq for Vector2 {
@@ -159,6 +169,12 @@ impl ops::IndexMut<usize> for Vector2 {
 impl From<(f32, f32)> for Vector2 {
     fn from(value: (f32, f32)) -> Self {
         Self::new(value.0, value.1)
+    }
+}
+
+impl From<Vector3> for Vector2 {
+    fn from(value: Vector3) -> Self {
+        Self::new(value.x, value.y)
     }
 }
 

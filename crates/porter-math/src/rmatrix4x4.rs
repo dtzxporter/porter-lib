@@ -62,6 +62,18 @@ impl RMatrix4x4 {
 
         result
     }
+
+    #[inline]
+    #[unroll::unroll_for_loops]
+    pub fn swap_bytes(&self) -> RMatrix4x4 {
+        let mut result = RMatrix4x4::new();
+
+        for i in 0..16 {
+            result.data[i] = f32::from_bits(self.data[i].to_bits().swap_bytes());
+        }
+
+        result
+    }
 }
 
 impl From<Matrix4x4> for RMatrix4x4 {

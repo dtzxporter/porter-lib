@@ -1,6 +1,6 @@
 /// A trait which converts a slice from one T: Copy to another O: Copy.
 pub trait AsThisSlice<O> {
-    type Output: Copy;
+    type Output: Copy + 'static;
 
     /// Converts the given slice to another slice type.
     fn as_this_slice(&self) -> &[Self::Output];
@@ -8,8 +8,8 @@ pub trait AsThisSlice<O> {
 
 impl<T, O> AsThisSlice<O> for &[T]
 where
-    T: Copy,
-    O: Copy,
+    T: Copy + 'static,
+    O: Copy + 'static,
 {
     type Output = O;
 
@@ -24,6 +24,7 @@ where
             size_in_bytes / output_size
         };
 
+        // SAFETY: We only support slices who's T is Copy and calculate the correct size in elements for the new slice.
         unsafe { std::slice::from_raw_parts(pointer as *const Self::Output, size_in_elements) }
     }
 }

@@ -2,17 +2,25 @@
 
 mod angles;
 mod matrix4x4;
+mod packed_i8_vector4;
+mod packed_u8_vector4;
 mod quaternion;
+mod rect;
 mod rmatrix4x4;
 mod vector2;
 mod vector3;
+mod vector4;
 
 pub use angles::*;
 pub use matrix4x4::*;
+pub use packed_i8_vector4::*;
+pub use packed_u8_vector4::*;
 pub use quaternion::*;
+pub use rect::*;
 pub use rmatrix4x4::*;
 pub use vector2::*;
 pub use vector3::*;
+pub use vector4::*;
 
 pub use half::f16;
 
@@ -26,17 +34,21 @@ pub fn radians_to_degrees(value: f32) -> f32 {
     (value * 180.0) / std::f32::consts::PI
 }
 
-/// Normalizes a f32x4 array.
-pub fn normalize_f32x4(mut array: [f32; 4]) -> [f32; 4] {
-    let length_sq =
-        array[0] * array[0] * array[1] * array[1] * array[2] * array[2] * array[3] * array[3];
+/// Normalizes a f32 array.
+pub fn normalize_array_f32<const SIZE: usize>(mut array: [f32; SIZE]) -> [f32; SIZE] {
+    let mut length_sq: f32 = 0.0;
+
+    #[allow(clippy::needless_range_loop)]
+    for i in 0..SIZE {
+        length_sq += array[i] * array[i];
+    }
 
     let length = length_sq.sqrt();
 
-    array[0] /= length;
-    array[1] /= length;
-    array[2] /= length;
-    array[3] /= length;
+    #[allow(clippy::needless_range_loop)]
+    for i in 0..SIZE {
+        array[i] /= length;
+    }
 
     array
 }

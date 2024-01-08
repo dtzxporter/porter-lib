@@ -1,6 +1,7 @@
 use wgpu::*;
 
 use std::sync::mpsc;
+use std::sync::Mutex;
 
 use porter_utils::AsAligned;
 
@@ -9,6 +10,11 @@ use porter_gpu::GPUInstance;
 
 use crate::ImageConvertOptions;
 use crate::TextureError;
+use crate::TextureExtensions;
+
+/// As of wgpu 0.18, there is a deadlock on device. Once 0.18.2/0.19 releases, we'll remove this again and test.
+/// TODO: Remove once a newer version of wgpu releases.
+static CONVERTER_MUTEX: Mutex<()> = Mutex::new(());
 
 /// Converts textures from one format to another (uncompressed only).
 pub struct GPUConverter {
@@ -56,12 +62,9 @@ impl GPUConverter {
     /// Creates the input texture data layout.
     #[inline(always)]
     fn input_texture_data_layout(&self) -> ImageDataLayout {
-        let block_size = self.input_format.block_size(None).unwrap_or_default();
-        let block_dims = self.input_format.block_dimensions();
-
         ImageDataLayout {
             offset: 0,
-            bytes_per_row: Some(block_size * (self.width / block_dims.0)),
+            bytes_per_row: Some(self.input_format.bytes_per_row(self.width)),
             rows_per_image: None,
         }
     }
@@ -208,16 +211,11 @@ impl GPUConverter {
 
     /// Creates an output buffer based on the size of the output texture.
     fn create_output_buffer(&self) -> Buffer {
-        let block_size = self.output_format.block_size(None).unwrap_or_default();
-        let block_dims = self.output_format.block_dimensions();
-
-        let bytes_per_row = block_size as u64 * (self.width as u64 / block_dims.0 as u64);
-        let size = bytes_per_row.as_aligned(COPY_BYTES_PER_ROW_ALIGNMENT as u64)
-            * (self.height as u64 / block_dims.1 as u64);
-
         self.instance.device().create_buffer(&BufferDescriptor {
             label: None,
-            size,
+            size: self
+                .output_format
+                .buffer_size_aligned(self.width, self.height),
             usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
             mapped_at_creation: false,
         })
@@ -243,9 +241,11 @@ impl GPUConverter {
                         b: 0.0,
                         a: 1.0,
                     }),
-                    store: true,
+                    store: StoreOp::Store,
                 },
             })],
+            occlusion_query_set: None,
+            timestamp_writes: None,
             depth_stencil_attachment: None,
         });
 
@@ -261,11 +261,6 @@ impl GPUConverter {
         output_texture: &Texture,
         output_buffer: &Buffer,
     ) {
-        let block_size = self.output_format.block_size(None).unwrap_or_default();
-        let block_dims = self.output_format.block_dimensions();
-
-        let bytes_per_row = block_size * (self.width / block_dims.0);
-
         encoder.copy_texture_to_buffer(
             ImageCopyTexture {
                 texture: output_texture,
@@ -277,7 +272,11 @@ impl GPUConverter {
                 buffer: output_buffer,
                 layout: ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: Some(bytes_per_row.as_aligned(COPY_BYTES_PER_ROW_ALIGNMENT)),
+                    bytes_per_row: Some(
+                        self.output_format
+                            .bytes_per_row(self.width)
+                            .as_aligned(COPY_BYTES_PER_ROW_ALIGNMENT),
+                    ),
                     rows_per_image: None,
                 },
             },
@@ -303,6 +302,7 @@ impl GPUConverter {
     /// Downloads the GPU texture data to the CPU texture buffer.
     fn download_gpu_texture_cpu<O: AsMut<[u8]>>(
         &self,
+        submission: SubmissionIndex,
         mut output: O,
         output_buffer: &Buffer,
     ) -> Result<(), TextureError> {
@@ -313,7 +313,9 @@ impl GPUConverter {
             tx.send(result).unwrap();
         });
 
-        self.instance.device().poll(MaintainBase::Wait);
+        self.instance
+            .device()
+            .poll(MaintainBase::WaitForSubmissionIndex(submission));
 
         if rx.recv().unwrap().is_err() {
             return Err(TextureError::ConversionError);
@@ -335,6 +337,8 @@ impl GPUConverter {
         input: I,
         output: O,
     ) -> Result<(), TextureError> {
+        let _guard = CONVERTER_MUTEX.lock().unwrap();
+
         let input_texture = self.create_input_texture();
 
         self.upload_cpu_texture_gpu(input, &input_texture);
@@ -370,8 +374,8 @@ impl GPUConverter {
 
         self.copy_texture_to_buffer(&mut encoder, &output_texture, &output_buffer);
 
-        self.instance.queue().submit(Some(encoder.finish()));
+        let submission = self.instance.queue().submit(Some(encoder.finish()));
 
-        self.download_gpu_texture_cpu(output, &output_buffer)
+        self.download_gpu_texture_cpu(submission, output, &output_buffer)
     }
 }

@@ -1,7 +1,10 @@
 use std::borrow::Cow;
+use std::io::Read;
 use std::io::Seek;
 use std::io::Write;
 
+use tiff::decoder::Decoder;
+use tiff::decoder::DecodingResult;
 use tiff::encoder::colortype;
 use tiff::encoder::compression::Deflate;
 use tiff::encoder::compression::DeflateLevel;
@@ -9,6 +12,7 @@ use tiff::encoder::TiffEncoder;
 use tiff::encoder::TiffValue;
 use tiff::tags::Tag;
 use tiff::tags::Type;
+use tiff::ColorType;
 
 use porter_utils::AsThisSlice;
 
@@ -236,7 +240,7 @@ impl TiffValue for IccProfileValue {
 
 /// Utility macro that writes the proper image format.
 macro_rules! write_image_data {
-    ($encoder:expr, $frame:expr, $color:ty, $srgb:expr) => {{
+    ($encoder:expr, $frame:expr, $size:expr, $color:ty, $srgb:expr) => {{
         let mut frame_encoder = $encoder.new_image_with_compression::<$color, Deflate>(
             $frame.width(),
             $frame.height(),
@@ -251,8 +255,21 @@ macro_rules! write_image_data {
             directory.write_tag(Tag::Unknown(0x8773), IccProfileValue)?;
         }
 
-        frame_encoder.write_data($frame.buffer().as_this_slice())?;
+        frame_encoder.write_data((&$frame.buffer()[..$size as usize]).as_this_slice())?;
     }};
+}
+
+/// Creates a proper image format from the tiff specification.
+const fn tiff_to_format(format: ColorType) -> Result<ImageFormat, TextureError> {
+    Ok(match format {
+        ColorType::Gray(8) => ImageFormat::R8Unorm,
+        ColorType::Gray(16) => ImageFormat::R16Unorm,
+        ColorType::GrayA(8) => ImageFormat::R8G8Unorm,
+        ColorType::GrayA(16) => ImageFormat::R16G16Unorm,
+        ColorType::RGBA(8) => ImageFormat::R8G8B8A8Unorm,
+        ColorType::RGBA(16) => ImageFormat::R16G16B16A16Unorm,
+        _ => return Err(TextureError::UnsupportedImageFormat(ImageFormat::Unknown)),
+    })
 }
 
 /// Picks the proper format required to save the input format to a tiff file type.
@@ -293,14 +310,20 @@ pub fn to_tiff<O: Write + Seek>(image: &Image, mut output: &mut O) -> Result<(),
     let mut encoder = TiffEncoder::new(&mut output)?;
 
     for frame in image.frames() {
+        let size = image.frame_size_with_mipmaps(frame.width(), frame.height(), 1);
+
         match image.format() {
-            ImageFormat::R8Unorm => write_image_data!(encoder, frame, colortype::Gray8, false),
-            ImageFormat::R16Unorm => write_image_data!(encoder, frame, colortype::Gray16, false),
+            ImageFormat::R8Unorm => {
+                write_image_data!(encoder, frame, size, colortype::Gray8, false)
+            }
+            ImageFormat::R16Unorm => {
+                write_image_data!(encoder, frame, size, colortype::Gray16, false)
+            }
             ImageFormat::R8G8B8A8Unorm => {
-                write_image_data!(encoder, frame, colortype::RGBA8, false)
+                write_image_data!(encoder, frame, size, colortype::RGBA8, false)
             }
             ImageFormat::R8G8B8A8UnormSrgb => {
-                write_image_data!(encoder, frame, colortype::RGBA8, true)
+                write_image_data!(encoder, frame, size, colortype::RGBA8, true)
             }
             _ => {
                 return Err(TextureError::ContainerFormatInvalid(
@@ -312,4 +335,40 @@ pub fn to_tiff<O: Write + Seek>(image: &Image, mut output: &mut O) -> Result<(),
     }
 
     Ok(())
+}
+
+/// Reads a tiff file from the input stream to an image.
+pub fn from_tiff<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
+    let mut decoder = Decoder::new(input)?;
+
+    let dimensions = decoder.dimensions()?;
+    let format = tiff_to_format(decoder.colortype()?)?;
+
+    let buffer = decoder.read_image()?;
+
+    let mut image = Image::new(dimensions.0, dimensions.1, format)?;
+    let frame = image.create_frame(dimensions.0, dimensions.1)?;
+
+    match buffer {
+        DecodingResult::U8(buffer) => {
+            if frame.buffer().len() != buffer.len() {
+                return Err(TextureError::ConversionError);
+            }
+
+            frame.buffer_mut().copy_from_slice(&buffer);
+        }
+        DecodingResult::U16(buffer) => {
+            let buffer = &buffer[0..];
+            let buffer: &[u8] = buffer.as_this_slice();
+
+            if frame.buffer().len() != buffer.len() {
+                return Err(TextureError::ConversionError);
+            }
+
+            frame.buffer_mut().copy_from_slice(buffer);
+        }
+        _ => return Err(TextureError::UnsupportedImageFormat(ImageFormat::Unknown)),
+    }
+
+    Ok(image)
 }

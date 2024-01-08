@@ -128,6 +128,9 @@ pub enum ImageFormat {
 
     // Added to ensure safe conversion from a raw integer value.
     Count,
+
+    // Non-standard formats used to convert on the software side.
+    R8G8B8Unorm = 0x400,
 }
 
 /// Gets whether or not an image format is palettized.
@@ -180,8 +183,27 @@ pub const fn is_format_srgb(format: ImageFormat) -> bool {
     )
 }
 
+/// Gets whether or not an image format is software convertable.
+pub const fn is_format_requires_unpack(format: ImageFormat) -> bool {
+    matches!(format, ImageFormat::R1Unorm | ImageFormat::R8G8B8Unorm)
+}
+
+/// Gets wwhether or not an image format and the target format are just swizzled.
+pub const fn is_format_swizzled(format: ImageFormat, target: ImageFormat) -> bool {
+    #[allow(clippy::match_like_matches_macro)]
+    match (format, target) {
+        (ImageFormat::R8G8B8A8Unorm, ImageFormat::B8G8R8A8Unorm) => true,
+        (ImageFormat::B8G8R8A8Unorm, ImageFormat::R8G8B8A8Unorm) => true,
+        (ImageFormat::R8G8B8A8UnormSrgb, ImageFormat::B8G8R8A8UnormSrgb) => true,
+        (ImageFormat::B8G8R8A8UnormSrgb, ImageFormat::R8G8B8A8UnormSrgb) => true,
+        (ImageFormat::R8G8B8A8Typeless, ImageFormat::B8G8R8A8Typeless) => true,
+        (ImageFormat::B8G8R8A8Typeless, ImageFormat::R8G8B8A8Typeless) => true,
+        _ => false,
+    }
+}
+
 /// Gets the block dimensions for an image format.
-pub fn format_to_block_dimensions(format: ImageFormat) -> (u32, u32) {
+pub const fn format_to_block_dimensions(format: ImageFormat) -> (u32, u32) {
     match format {
         // 4x4 compressed texture format.
         ImageFormat::Bc1Typeless
@@ -208,6 +230,48 @@ pub fn format_to_block_dimensions(format: ImageFormat) -> (u32, u32) {
 
         // Non-compressed texture format.
         _ => (1, 1),
+    }
+}
+
+/// Calculates the block size for a compressed texture only.
+pub const fn format_to_block_size(format: ImageFormat) -> u32 {
+    match format {
+        ImageFormat::Bc1Typeless
+        | ImageFormat::Bc1Unorm
+        | ImageFormat::Bc1UnormSrgb
+        | ImageFormat::Bc4Typeless
+        | ImageFormat::Bc4Unorm
+        | ImageFormat::Bc4Snorm => 8,
+        ImageFormat::Bc2Typeless
+        | ImageFormat::Bc2Unorm
+        | ImageFormat::Bc2UnormSrgb
+        | ImageFormat::Bc3Typeless
+        | ImageFormat::Bc3Unorm
+        | ImageFormat::Bc3UnormSrgb
+        | ImageFormat::Bc5Typeless
+        | ImageFormat::Bc5Unorm
+        | ImageFormat::Bc5Snorm
+        | ImageFormat::Bc6HTypeless
+        | ImageFormat::Bc6HUf16
+        | ImageFormat::Bc6HSf16
+        | ImageFormat::Bc7Typeless
+        | ImageFormat::Bc7Unorm
+        | ImageFormat::Bc7UnormSrgb => 16,
+        _ => 0,
+    }
+}
+
+/// Calculates the buffer size for an image in the format, with the given width and height.
+pub const fn format_to_buffer_size(format: ImageFormat, width: u32, height: u32) -> u32 {
+    if is_format_compressed(format) {
+        let block_size = format_to_block_size(format);
+        let block_dimensions = format_to_block_dimensions(format);
+
+        let bytes_per_row = block_size * ((width + (block_dimensions.0 - 1)) / block_dimensions.0);
+
+        bytes_per_row * ((height + (block_dimensions.1 - 1)) / block_dimensions.1)
+    } else {
+        (width * height * format_to_bpp(format) + 7) / 8
     }
 }
 
@@ -310,6 +374,20 @@ pub const fn format_to_wgpu(format: ImageFormat) -> Result<TextureFormat, Textur
     })
 }
 
+/// Converts an unsigned to a signed image format.
+pub const fn format_to_srgb(format: ImageFormat) -> ImageFormat {
+    match format {
+        ImageFormat::R8G8B8A8Unorm => ImageFormat::R8G8B8A8UnormSrgb,
+        ImageFormat::Bc1Unorm => ImageFormat::Bc1UnormSrgb,
+        ImageFormat::Bc2Unorm => ImageFormat::Bc2UnormSrgb,
+        ImageFormat::Bc3Unorm => ImageFormat::Bc3UnormSrgb,
+        ImageFormat::B8G8R8A8Unorm => ImageFormat::B8G8R8A8UnormSrgb,
+        ImageFormat::B8G8R8X8Unorm => ImageFormat::B8G8R8X8UnormSrgb,
+        ImageFormat::Bc7Unorm => ImageFormat::Bc7UnormSrgb,
+        _ => format,
+    }
+}
+
 /// Gets an image formats `bits` per pixel.
 pub const fn format_to_bpp(format: ImageFormat) -> u32 {
     match format {
@@ -377,7 +455,7 @@ pub const fn format_to_bpp(format: ImageFormat) -> u32 {
         | ImageFormat::V208 => 16,
 
         // 24 bits per pixel
-        ImageFormat::P010 | ImageFormat::P016 | ImageFormat::V408 => 24,
+        ImageFormat::P010 | ImageFormat::P016 | ImageFormat::V408 | ImageFormat::R8G8B8Unorm => 24,
 
         // 32 bits per pixel
         ImageFormat::R10G10B10A2Typeless
@@ -449,5 +527,20 @@ pub const fn format_to_bpp(format: ImageFormat) -> u32 {
         | ImageFormat::R32G32B32A32Float
         | ImageFormat::R32G32B32A32Uint
         | ImageFormat::R32G32B32A32Sint => 128,
+    }
+}
+
+impl TryFrom<u32> for ImageFormat {
+    type Error = TextureError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        if value >= ImageFormat::Unknown as u32 && value < ImageFormat::Count as u32 {
+            // SAFETY: We check that the value is within the bounds of the enum, and that
+            // the enum has no caps or holes.
+            #[allow(unsafe_code)]
+            Ok(unsafe { std::mem::transmute(value) })
+        } else {
+            Err(TextureError::InvalidImageFormat(ImageFormat::Unknown))
+        }
     }
 }

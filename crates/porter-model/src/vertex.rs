@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt;
 
 use porter_math::Vector2;
@@ -58,20 +59,18 @@ impl<'a> Vertex<'a> {
         )
     }
 
-    /// Returns the count of non-zero weight values.
+    /// Returns the unique weights for this vertex.
     #[inline]
-    pub fn weight_count(&self) -> usize {
-        let mut count = 0;
+    pub fn unique_weights(&self) -> BTreeMap<u16, f32> {
+        let mut result = BTreeMap::new();
 
-        for i in 0..self.buffer.maximum_influence() {
-            if self.weight(i).value != 0.0 {
-                count += 1;
-            } else {
-                break;
-            }
+        for w in 0..self.buffer.maximum_influence() {
+            let weight = self.weight(w);
+
+            *result.entry(weight.bone).or_default() += weight.value;
         }
 
-        count
+        result
     }
 
     /// Returns the color for this vertex.
@@ -91,8 +90,9 @@ impl<'a> Vertex<'a> {
     fn read<T: Copy>(&self, offset: usize) -> T {
         let count = (self.index * self.buffer.stride()) + offset;
 
-        debug_assert!(count < self.buffer.as_slice().len());
+        debug_assert!((count + std::mem::size_of::<T>()) <= self.buffer.as_slice().len());
 
+        // SAFETY: We assert that the count of bytes is less than the buffer size.
         unsafe { std::ptr::read(self.buffer.as_slice().as_ptr().add(count) as *const T) }
     }
 }
@@ -163,20 +163,18 @@ impl<'a> VertexMut<'a> {
         )
     }
 
-    /// Returns the count of non-zero weight values.
+    /// Returns the unique weights for this vertex.
     #[inline]
-    pub fn weight_count(&self) -> usize {
-        let mut count = 0;
+    pub fn unique_weights(&self) -> BTreeMap<u16, f32> {
+        let mut result = BTreeMap::new();
 
-        for i in 0..self.buffer.maximum_influence() {
-            if self.weight(i).value != 0.0 {
-                count += 1;
-            } else {
-                break;
-            }
+        for w in 0..self.buffer.maximum_influence() {
+            let weight = self.weight(w);
+
+            *result.entry(weight.bone).or_default() += weight.value;
         }
 
-        count
+        result
     }
 
     /// Sets a weight for this vertex.
@@ -221,13 +219,57 @@ impl<'a> VertexMut<'a> {
         self
     }
 
+    /// Copies all of the values from the given vertex.
+    #[inline]
+    pub fn copy_from(&mut self, vertex: &Vertex<'_>) {
+        debug_assert!(self.buffer.colors() == vertex.buffer.colors());
+        debug_assert!(self.buffer.uv_layers() == vertex.buffer.uv_layers());
+        debug_assert!(self.buffer.maximum_influence() == vertex.buffer.maximum_influence());
+
+        let size = self.buffer.stride();
+
+        let offset_src = vertex.index * size;
+        let offset_dst = self.index * size;
+
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                vertex.buffer.as_slice().as_ptr().add(offset_src),
+                self.buffer.as_slice().as_ptr().add(offset_dst) as *mut u8,
+                size,
+            )
+        };
+    }
+
+    /// Copies all of the values from the given vertex.
+    #[inline]
+    pub fn copy_from_mut(&mut self, vertex: &VertexMut<'_>) {
+        debug_assert!(self.buffer.colors() == vertex.buffer.colors());
+        debug_assert!(self.buffer.uv_layers() == vertex.buffer.uv_layers());
+        debug_assert!(self.buffer.maximum_influence() == vertex.buffer.maximum_influence());
+        debug_assert!(self.buffer.stride() == vertex.buffer.stride());
+
+        let size = self.buffer.stride();
+
+        let offset_src = vertex.index * size;
+        let offset_dst = self.index * size;
+
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                vertex.buffer.as_slice().as_ptr().add(offset_src),
+                self.buffer.as_slice().as_ptr().add(offset_dst) as *mut u8,
+                size,
+            )
+        };
+    }
+
     /// Reads T from the specified offset.
     #[inline(always)]
     fn read<T: Copy>(&self, offset: usize) -> T {
         let count = (self.index * self.buffer.stride()) + offset;
 
-        debug_assert!(count < self.buffer.as_slice().len());
+        debug_assert!((count + std::mem::size_of::<T>()) <= self.buffer.as_slice().len());
 
+        // SAFETY: We assert that the count of bytes is less than the buffer size.
         unsafe { std::ptr::read(self.buffer.as_slice().as_ptr().add(count) as *const T) }
     }
 
@@ -236,11 +278,10 @@ impl<'a> VertexMut<'a> {
     fn write<T: Copy>(&mut self, offset: usize, value: T) {
         let count = (self.index * self.buffer.stride()) + offset;
 
-        debug_assert!(count < self.buffer.as_slice().len());
+        debug_assert!((count + std::mem::size_of::<T>()) <= self.buffer.as_slice().len());
 
-        unsafe {
-            std::ptr::write(self.buffer.as_slice().as_ptr().add(count) as *mut T, value);
-        }
+        // SAFETY: We assert that the count of bytes is less than the buffer size.
+        unsafe { std::ptr::write(self.buffer.as_slice().as_ptr().add(count) as *mut T, value) };
     }
 }
 

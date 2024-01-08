@@ -28,6 +28,9 @@ where
                 break;
             }
 
+            buffer
+                .try_reserve(1)
+                .map_err(|e| io::Error::new(io::ErrorKind::OutOfMemory, e))?;
             buffer.push(scratch[0]);
         }
 
@@ -39,7 +42,12 @@ where
         size: usize,
         null_terminator: bool,
     ) -> Result<String, io::Error> {
-        let mut buffer = vec![0; size];
+        let mut buffer: Vec<u8> = Vec::new();
+
+        buffer
+            .try_reserve(size)
+            .map_err(|e| io::Error::new(io::ErrorKind::OutOfMemory, e))?;
+        buffer.resize(size, 0);
 
         self.read_exact(&mut buffer)?;
 

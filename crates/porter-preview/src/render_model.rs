@@ -37,7 +37,7 @@ impl RenderModel {
                 .iter()
                 .map(|mesh| RenderMesh::from_mesh(instance, bind_group_layouts, mesh, &materials))
                 .collect(),
-            skeleton: if model.skeleton.is_empty() {
+            skeleton: if model.skeleton.bones.is_empty() {
                 None
             } else {
                 Some(RenderSkeleton::from_skeleton(

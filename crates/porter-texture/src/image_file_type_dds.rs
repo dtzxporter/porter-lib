@@ -1,22 +1,31 @@
+use std::io::Read;
 use std::io::Seek;
 use std::io::Write;
 
-use porter_utils::AsByteSlice;
+use porter_utils::StructReadExt;
+use porter_utils::StructWriteExt;
 
 use crate::format_to_bpp;
+use crate::format_to_srgb;
 use crate::is_format_compressed;
 use crate::Image;
+use crate::ImageFileType;
 use crate::ImageFormat;
 use crate::TextureError;
 
 const DDS_FOURCC: u32 = 0x00000004;
+const DDS_RGB: u32 = 0x00000040;
+
+const DDS_PIXEL_FORMAT_SRGB: u32 = 0x40000000;
 
 const DDS_HEADER_FLAGS_TEXTURE: u32 = 0x00001007;
 const DDS_HEADER_FLAGS_PITCH: u32 = 0x00000008;
 const DDS_HEADER_FLAGS_LINEARSIZE: u32 = 0x00080000;
+const DDS_HEADER_FLAGS_MIPMAP: u32 = 0x20000;
 
 const DDS_SURFACE_FLAGS_TEXTURE: u32 = 0x00001000;
 const DDS_SURFACE_FLAGS_CUBEMAP: u32 = 0x00000008;
+const DDS_SURFACE_FLAGS_MIPMAP: u32 = 0x400008;
 
 const DDS_CUBEMAP_ALLFACES: u32 = 0x0000FE00;
 
@@ -30,8 +39,22 @@ macro_rules! make_four_cc {
     };
 }
 
+/// Map of bitmasks to their image formats.
+#[rustfmt::skip]
+static BITMASK_TO_FORMAT: [(u32, u32, u32, u32, u32, ImageFormat); 9] = [
+    (32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000, ImageFormat::R8G8B8A8Unorm),
+    (32, 0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000, ImageFormat::B8G8R8A8Unorm),
+    (32, 0x0000ffff, 0xffff0000, 0, 0, ImageFormat::R16G16Unorm),
+    (24, 0xff000000, 0x00ff0000, 0x0000ff00, 0, ImageFormat::R8G8B8Unorm),
+    (16, 0x0f00, 0x00f0, 0x000f, 0xf000, ImageFormat::B4G4R4A4Unorm),
+    (16, 0x00ff, 0, 0, 0xff00, ImageFormat::R8G8Unorm),
+    (16, 0xffff, 0, 0, 0, ImageFormat::R16Unorm),
+    (8, 0xff, 0, 0, 0, ImageFormat::R8Unorm),
+    (8, 0, 0, 0, 0xff, ImageFormat::A8Unorm),
+];
+
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 struct DdsPixelFormat {
     pub size: u32,
     pub flags: u32,
@@ -44,7 +67,7 @@ struct DdsPixelFormat {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 struct DdsHeader {
     pub size: u32,
     pub flags: u32,
@@ -63,7 +86,7 @@ struct DdsHeader {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 struct DdsHeaderDx10 {
     pub dxgi_format: u32,
     pub resource_dimension: u32,
@@ -193,6 +216,19 @@ const fn format_to_pf_dx10(
             },
             None,
         ),
+        ImageFormat::R8G8B8Unorm => (
+            DdsPixelFormat {
+                size: std::mem::size_of::<DdsPixelFormat>() as u32,
+                flags: DDS_RGB,
+                four_cc: 0,
+                rgb_bit_count: 24,
+                rbit_mask: 0xff000000,
+                gbit_mask: 0x00ff0000,
+                bbit_mask: 0x0000ff00,
+                abit_mask: 0x00000000,
+            },
+            None,
+        ),
         // Fall back to directx 10 header, which uses format directly.
         _ => {
             let pixel_format = DdsPixelFormat {
@@ -237,6 +273,13 @@ fn format_to_dds(image: &Image) -> (DdsHeader, Option<DdsHeaderDx10>) {
         0
     };
 
+    let mip_map_count = image.mipmaps();
+
+    if mip_map_count > 0 {
+        caps |= DDS_SURFACE_FLAGS_MIPMAP;
+        flags |= DDS_HEADER_FLAGS_MIPMAP;
+    }
+
     let (pitch, slice) = compute_pitch_slice(image.format(), image.width(), image.height());
 
     let pitch_or_linear_size = if is_format_compressed(image.format()) {
@@ -256,7 +299,7 @@ fn format_to_dds(image: &Image) -> (DdsHeader, Option<DdsHeaderDx10>) {
         width: image.width(),
         pitch_or_linear_size,
         depth: 1,
-        mip_map_count: 0,
+        mip_map_count,
         reserved1: [0; 11],
         pixel_format,
         caps,
@@ -267,6 +310,61 @@ fn format_to_dds(image: &Image) -> (DdsHeader, Option<DdsHeaderDx10>) {
     };
 
     (header, header_dx10)
+}
+
+/// Creates a proper image format from the dds pixel format.
+fn dds_to_format(pixel_format: &DdsPixelFormat) -> Result<ImageFormat, TextureError> {
+    if (pixel_format.flags & DDS_FOURCC) > 0 {
+        let format = match pixel_format.four_cc {
+            // Standard block encoded values.
+            x if x == make_four_cc!('D', 'X', 'T', '1') => ImageFormat::Bc1Unorm,
+            x if x == make_four_cc!('D', 'X', 'T', '3') => ImageFormat::Bc2Unorm,
+            x if x == make_four_cc!('D', 'X', 'T', '5') => ImageFormat::Bc3Unorm,
+            x if x == make_four_cc!('A', 'T', 'I', '1') => ImageFormat::Bc4Unorm,
+            x if x == make_four_cc!('A', 'T', 'I', '2') => ImageFormat::Bc5Unorm,
+            x if x == make_four_cc!('A', '2', 'X', 'Y') => ImageFormat::Bc5Unorm,
+            x if x == make_four_cc!('B', 'C', '4', 'U') => ImageFormat::Bc4Unorm,
+            x if x == make_four_cc!('B', 'C', '4', 'S') => ImageFormat::Bc4Snorm,
+            x if x == make_four_cc!('B', 'C', '5', 'U') => ImageFormat::Bc5Unorm,
+            x if x == make_four_cc!('B', 'C', '5', 'S') => ImageFormat::Bc5Snorm,
+
+            // D3DFormat legacy values.
+            36 => ImageFormat::R16G16B16A16Unorm,
+            110 => ImageFormat::R16G16B16A16Unorm,
+            111 => ImageFormat::R16Float,
+            112 => ImageFormat::R16G16Float,
+            113 => ImageFormat::R16G16B16A16Float,
+            114 => ImageFormat::R32Float,
+            115 => ImageFormat::R32G32Float,
+            116 => ImageFormat::R32G32B32A32Float,
+
+            // Unknown or unsupported.
+            _ => {
+                #[cfg(debug_assertions)]
+                println!("Unsupported fourCC code: {:#02X?}", pixel_format.four_cc);
+
+                return Err(TextureError::UnsupportedImageFormat(ImageFormat::Unknown));
+            }
+        };
+
+        return Ok(format);
+    }
+
+    for mask in &BITMASK_TO_FORMAT {
+        if pixel_format.rgb_bit_count == mask.0
+            && pixel_format.rbit_mask == mask.1
+            && pixel_format.gbit_mask == mask.2
+            && pixel_format.bbit_mask == mask.3
+            && pixel_format.abit_mask == mask.4
+        {
+            return Ok(mask.5);
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    println!("Unsupported masks: {:#02X?}", pixel_format);
+
+    Err(TextureError::UnsupportedImageFormat(ImageFormat::Unknown))
 }
 
 /// Picks the proper format required to save the input format to a dds file type.
@@ -280,10 +378,10 @@ pub fn to_dds<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), Text
 
     output.write_all(&make_four_cc!('D', 'D', 'S', ' ').to_le_bytes())?;
 
-    output.write_all(header.as_byte_slice())?;
+    output.write_struct(header)?;
 
     if let Some(header_dx10) = header_dx10 {
-        output.write_all(header_dx10.as_byte_slice())?;
+        output.write_struct(header_dx10)?;
     }
 
     for frame in image.frames() {
@@ -291,4 +389,55 @@ pub fn to_dds<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), Text
     }
 
     Ok(())
+}
+
+/// Reads a dds file from the input stream to an image.
+pub fn from_dds<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
+    let magic: u32 = input.read_struct()?;
+
+    if magic != make_four_cc!('D', 'D', 'S', ' ') {
+        return Err(TextureError::ContainerInvalid(ImageFileType::Dds));
+    }
+
+    let header: DdsHeader = input.read_struct()?;
+
+    let mut frames = if header.caps2 & DDS_CUBEMAP_ALLFACES == DDS_CUBEMAP_ALLFACES {
+        6
+    } else {
+        1
+    };
+
+    let mut format: ImageFormat =
+        if header.pixel_format.four_cc == make_four_cc!('D', 'X', '1', '0') {
+            let header_dx10: DdsHeaderDx10 = input.read_struct()?;
+
+            if header_dx10.array_size == 6 {
+                frames = 6;
+            }
+
+            ImageFormat::try_from(header_dx10.dxgi_format)?
+        } else {
+            dds_to_format(&header.pixel_format)?
+        };
+
+    if header.reserved1[9] == make_four_cc!('N', 'V', 'T', 'T')
+        && (header.pixel_format.flags & DDS_PIXEL_FORMAT_SRGB) > 0
+    {
+        format = format_to_srgb(format);
+    }
+
+    let mut image = Image::with_mipmaps(
+        header.width,
+        header.height,
+        header.mip_map_count.max(1),
+        format,
+    )?;
+
+    for _ in 0..frames {
+        let frame = image.create_frame(header.width, header.height)?;
+
+        input.read_exact(frame.buffer_mut())?;
+    }
+
+    Ok(image)
 }

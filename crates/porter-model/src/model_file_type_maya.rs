@@ -8,7 +8,7 @@ use std::path::Path;
 use porter_math::Angles;
 use porter_math::Vector3;
 
-use porter_utils::AsHash;
+use porter_utils::HashXXH64;
 
 use crate::Model;
 use crate::ModelError;
@@ -21,7 +21,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         .file_stem()
         .map(|x| x.to_string_lossy().to_string())
         .unwrap_or_else(|| String::from("porter_model"));
-    let hash = file_name.as_hash() as u32;
+    let hash = file_name.hash_xxh64() as u32;
 
     let mut maya = BufWriter::new(File::create(path.with_extension("ma"))?);
 
@@ -408,7 +408,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         )?;
 
         for u in 0..mesh.vertices.uv_layers() {
-            if u > mesh.materials.len() {
+            if u >= mesh.materials.len() {
                 break;
             }
 
@@ -424,7 +424,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         }
     }
 
-    if model.skeleton.is_empty() {
+    if model.skeleton.bones.is_empty() {
         return Ok(());
     }
 
@@ -433,7 +433,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         "createNode transform -n \"Joints\";\nsetAttr \".ove\" yes;\n"
     )?;
 
-    for (bone_index, bone) in model.skeleton.iter().enumerate() {
+    for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
         if bone.parent == -1 {
             writeln!(
                 maya,
@@ -449,7 +449,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 bone.name
                     .as_deref()
                     .unwrap_or(&format!("porter_bone_{}", bone_index)),
-                model.skeleton[bone.parent as usize]
+                model.skeleton.bones[bone.parent as usize]
                     .name
                     .as_deref()
                     .unwrap_or(&format!("porter_bone_{}", bone.parent))
@@ -518,12 +518,12 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         for v in 0..mesh.vertices.len() {
             let vertex = mesh.vertices.vertex(v);
 
-            for w in 0..vertex.weight_count() {
+            for w in 0..mesh.vertices.maximum_influence() {
                 let weight = vertex.weight(w);
 
                 if bone_set.insert(weight.bone) {
                     bone_names.push(
-                        model.skeleton[weight.bone as usize]
+                        model.skeleton.bones[weight.bone as usize]
                             .name
                             .clone()
                             .unwrap_or_else(|| format!("porter_bone_{}", { weight.bone })),
@@ -572,16 +572,15 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
 
                     let mut weight_value = 0.0;
 
-                    for w in 0..vertex.weight_count() {
+                    for w in 0..mesh.vertices.maximum_influence() {
                         let weight = vertex.weight(w);
 
                         if weight.bone == reverse_bone_map[&(b as u32)] as u16 {
-                            weight_value = weight.value;
-                            break;
+                            weight_value += weight.value;
                         }
                     }
 
-                    writeln!(bind, "{}", weight_value)?;
+                    write!(bind, "{}", weight_value)?;
                 }
             }
 

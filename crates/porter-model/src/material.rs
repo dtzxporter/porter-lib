@@ -40,7 +40,7 @@ pub struct Material {
 }
 
 /// Cleans a material name.
-fn sanitize_material_name(name: String) -> String {
+pub(crate) fn sanitize_material_name(name: String) -> String {
     let mut name = name.replace(' ', "_").sanitized();
 
     if name == "default" || name.is_empty() {

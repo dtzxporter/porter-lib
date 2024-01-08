@@ -7,17 +7,27 @@ pub enum TextureError {
     UnsupportedImageFormat(ImageFormat),
     InvalidImageSize(u32, u32),
     InvalidFrameSize(u32, u32),
+    InvalidMipMaps(u32),
     FrameAllocationFailed,
     ContainerFormatInvalid(ImageFormat, ImageFileType),
+    ContainerInvalid(ImageFileType),
     ConversionError,
+    InvalidOperation,
     IoError(std::io::Error),
     PngEncodingError(png::EncodingError),
+    PngDecodingError(png::DecodingError),
     TiffError(tiff::TiffError),
 }
 
 impl From<png::EncodingError> for TextureError {
     fn from(value: png::EncodingError) -> Self {
         Self::PngEncodingError(value)
+    }
+}
+
+impl From<png::DecodingError> for TextureError {
+    fn from(value: png::DecodingError) -> Self {
+        Self::PngDecodingError(value)
     }
 }
 

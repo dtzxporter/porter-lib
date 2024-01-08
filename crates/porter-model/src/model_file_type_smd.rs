@@ -22,7 +22,7 @@ macro_rules! write_face_vertex {
             Vector2::zero()
         };
 
-        let actual_weight_count = vertex.weight_count();
+        let weights = vertex.unique_weights();
 
         write!(
             $smd,
@@ -35,13 +35,11 @@ macro_rules! write_face_vertex {
             normal.z,
             uv.x,
             1.0 - uv.y,
-            actual_weight_count
+            weights.len()
         )?;
 
-        for i in 0..actual_weight_count {
-            let weight = vertex.weight(i);
-
-            write!($smd, " {} {:.6}", weight.bone as u16, weight.value as f32)?;
+        for (bone, value) in weights {
+            write!($smd, " {} {:.6}", bone, value)?;
         }
 
         writeln!($smd)?;
@@ -54,7 +52,7 @@ pub fn to_smd<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
 
     writeln!(smd, "version 1\n// Exported by PorterLib\n// Please credit DTZxPorter for use of this asset!\nnodes")?;
 
-    for (bone_index, bone) in model.skeleton.iter().enumerate() {
+    for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
         writeln!(
             smd,
             "{} \"{}\" {}",
@@ -68,11 +66,11 @@ pub fn to_smd<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
 
     writeln!(smd, "end\nskeleton\ntime 0")?;
 
-    for (bone_index, bone) in model.skeleton.iter().enumerate() {
+    for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
         let local_rotation = bone
             .local_rotation
             .unwrap_or_default()
-            .euler_angles(Angles::Degrees);
+            .euler_angles(Angles::Radians);
         let local_position = bone.local_position.unwrap_or_default();
 
         writeln!(
@@ -93,7 +91,14 @@ pub fn to_smd<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
     for mesh in &model.meshes {
         writeln!(smd, "triangles")?;
 
+        let material = match mesh.materials.first() {
+            Some(-1) | None => "default_material",
+            Some(index) => model.materials[*index as usize].name.as_str(),
+        };
+
         for face in &mesh.faces {
+            writeln!(smd, "{}", material)?;
+
             write_face_vertex!(smd, mesh, face.i3);
             write_face_vertex!(smd, mesh, face.i2);
             write_face_vertex!(smd, mesh, face.i1);

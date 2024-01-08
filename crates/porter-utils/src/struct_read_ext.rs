@@ -1,40 +1,41 @@
 use std::io;
 use std::io::Read;
 
-/// A trait that reads structs from different sources.
-pub trait StructReadExt: Copy {
-    /// Creates a struct from a slice of bytes equal to or greater than it's size.
-    fn from_byte_slice<S: AsRef<[u8]>>(slice: S) -> Result<Self, io::Error>;
+/// A trait that reads structs from `Read` sources.
+pub trait StructReadExt: Read {
     /// Reads the type from the reader and advances the stream.
-    fn from_io_read<R: Read>(reader: R) -> Result<Self, io::Error>;
+    fn read_struct<S: Copy + 'static>(&mut self) -> Result<S, io::Error>;
+    /// Reads a byte length integer from the reader and advances the stream.
+    fn read_sized_integer(&mut self, size: usize) -> Result<u64, io::Error>;
 }
 
 impl<T> StructReadExt for T
 where
-    T: Copy,
+    T: Read,
 {
-    fn from_byte_slice<S: AsRef<[u8]>>(slice: S) -> Result<Self, io::Error> {
-        let slice = slice.as_ref();
-        let size = std::mem::size_of::<Self>();
+    fn read_struct<S: Copy + 'static>(&mut self) -> Result<S, io::Error> {
+        let mut result = std::mem::MaybeUninit::<S>::zeroed();
 
-        if slice.len() < size {
-            return Err(io::Error::from(io::ErrorKind::UnexpectedEof));
-        }
+        // SAFETY: This slice has the same length as T, and T is always Copy.
+        let slice = unsafe {
+            std::slice::from_raw_parts_mut(result.as_mut_ptr() as *mut u8, std::mem::size_of::<S>())
+        };
 
-        Ok(unsafe { std::ptr::read(slice.as_ptr() as *const T) })
+        self.read_exact(slice)?;
+
+        // SAFETY: As long as `read_exact` is safe, we can assume that the full data was initialized.
+        Ok(unsafe { result.assume_init() })
     }
 
-    fn from_io_read<R: Read>(mut reader: R) -> Result<Self, io::Error> {
-        let mut buffer: [u8; 512] = [0; 512];
+    fn read_sized_integer(&mut self, size: usize) -> Result<u64, io::Error> {
+        let mut result: u64 = 0;
 
-        let size = std::mem::size_of::<Self>();
+        debug_assert!(size <= std::mem::size_of::<u64>());
 
-        if size > buffer.len() {
-            return Err(io::Error::from(io::ErrorKind::OutOfMemory));
+        for i in 0..size {
+            result |= (self.read_struct::<u8>()? as u64) << (i * std::mem::size_of::<u64>());
         }
 
-        reader.read_exact(&mut buffer[0..size])?;
-
-        Self::from_byte_slice(&buffer[0..size])
+        Ok(result)
     }
 }

@@ -180,47 +180,50 @@ impl Matrix4x4 {
 
     #[inline]
     pub fn rotation(&self) -> Quaternion {
-        if (self.mat::<0, 0>() + self.mat::<1, 1>() + self.mat::<2, 2>()) > 0.0 {
-            let scale =
-                (self.mat::<0, 0>() + self.mat::<1, 1>() + self.mat::<2, 2>() + 1.0).sqrt() * 2.0;
+        let trace = self.mat::<0, 0>() + self.mat::<1, 1>() + self.mat::<2, 2>();
+        let half: f32 = 0.5f32;
 
-            Quaternion::new(
-                (self.mat::<2, 1>() - self.mat::<1, 2>()) / scale,
-                (self.mat::<0, 2>() - self.mat::<2, 0>()) / scale,
-                (self.mat::<1, 0>() - self.mat::<0, 1>()) / scale,
-                0.25 * scale,
-            )
+        if trace >= 0.0f32 {
+            let s = (1.0f32 + trace).sqrt();
+            let w = half * s;
+            let s = half / s;
+            let x = (self.mat::<1, 2>() - self.mat::<2, 1>()) * s;
+            let y = (self.mat::<2, 0>() - self.mat::<0, 2>()) * s;
+            let z = (self.mat::<0, 1>() - self.mat::<1, 0>()) * s;
+
+            Quaternion::new(x, y, z, w)
         } else if (self.mat::<0, 0>() > self.mat::<1, 1>())
             && (self.mat::<0, 0>() > self.mat::<2, 2>())
         {
-            let scale =
-                (1.0 + self.mat::<0, 0>() - self.mat::<1, 1>() - self.mat::<2, 2>()).sqrt() * 2.0;
+            let s =
+                ((self.mat::<0, 0>() - self.mat::<1, 1>() - self.mat::<2, 2>()) + 1.0f32).sqrt();
+            let x = half * s;
+            let s = half / s;
+            let y = (self.mat::<1, 0>() + self.mat::<0, 1>()) * s;
+            let z = (self.mat::<0, 2>() + self.mat::<2, 0>()) * s;
+            let w = (self.mat::<1, 2>() - self.mat::<2, 1>()) * s;
 
-            Quaternion::new(
-                0.25 * scale,
-                (self.mat::<0, 1>() + self.mat::<1, 0>()) / scale,
-                (self.mat::<0, 2>() + self.mat::<2, 0>()) / scale,
-                (self.mat::<2, 1>() - self.mat::<1, 2>()) / scale,
-            )
+            Quaternion::new(x, y, z, w)
         } else if self.mat::<1, 1>() > self.mat::<2, 2>() {
-            let scale =
-                (1.0 + self.mat::<1, 1>() - self.mat::<0, 0>() - self.mat::<2, 2>()).sqrt() * 2.0;
+            let s =
+                ((self.mat::<1, 1>() - self.mat::<0, 0>() - self.mat::<2, 2>()) + 1.0f32).sqrt();
+            let y = half * s;
+            let s = half / s;
+            let z = (self.mat::<2, 1>() + self.mat::<1, 2>()) * s;
+            let x = (self.mat::<1, 0>() + self.mat::<0, 1>()) * s;
+            let w = (self.mat::<2, 0>() - self.mat::<0, 2>()) * s;
 
-            Quaternion::new(
-                (self.mat::<0, 1>() + self.mat::<1, 0>()) / scale,
-                0.25 * scale,
-                (self.mat::<1, 2>() + self.mat::<2, 1>()) / scale,
-                (self.mat::<0, 2>() - self.mat::<2, 0>()) / scale,
-            )
+            Quaternion::new(x, y, z, w)
         } else {
-            let scale = (1.0 + self.mat::<2, 2>() - self.mat::<0, 0>() - self.mat::<1, 1>()) * 2.0;
+            let s =
+                ((self.mat::<2, 2>() - self.mat::<0, 0>() - self.mat::<1, 1>()) + 1.0f32).sqrt();
+            let z = half * s;
+            let s = half / s;
+            let x = (self.mat::<0, 2>() + self.mat::<2, 0>()) * s;
+            let y = (self.mat::<2, 1>() + self.mat::<1, 2>()) * s;
+            let w = (self.mat::<0, 1>() - self.mat::<1, 0>()) * s;
 
-            Quaternion::new(
-                (self.mat::<0, 2>() + self.mat::<2, 0>()) / scale,
-                (self.mat::<1, 2>() + self.mat::<2, 1>()) / scale,
-                0.25 * scale,
-                (self.mat::<1, 0>() - self.mat::<0, 1>()) / scale,
-            )
+            Quaternion::new(x, y, z, w)
         }
     }
 
@@ -273,6 +276,18 @@ impl Matrix4x4 {
             for j in 0..4 {
                 *result.mat_mut::<i, j>() = self.mat::<j, i>();
             }
+        }
+
+        result
+    }
+
+    #[inline]
+    #[unroll::unroll_for_loops]
+    pub fn swap_bytes(&self) -> Matrix4x4 {
+        let mut result = Matrix4x4::new();
+
+        for i in 0..16 {
+            result.data[i] = f32::from_bits(self.data[i].to_bits().swap_bytes());
         }
 
         result
