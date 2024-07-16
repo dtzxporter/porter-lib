@@ -11,4 +11,4 @@ strip = true
 panic = "abort"
 
 [patch.crates-io]
-iced = { git = "https://github.com/iced-rs/iced", rev = "bc1bde0d5ca1ec291f13e108f1543daa75b97848" }
+iced = { git = "https://github.com/iced-rs/iced", rev = "f5c6fa7338713a0430dcdfc5bd53f72103144f22" }

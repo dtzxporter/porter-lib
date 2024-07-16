@@ -54,7 +54,7 @@ impl PreviewCamera {
         let model_matrix = match up_axis {
             PreviewCameraUpAxis::Y => Matrix4x4::new(),
             PreviewCameraUpAxis::Z => {
-                Quaternion::from_euler_angles(-90.0, 0.0, 0.0, Angles::Degrees).matrix4x4()
+                Quaternion::from_euler_angles(-90.0, 0.0, 0.0, Angles::Degrees).to_4x4()
             }
         };
 

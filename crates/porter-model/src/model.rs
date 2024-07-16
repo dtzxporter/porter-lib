@@ -10,6 +10,7 @@ use crate::model_file_type_cast;
 use crate::model_file_type_fbx;
 use crate::model_file_type_maya;
 use crate::model_file_type_obj;
+use crate::model_file_type_semodel;
 use crate::model_file_type_smd;
 use crate::model_file_type_xmodel_export;
 use crate::model_file_type_xna_lara;
@@ -391,6 +392,7 @@ impl Model {
             ModelFileType::Cast => model_file_type_cast::to_cast(path, self),
             ModelFileType::Fbx => model_file_type_fbx::to_fbx(path, self),
             ModelFileType::Maya => model_file_type_maya::to_maya(path, self),
+            ModelFileType::SEModel => model_file_type_semodel::to_semodel(path, self),
         }
     }
 

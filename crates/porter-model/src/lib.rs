@@ -38,6 +38,7 @@ pub(crate) mod model_file_type_cast;
 pub(crate) mod model_file_type_fbx;
 pub(crate) mod model_file_type_maya;
 pub(crate) mod model_file_type_obj;
+pub(crate) mod model_file_type_semodel;
 pub(crate) mod model_file_type_smd;
 pub(crate) mod model_file_type_xmodel_export;
 pub(crate) mod model_file_type_xna_lara;

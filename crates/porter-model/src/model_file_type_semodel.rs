@@ -259,7 +259,7 @@ pub fn to_semodel<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelErr
         semodel.write_null_terminated_string(&material.name)?;
         semodel.write_all(&[1])?;
 
-        let diffuse = if let Some(diffuse) = material.base_texture() {
+        let diffuse = if let Some(diffuse) = material.base_color_texture() {
             diffuse.file_name.as_str()
         } else {
             ""
