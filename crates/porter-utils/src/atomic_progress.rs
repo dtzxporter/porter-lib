@@ -45,9 +45,7 @@ impl AtomicProgress {
             return 0;
         }
 
-        (((completed as f32) / (total as f32) * 100.0) as u32)
-            .min(100)
-            .max(0)
+        (((completed as f32) / (total as f32) * 100.0) as u32).clamp(0, 100)
     }
 }
 

@@ -7,6 +7,9 @@ pub trait ArrayReadExt: Read {
     fn read_array<R>(&mut self, length: usize) -> Result<Vec<R>, io::Error>
     where
         R: Copy + 'static;
+
+    /// Reads an array of 'u8' until EOF.
+    fn read_array_to_end(&mut self) -> Result<Vec<u8>, io::Error>;
 }
 
 impl<T> ArrayReadExt for T
@@ -44,5 +47,13 @@ where
 
         // SAFETY: The source data was a Vec<> and MaybeUninit always has the same memory layout as T.
         Ok(unsafe { Vec::from_raw_parts(ptr as *mut R, len, cap) })
+    }
+
+    fn read_array_to_end(&mut self) -> Result<Vec<u8>, io::Error> {
+        let mut result: Vec<u8> = Vec::new();
+
+        self.read_to_end(&mut result)?;
+
+        Ok(result)
     }
 }

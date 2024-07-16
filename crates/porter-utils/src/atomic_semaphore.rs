@@ -19,7 +19,12 @@ pub struct AtomicSemaphoreGuard {
 impl AtomicSemaphore {
     /// Constructs a new semaphore with the default thread count.
     pub fn new() -> Self {
-        Self::with_max(num_cpus::get_physical())
+        let threads = std::thread::available_parallelism()
+            .map(|threads| threads.get())
+            .unwrap_or_default()
+            .max(4);
+
+        Self::with_max(threads)
     }
 
     /// Constructs a new semaphore.

@@ -111,6 +111,20 @@ impl Pattern {
         }
     }
 
+    /// Scans the given buffer for all occurrences of this pattern and returns each byte offset.
+    pub fn scan_all<B: AsRef<[u8]>>(&self, buffer: B) -> Vec<usize> {
+        let buffer = buffer.as_ref();
+        let mut buffer_next = 0;
+        let mut offsets = Vec::with_capacity(16);
+
+        while let Some(offset) = self.scan(&buffer[buffer_next..]) {
+            offsets.push(offset + buffer_next);
+            buffer_next = offset + buffer_next + 1;
+        }
+
+        offsets
+    }
+
     /// Scans the given reader for this pattern and returns the byte offset from the current position if found.
     pub fn scan_from<R: Read>(&self, mut read: R) -> Result<Option<usize>, io::Error> {
         let mut scratch = vec![0; SCAN_BUFFER_SIZE];
@@ -120,7 +134,11 @@ impl Pattern {
         loop {
             let len = read.read(&mut scratch[overlap..])?;
 
-            if let Some(result) = self.scan(&scratch[0..len + overlap]) {
+            if len == 0 {
+                break;
+            }
+
+            if let Some(result) = self.scan(&scratch[0..overlap + len]) {
                 return Ok(Some(result + offset));
             }
 
@@ -129,15 +147,14 @@ impl Pattern {
             if (overlap + len) < self.len {
                 overlap += len;
             } else {
-                // Copy the end self.len bytes to the start.
-                scratch.copy_within(len - self.len..len, 0);
+                let scratch_end = overlap + len;
+                let scratch_start = scratch_end - self.len;
+
+                // Copy the last self.len bytes to the start of the buffer.
+                scratch.copy_within(scratch_start..scratch_end, 0);
 
                 overlap = self.len;
-                offset += len - self.len;
-            }
-
-            if len == 0 {
-                break;
+                offset += scratch_start;
             }
         }
 
@@ -162,8 +179,8 @@ impl Pattern {
         let mut load: [u8; 16] = [0; 16];
 
         for potential in memchr_iter(self.data[0], buffer) {
-            if potential + self.len >= buffer.len() {
-                continue;
+            if potential + self.len > buffer.len() {
+                return None;
             }
 
             for i in 0..16 {
@@ -205,8 +222,8 @@ impl Pattern {
         let mut load: [u8; 8] = [0; 8];
 
         for potential in memchr_iter(self.data[0], buffer) {
-            if potential + self.len >= buffer.len() {
-                continue;
+            if potential + self.len > buffer.len() {
+                return None;
             }
 
             for i in 0..8 {
@@ -248,8 +265,8 @@ impl Pattern {
         let mut load: [u8; 4] = [0; 4];
 
         for potential in memchr_iter(self.data[0], buffer) {
-            if potential + self.len >= buffer.len() {
-                continue;
+            if potential + self.len > buffer.len() {
+                return None;
             }
 
             for i in 0..4 {
@@ -276,8 +293,8 @@ impl Pattern {
     /// Slow scan fallback for patterns > 16 bytes.
     fn scan_slow(&self, buffer: &[u8]) -> Option<usize> {
         for potential in memchr_iter(self.data[0], buffer) {
-            if potential + self.len >= buffer.len() {
-                continue;
+            if potential + self.len > buffer.len() {
+                return None;
             }
 
             let mut matched = true;
