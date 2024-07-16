@@ -52,7 +52,7 @@ impl ProcessHandlePlatform for ProcessHandle {
                 offset as *const c_void,
                 buf.as_mut_ptr() as *mut c_void,
                 buf.len(),
-                &mut size_read as *mut usize,
+                &mut size_read,
             )
         };
 
@@ -79,7 +79,7 @@ impl ProcessHandlePlatform for ProcessHandle {
                 self.handle,
                 modules.as_mut_ptr(),
                 std::mem::size_of_val(&modules) as u32,
-                &mut size_needed as *mut u32,
+                &mut size_needed,
             )
         };
 
@@ -92,6 +92,49 @@ impl ProcessHandlePlatform for ProcessHandle {
         }
 
         Ok(modules[0] as u64)
+    }
+
+    fn main_module_size(&self) -> Result<u64, ProcessError> {
+        let mut modules: [HMODULE; 256] = [0; 256];
+        let mut size_needed: u32 = 0;
+
+        let result = unsafe {
+            EnumProcessModules(
+                self.handle,
+                modules.as_mut_ptr(),
+                std::mem::size_of_val(&modules) as u32,
+                &mut size_needed,
+            )
+        };
+
+        if result == 0 {
+            match unsafe { GetLastError() } {
+                ERROR_INVALID_PARAMETER => return Err(ProcessError::NotFound),
+                ERROR_ACCESS_DENIED => return Err(ProcessError::AccessDenied),
+                _ => return Err(std::io::Error::last_os_error().into()),
+            }
+        }
+
+        let mut module_info: MODULEINFO = unsafe { std::mem::zeroed() };
+
+        let result = unsafe {
+            GetModuleInformation(
+                self.handle,
+                modules[0],
+                &mut module_info,
+                std::mem::size_of_val(&module_info) as u32,
+            )
+        };
+
+        if result == 0 {
+            match unsafe { GetLastError() } {
+                ERROR_INVALID_PARAMETER => return Err(ProcessError::NotFound),
+                ERROR_ACCESS_DENIED => return Err(ProcessError::AccessDenied),
+                _ => return Err(std::io::Error::last_os_error().into()),
+            }
+        }
+
+        Ok(module_info.SizeOfImage as u64)
     }
 
     fn close(&mut self) {

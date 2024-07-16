@@ -46,6 +46,10 @@ impl ProcessHandlePlatform for ProcessHandle {
         unimplemented!()
     }
 
+    fn main_module_size(&self) -> Result<u64, ProcessError> {
+        unimplemented!()
+    }
+
     fn close(&mut self) {
         // Nothing, there is no open handle on linux, just the pid.
     }

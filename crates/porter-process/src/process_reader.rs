@@ -21,6 +21,11 @@ impl ProcessReader {
     pub fn base_address(&self) -> Result<u64, ProcessError> {
         self.handle.base_address()
     }
+
+    /// Gets the size of the main module in bytes.
+    pub fn main_module_size(&self) -> Result<u64, ProcessError> {
+        self.handle.main_module_size()
+    }
 }
 
 impl std::io::Read for ProcessReader {

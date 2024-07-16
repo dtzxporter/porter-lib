@@ -40,9 +40,7 @@ impl ProcessInfoPlatform for ProcessInfo {
                         .map(|x| x.to_string_lossy().to_string())
                         .unwrap_or(format!("Process_{}", process.pid()));
 
-                    let path = name_and_path.parent().map(|x| x.to_path_buf());
-
-                    (name, path)
+                    (name, Some(name_and_path))
                 } else {
                     (format!("Process_{}", process.pid()), None)
                 };
@@ -60,5 +58,9 @@ impl ProcessInfoPlatform for ProcessInfo {
         }
 
         Ok(result)
+    }
+
+    fn get_path(&self) -> Option<PathBuf> {
+        self.path.clone()
     }
 }

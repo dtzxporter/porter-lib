@@ -106,6 +106,10 @@ impl ProcessHandlePlatform for ProcessHandle {
         Ok(vm_info.min_address)
     }
 
+    fn main_module_size(&self) -> Result<u64, ProcessError> {
+        unimplemented!()
+    }
+
     fn close(&mut self) {
         unsafe { mach_port_deallocate(mach_task_self(), self.handle) };
     }

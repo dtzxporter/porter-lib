@@ -215,9 +215,7 @@ impl ProcessInfoPlatform for ProcessInfo {
                     .map(|x| x.to_string_lossy().to_string())
                     .unwrap_or(format!("Process_{}", kinfo.kp_proc.p_pid));
 
-                let path = name_and_path.parent().map(|x| x.to_path_buf());
-
-                (name, path)
+                (name, Some(name_and_path))
             } else if kinfo.kp_proc.p_pid == 0 {
                 (String::from("kernel_task"), None)
             } else {
@@ -233,5 +231,9 @@ impl ProcessInfoPlatform for ProcessInfo {
         }
 
         Ok(result)
+    }
+
+    fn get_path(&self) -> Option<PathBuf> {
+        self.path.clone()
     }
 }

@@ -66,9 +66,9 @@ impl Process {
         self.info.pid
     }
 
-    /// The path of the process executable on disk.
-    pub fn path(&self) -> &Option<PathBuf> {
-        &self.info.path
+    /// Queries the full path of the process executable on disk.
+    pub fn path(&self) -> Option<PathBuf> {
+        self.info.get_path()
     }
 
     /// The time at which the process was started.

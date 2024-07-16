@@ -6,7 +6,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use windows_sys::Wdk::System::SystemInformation::*;
 use windows_sys::Win32::Foundation::*;
+use windows_sys::Win32::System::Threading::*;
 use windows_sys::Win32::System::WindowsProgramming::*;
 
 use widestring::U16CStr;
@@ -78,16 +80,13 @@ impl ProcessInfoPlatform for ProcessInfo {
                 continue;
             }
 
-            let (name, path) = if sys_process_info.ImageName.Buffer.is_null() {
+            let name = if sys_process_info.ImageName.Buffer.is_null() {
                 if sys_process_info.UniqueProcessId == 4 {
-                    (String::from("System"), None)
+                    String::from("System")
                 } else if sys_process_info.UniqueProcessId == 0 {
-                    (String::from("Idle"), None)
+                    String::from("Idle")
                 } else {
-                    (
-                        format!("Process_{}", sys_process_info.UniqueProcessId),
-                        None,
-                    )
+                    format!("Process_{}", sys_process_info.UniqueProcessId)
                 }
             } else {
                 // SAFETY: We checked if the buffer was null before calling this method.
@@ -98,16 +97,14 @@ impl ProcessInfoPlatform for ProcessInfo {
                     )?
                 };
 
-                let name_and_path = PathBuf::from(wcstr.to_string_lossy());
+                let name = PathBuf::from(wcstr.to_string_lossy());
 
-                let name = name_and_path
+                let name = name
                     .file_stem()
                     .map(|x| x.to_string_lossy().to_string())
                     .unwrap_or(format!("Process_{}", sys_process_info.UniqueProcessId));
 
-                let path = name_and_path.parent().map(|x| x.to_path_buf());
-
-                (name, path)
+                name
             };
 
             let reserve: ReservedInfo = Cursor::new(sys_process_info.Reserved1).read_struct()?;
@@ -115,7 +112,7 @@ impl ProcessInfoPlatform for ProcessInfo {
             result.push(ProcessInfo {
                 pid: sys_process_info.UniqueProcessId as u64,
                 name,
-                path,
+                path: None,
                 started_at: create_time_to_sys_time(reserve.created_at),
             });
 
@@ -127,5 +124,35 @@ impl ProcessInfoPlatform for ProcessInfo {
         }
 
         Ok(result)
+    }
+
+    fn get_path(&self) -> Option<PathBuf> {
+        let handle: HANDLE =
+            unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, self.pid as u32) };
+
+        if handle == 0 {
+            return None;
+        }
+
+        let mut buffer: [u16; 1024] = [0; 1024];
+        let mut length: u32 = buffer.len() as u32;
+
+        let result =
+            unsafe { QueryFullProcessImageNameW(handle, 0, buffer.as_mut_ptr(), &mut length) };
+
+        unsafe { CloseHandle(handle) };
+
+        if result == 0 {
+            return None;
+        }
+
+        let wcstr = unsafe { U16CStr::from_ptr_mut(buffer.as_mut_ptr(), length as usize).ok()? };
+        let string = wcstr.to_string_lossy();
+
+        if string.is_empty() {
+            None
+        } else {
+            Some(PathBuf::from(string))
+        }
     }
 }
