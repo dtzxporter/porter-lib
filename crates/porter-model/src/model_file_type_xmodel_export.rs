@@ -114,7 +114,7 @@ pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), Mo
     writeln!(xmodel)?;
 
     for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
-        let rotation = bone.world_rotation.unwrap_or_default().matrix4x4();
+        let rotation = bone.world_rotation.unwrap_or_default().to_4x4();
         let position = bone.world_position.unwrap_or_default();
         let scale = bone.local_scale.unwrap_or_else(Vector3::one);
 
@@ -219,7 +219,7 @@ pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), Mo
             material_index, material.name
         )?;
 
-        if let Some(diffuse) = material.base_texture() {
+        if let Some(diffuse) = material.base_color_texture() {
             write!(xmodel, "color:{}", diffuse.file_name)?;
         }
 

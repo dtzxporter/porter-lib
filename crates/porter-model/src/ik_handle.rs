@@ -12,7 +12,6 @@ pub struct IKHandle {
 
 impl IKHandle {
     /// Constructs a new instance of an ik handle.
-    #[inline]
     pub fn new(name: Option<String>, start_bone: usize, end_bone: usize) -> Self {
         Self {
             name,
@@ -26,24 +25,28 @@ impl IKHandle {
     }
 
     /// Sets the target bone index.
+    #[inline]
     pub fn target_bone(mut self, bone: usize) -> Self {
         self.target_bone = Some(bone);
         self
     }
 
     /// Sets the pole vector bone index.
+    #[inline]
     pub fn pole_vector_bone(mut self, bone: usize) -> Self {
         self.pole_vector_bone = Some(bone);
         self
     }
 
     /// Sets the pole bone index.
+    #[inline]
     pub fn pole_bone(mut self, bone: usize) -> Self {
         self.pole_bone = Some(bone);
         self
     }
 
     /// Sets whether or not to use the target bone's rotation.
+    #[inline]
     pub fn use_target_rotation(mut self, value: bool) -> Self {
         self.use_target_rotation = value;
         self

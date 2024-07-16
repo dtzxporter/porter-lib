@@ -34,7 +34,7 @@ impl PackedI8Vector4 {
 
     #[inline]
     pub fn vector2(self) -> Vector2 {
-        Vector3::from(Vector4::from(self)).into()
+        Vector4::from(self).into()
     }
 }
 

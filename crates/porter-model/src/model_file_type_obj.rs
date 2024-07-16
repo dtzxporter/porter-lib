@@ -5,7 +5,6 @@ use std::path::Path;
 
 use crate::Model;
 use crate::ModelError;
-use crate::MAXIMUM_MATERIAL_TEXTURES;
 
 /// Writes a model in obj format to the given path.
 pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> {
@@ -151,16 +150,15 @@ pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
             material.name
         )?;
 
-        for i in 0..MAXIMUM_MATERIAL_TEXTURES {
-            if material.textures[i].is_empty() {
+        for texture in &material.textures {
+            if texture.is_empty() {
                 continue;
             }
 
             writeln!(
                 mtl,
                 "{} {}",
-                MATERIAL_MAPPINGS[material.textures[i].texture_usage as usize],
-                material.textures[i].file_name
+                MATERIAL_MAPPINGS[texture.texture_usage as usize], texture.file_name
             )?;
         }
     }

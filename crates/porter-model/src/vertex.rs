@@ -22,25 +22,21 @@ pub struct VertexMut<'a> {
 
 impl<'a> Vertex<'a> {
     /// Creates a new instance of vertex.
-    #[inline]
     pub(crate) fn new(buffer: &'a VertexBuffer, index: usize) -> Self {
         Self { buffer, index }
     }
 
     /// Returns the position of this vertex.
-    #[inline]
     pub fn position(&self) -> Vector3 {
         self.read(0)
     }
 
     /// Returns the normal of this vertex.
-    #[inline]
     pub fn normal(&self) -> Vector3 {
         self.read(std::mem::size_of::<Vector3>())
     }
 
     /// Returns the uv layer of this vertex.
-    #[inline]
     pub fn uv(&self, index: usize) -> Vector2 {
         debug_assert!(index < self.buffer.uv_layers());
 
@@ -48,7 +44,6 @@ impl<'a> Vertex<'a> {
     }
 
     /// Returns a weight for this vertex.
-    #[inline]
     pub fn weight(&self, index: usize) -> VertexWeight {
         debug_assert!(index < self.buffer.maximum_influence());
 
@@ -60,7 +55,6 @@ impl<'a> Vertex<'a> {
     }
 
     /// Returns the unique weights for this vertex.
-    #[inline]
     pub fn unique_weights(&self) -> BTreeMap<u16, f32> {
         let mut result = BTreeMap::new();
 
@@ -74,7 +68,6 @@ impl<'a> Vertex<'a> {
     }
 
     /// Returns the color for this vertex.
-    #[inline]
     pub fn color(&self) -> VertexColor {
         debug_assert!(self.buffer.colors());
 
@@ -99,39 +92,33 @@ impl<'a> Vertex<'a> {
 
 impl<'a> VertexMut<'a> {
     /// Creates a new instance of vertex.
-    #[inline]
     pub(crate) fn new(buffer: &'a mut VertexBuffer, index: usize) -> Self {
         Self { buffer, index }
     }
 
     /// Returns the position of this vertex.
-    #[inline]
     pub fn position(&self) -> Vector3 {
         self.read(0)
     }
 
     /// Sets the position of this vertex.
-    #[inline]
     pub fn set_position(&mut self, position: Vector3) -> &mut Self {
         self.write(0, position);
         self
     }
 
     /// Returns the normal of this vertex.
-    #[inline]
     pub fn normal(&self) -> Vector3 {
         self.read(std::mem::size_of::<Vector3>())
     }
 
     /// Sets the normal of this vertex.
-    #[inline]
     pub fn set_normal(&mut self, normal: Vector3) -> &mut Self {
         self.write(std::mem::size_of::<Vector3>(), normal);
         self
     }
 
     /// Returns the uv layer of this vertex.
-    #[inline]
     pub fn uv(&self, index: usize) -> Vector2 {
         debug_assert!(index < self.buffer.uv_layers());
 
@@ -139,7 +126,6 @@ impl<'a> VertexMut<'a> {
     }
 
     /// Sets the uv layer of this vertex.
-    #[inline]
     pub fn set_uv(&mut self, index: usize, value: Vector2) -> &mut Self {
         debug_assert!(index < self.buffer.uv_layers());
 
@@ -152,7 +138,6 @@ impl<'a> VertexMut<'a> {
     }
 
     /// Returns a weight for this vertex.
-    #[inline]
     pub fn weight(&self, index: usize) -> VertexWeight {
         debug_assert!(index < self.buffer.maximum_influence());
 
@@ -164,7 +149,6 @@ impl<'a> VertexMut<'a> {
     }
 
     /// Returns the unique weights for this vertex.
-    #[inline]
     pub fn unique_weights(&self) -> BTreeMap<u16, f32> {
         let mut result = BTreeMap::new();
 
@@ -178,7 +162,6 @@ impl<'a> VertexMut<'a> {
     }
 
     /// Sets a weight for this vertex.
-    #[inline]
     pub fn set_weight(&mut self, index: usize, weight: VertexWeight) -> &mut Self {
         debug_assert!(index < self.buffer.maximum_influence());
 
@@ -192,8 +175,27 @@ impl<'a> VertexMut<'a> {
         self
     }
 
+    /// Sets the weight bone index for this vertex.
+    pub fn set_weight_bone(&mut self, index: usize, bone: u16) -> &mut Self {
+        let mut weight = self.weight(index);
+        weight.bone = bone;
+
+        self.set_weight(index, weight);
+
+        self
+    }
+
+    /// Sets the weight bone value for this vertex.
+    pub fn set_weight_value(&mut self, index: usize, value: f32) -> &mut Self {
+        let mut weight = self.weight(index);
+        weight.value = value;
+
+        self.set_weight(index, weight);
+
+        self
+    }
+
     /// Returns the color for this vertex.
-    #[inline]
     pub fn color(&self) -> VertexColor {
         debug_assert!(self.buffer.colors());
 
@@ -205,7 +207,6 @@ impl<'a> VertexMut<'a> {
     }
 
     /// Returns the color for this vertex.
-    #[inline]
     pub fn set_color(&mut self, color: VertexColor) -> &mut Self {
         debug_assert!(self.buffer.colors());
 
@@ -220,7 +221,6 @@ impl<'a> VertexMut<'a> {
     }
 
     /// Copies all of the values from the given vertex.
-    #[inline]
     pub fn copy_from(&mut self, vertex: &Vertex<'_>) {
         debug_assert!(self.buffer.colors() == vertex.buffer.colors());
         debug_assert!(self.buffer.uv_layers() == vertex.buffer.uv_layers());
@@ -241,7 +241,6 @@ impl<'a> VertexMut<'a> {
     }
 
     /// Copies all of the values from the given vertex.
-    #[inline]
     pub fn copy_from_mut(&mut self, vertex: &VertexMut<'_>) {
         debug_assert!(self.buffer.colors() == vertex.buffer.colors());
         debug_assert!(self.buffer.uv_layers() == vertex.buffer.uv_layers());

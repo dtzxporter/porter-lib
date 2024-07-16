@@ -3,15 +3,17 @@ use std::collections::HashMap;
 
 use std::path::Path;
 
+use porter_math::Matrix4x4;
+use porter_math::Vector3;
+
 use crate::model_file_type_cast;
 use crate::model_file_type_fbx;
 use crate::model_file_type_maya;
 use crate::model_file_type_obj;
-use crate::model_file_type_semodel;
 use crate::model_file_type_smd;
 use crate::model_file_type_xmodel_export;
 use crate::model_file_type_xna_lara;
-use crate::sanitize_material_name;
+use crate::Aabb;
 use crate::BlendShape;
 use crate::Face;
 use crate::FaceBuffer;
@@ -28,15 +30,18 @@ use crate::VertexBuffer;
 /// A 3d model, with optional skeleton and materials.
 #[derive(Debug, Clone, Default)]
 pub struct Model {
+    /// The 3d skeleton for this model which can be empty.
     pub skeleton: Skeleton,
+    /// The 3d meshes for this model which can be empty.
     pub meshes: Vec<Mesh>,
+    /// A collection of blend shapes that go with this models meshes.
     pub blend_shapes: Vec<BlendShape>,
+    /// A collection of materials for this model.
     pub materials: Vec<Material>,
 }
 
 impl Model {
     /// Constructs a new instance of model.
-    #[inline]
     pub fn new() -> Self {
         Self {
             skeleton: Skeleton::new(),
@@ -47,7 +52,6 @@ impl Model {
     }
 
     /// Constructs a new instance of model with the given capacity.
-    #[inline]
     pub fn with_capacity(bones: usize, meshes: usize) -> Self {
         Self {
             skeleton: Skeleton::with_capacity(bones),
@@ -58,13 +62,11 @@ impl Model {
     }
 
     /// Returns the total number of vertices in the model.
-    #[inline]
     pub fn vertex_count(&self) -> usize {
         self.meshes.iter().map(|x| x.vertices.len()).sum()
     }
 
     /// Returns the total number of faces in the model.
-    #[inline]
     pub fn face_count(&self) -> usize {
         self.meshes.iter().map(|x| x.faces.len()).sum()
     }
@@ -75,7 +77,20 @@ impl Model {
             mesh.scale(factor);
         }
 
+        for blend_shape in &mut self.blend_shapes {
+            blend_shape.scale(factor);
+        }
+
         self.skeleton.scale(factor);
+    }
+
+    /// Transforms the model by the given matrix.
+    pub fn transform(&mut self, matrix: &Matrix4x4) {
+        for mesh in &mut self.meshes {
+            mesh.transform(matrix);
+        }
+
+        self.skeleton.transform(matrix);
     }
 
     /// Remaps the model's meshes by their materials and faces.
@@ -90,7 +105,7 @@ impl Model {
 
         for remap in remaps {
             remaps_per_material
-                .entry(sanitize_material_name(remap.material.clone()))
+                .entry(remap.material.clone())
                 .or_default()
                 .entry(remap.mesh)
                 .or_default()
@@ -103,12 +118,15 @@ impl Model {
             HashMap::with_capacity(remaps_per_material.len());
 
         for (material, opcodes) in remaps_per_material {
-            let material_index =
-                if let Some(index) = self.materials.iter().position(|x| x.name == material) {
-                    index as isize
-                } else {
-                    -1
-                };
+            let material_index = if let Some(index) = self
+                .materials
+                .iter()
+                .position(|x| x.source_name == material)
+            {
+                index as isize
+            } else {
+                -1
+            };
 
             for (mesh, verts) in opcodes {
                 let old_mesh = &old_meshes[mesh];
@@ -152,42 +170,60 @@ impl Model {
                 }
 
                 for face in &old_mesh.faces {
-                    if face.i1 < vertices && face.i2 < vertices && face.i3 < vertices {
-                        let i1 = vertex_remap.get(&{ face.i1 }).copied().unwrap_or_default();
-                        let i2 = vertex_remap.get(&{ face.i2 }).copied().unwrap_or_default();
-                        let i3 = vertex_remap.get(&{ face.i3 }).copied().unwrap_or_default();
+                    let i1 = vertex_remap.get(&{ face.i1 }).copied();
+                    let i2 = vertex_remap.get(&{ face.i2 }).copied();
+                    let i3 = vertex_remap.get(&{ face.i3 }).copied();
 
-                        new_mesh.faces.push(Face::new(i1, i2, i3));
-
+                    if i1.is_none() && i2.is_none() && i3.is_none() {
                         continue;
                     }
 
-                    #[cfg(debug_assertions)]
-                    if face.i1 < vertices {
-                        println!(
-                            "Remap Warning: Dropping face due to mixed vertex materials: {:?}",
-                            face
-                        );
-                        continue;
-                    }
+                    let i1 = match i1 {
+                        Some(i1) => i1,
+                        None => {
+                            let old_vertex = old_mesh.vertices.vertex(face.i1 as usize);
 
-                    #[cfg(debug_assertions)]
-                    if face.i2 < vertices {
-                        println!(
-                            "Remap Warning: Dropping face due to mixed vertex materials: {:?}",
-                            face
-                        );
-                        continue;
-                    }
+                            new_mesh.vertices.create().copy_from(&old_vertex);
 
-                    #[cfg(debug_assertions)]
-                    if face.i3 < vertices {
-                        println!(
-                            "Remap Warning: Dropping face due to mixed vertex materials: {:?}",
-                            face
-                        );
-                        continue;
-                    }
+                            vertex_remap.insert(face.i1, vertices);
+
+                            vertices += 1;
+
+                            vertices - 1
+                        }
+                    };
+
+                    let i2 = match i2 {
+                        Some(i2) => i2,
+                        None => {
+                            let old_vertex = old_mesh.vertices.vertex(face.i2 as usize);
+
+                            new_mesh.vertices.create().copy_from(&old_vertex);
+
+                            vertex_remap.insert(face.i2, vertices);
+
+                            vertices += 1;
+
+                            vertices - 1
+                        }
+                    };
+
+                    let i3 = match i3 {
+                        Some(i3) => i3,
+                        None => {
+                            let old_vertex = old_mesh.vertices.vertex(face.i3 as usize);
+
+                            new_mesh.vertices.create().copy_from(&old_vertex);
+
+                            vertex_remap.insert(face.i3, vertices);
+
+                            vertices += 1;
+
+                            vertices - 1
+                        }
+                    };
+
+                    new_mesh.faces.push(Face::new(i1, i2, i3));
                 }
             }
         }
@@ -211,7 +247,7 @@ impl Model {
 
         for remap in remaps {
             remaps_per_material
-                .entry(sanitize_material_name(remap.material.clone()))
+                .entry(remap.material.clone())
                 .or_default()
                 .entry(remap.mesh)
                 .or_default()
@@ -224,12 +260,15 @@ impl Model {
             HashMap::with_capacity(remaps_per_material.len());
 
         for (material, opcodes) in remaps_per_material {
-            let material_index =
-                if let Some(index) = self.materials.iter().position(|x| x.name == material) {
-                    index as isize
-                } else {
-                    -1
-                };
+            let material_index = if let Some(index) = self
+                .materials
+                .iter()
+                .position(|x| x.source_name == material)
+            {
+                index as isize
+            } else {
+                -1
+            };
 
             for (mesh, faces) in opcodes {
                 let old_mesh = &old_meshes[mesh];
@@ -268,9 +307,9 @@ impl Model {
                             if let Some(vertex) = vertex_remap.get(&index) {
                                 *vertex
                             } else {
-                                vertex_remap.insert(face.i1, vertices);
+                                vertex_remap.insert(index, vertices);
 
-                                let old_vertex = old_mesh.vertices.vertex(face.i1 as usize);
+                                let old_vertex = old_mesh.vertices.vertex(index as usize);
 
                                 new_mesh.vertices.create().copy_from(&old_vertex);
 
@@ -301,14 +340,14 @@ impl Model {
         let mut result = Vec::with_capacity(self.materials.len());
 
         for material in &self.materials {
-            result.push(material.base_texture().cloned());
+            result.push(material.base_color_texture().cloned());
         }
 
         result
     }
 
-    /// Calculates the bounding box for the given model, [mins; maxs;].
-    pub fn bounding_box(&self) -> [f32; 6] {
+    /// Calculates the bounding box for the given model.
+    pub fn bounding_box(&self) -> Aabb {
         let mut min_x = f32::INFINITY;
         let mut min_y = f32::INFINITY;
         let mut min_z = f32::INFINITY;
@@ -330,7 +369,10 @@ impl Model {
             }
         }
 
-        [min_x, min_y, min_z, max_x, max_y, max_z]
+        Aabb::new(
+            Vector3::new(min_x, min_y, min_z),
+            Vector3::new(max_x, max_y, max_z),
+        )
     }
 
     /// Saves the model to the given file path in the given model format.
@@ -346,7 +388,6 @@ impl Model {
             ModelFileType::XModelExport => {
                 model_file_type_xmodel_export::to_xmodel_export(path, self)
             }
-            ModelFileType::SEModel => model_file_type_semodel::to_semodel(path, self),
             ModelFileType::Cast => model_file_type_cast::to_cast(path, self),
             ModelFileType::Fbx => model_file_type_fbx::to_fbx(path, self),
             ModelFileType::Maya => model_file_type_maya::to_maya(path, self),

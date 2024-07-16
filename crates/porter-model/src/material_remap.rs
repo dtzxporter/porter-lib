@@ -1,4 +1,5 @@
 /// A material remap operation by faces.
+#[derive(Debug)]
 pub struct MaterialRemapFaces {
     pub(crate) material: String,
     pub(crate) mesh: usize,
@@ -7,6 +8,7 @@ pub struct MaterialRemapFaces {
 }
 
 /// A material remap operation by vertex.
+#[derive(Debug)]
 pub struct MaterialRemapVertices {
     pub(crate) material: String,
     pub(crate) mesh: usize,

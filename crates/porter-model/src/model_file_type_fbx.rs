@@ -596,7 +596,7 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
 
         material_map.insert(material_index, material_hash);
 
-        if let Some(diffuse) = material.base_texture() {
+        if let Some(diffuse) = material.base_color_texture() {
             initialize_texture_node(&mut root, diffuse, material_hash, "DiffuseColor");
         }
 
@@ -896,7 +896,7 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
 
             layer_material
                 .create("Materials")
-                .create_property(FbxPropertyType::Integer32)
+                .create_property(FbxPropertyType::Integer32Array)
                 .push(0u32);
         }
 

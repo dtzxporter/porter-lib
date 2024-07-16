@@ -1,18 +1,23 @@
+use porter_math::Matrix4x4;
+
 use crate::FaceBuffer;
 use crate::VertexBuffer;
 
 /// A polygon mesh for a model.
 #[derive(Debug, Clone)]
 pub struct Mesh {
+    /// Name of this mesh, used mostly for blend shape targets.
     pub name: Option<String>,
+    /// The face buffer for this mesh.
     pub faces: FaceBuffer,
+    /// The vertex buffer for this mesh.
     pub vertices: VertexBuffer,
+    /// A list of material indices for this mesh.
     pub materials: Vec<isize>,
 }
 
 impl Mesh {
     /// Constructs a new mesh instance.
-    #[inline]
     pub fn new(faces: FaceBuffer, vertices: VertexBuffer) -> Self {
         Self {
             name: None,
@@ -34,6 +39,24 @@ impl Mesh {
             let mut vertex = self.vertices.vertex_mut(i);
 
             vertex.set_position(vertex.position() * factor);
+        }
+    }
+
+    /// Transforms the mesh by the given matrix.
+    pub fn transform(&mut self, matrix: &Matrix4x4) {
+        let normal = matrix.to_3x3().to_4x4().inverse().transpose();
+
+        for i in 0..self.vertices.len() {
+            let mut vertex = self.vertices.vertex_mut(i);
+
+            vertex.set_position(vertex.position().transform(matrix));
+            vertex.set_normal(vertex.normal().transform(&normal).normalized());
+        }
+
+        if matrix.determinant() < 0.0 {
+            for face in &mut self.faces {
+                face.swap_order();
+            }
         }
     }
 

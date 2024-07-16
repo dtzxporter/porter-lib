@@ -76,6 +76,12 @@ impl RMatrix4x4 {
     }
 }
 
+impl Default for RMatrix4x4 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl From<Matrix4x4> for RMatrix4x4 {
     fn from(value: Matrix4x4) -> Self {
         value.row_major()

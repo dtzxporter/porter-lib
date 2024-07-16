@@ -1,28 +1,37 @@
+use porter_math::Vector3;
+
 /// A 3d blend shape.
 #[derive(Debug, Clone)]
 pub struct BlendShape {
-    pub name: Option<String>,
+    pub name: String,
     pub base_mesh: usize,
-    pub target_meshes: Vec<usize>,
-    pub target_scales: Vec<f32>,
+    pub vertex_indices: Vec<u32>,
+    pub vertex_positions: Vec<Vector3>,
+    pub target_scale: f32,
 }
 
 impl BlendShape {
     /// Constructs a new instance of blend shape.
-    #[inline]
-    pub fn new(name: Option<String>, base_mesh: usize) -> Self {
+    pub fn new(name: String, base_mesh: usize) -> Self {
         Self {
             name,
             base_mesh,
-            target_meshes: Vec::new(),
-            target_scales: Vec::new(),
+            vertex_indices: Vec::new(),
+            vertex_positions: Vec::new(),
+            target_scale: 1.0,
         }
     }
 
-    /// Adds a target to the blend shape.
-    pub fn add_target(mut self, target_mesh: usize, target_scale: f32) -> Self {
-        self.target_meshes.push(target_mesh);
-        self.target_scales.push(target_scale);
+    /// Scales the blend shape by the given factor.
+    pub fn scale(&mut self, factor: f32) {
+        for position in &mut self.vertex_positions {
+            *position *= factor;
+        }
+    }
+
+    /// Sets the target scale value.
+    pub fn target_scale(mut self, target_scale: f32) -> Self {
+        self.target_scale = target_scale;
         self
     }
 }

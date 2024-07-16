@@ -1,3 +1,4 @@
+mod aabb;
 mod blend_shape;
 mod bone;
 mod constraint;
@@ -15,6 +16,7 @@ mod vertex_buffer;
 mod vertex_color;
 mod vertex_weight;
 
+pub use aabb::*;
 pub use blend_shape::*;
 pub use bone::*;
 pub use constraint::*;
@@ -36,7 +38,6 @@ pub(crate) mod model_file_type_cast;
 pub(crate) mod model_file_type_fbx;
 pub(crate) mod model_file_type_maya;
 pub(crate) mod model_file_type_obj;
-pub(crate) mod model_file_type_semodel;
 pub(crate) mod model_file_type_smd;
 pub(crate) mod model_file_type_xmodel_export;
 pub(crate) mod model_file_type_xna_lara;

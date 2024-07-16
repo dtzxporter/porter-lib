@@ -21,7 +21,6 @@ pub struct Constraint {
 
 impl Constraint {
     /// Constructs a new instance of a constraint.
-    #[inline]
     pub fn new(
         name: Option<String>,
         constraint_type: ConstraintType,
@@ -42,18 +41,21 @@ impl Constraint {
     }
 
     /// Sets whether or not to skip the x axis.
+    #[inline]
     pub fn skip_x(mut self, skip: bool) -> Self {
         self.skip_x = skip;
         self
     }
 
     /// Sets whether or not to skip the z axis.
+    #[inline]
     pub fn skip_y(mut self, skip: bool) -> Self {
         self.skip_y = skip;
         self
     }
 
     /// Sets whether or not to skip the z axis.
+    #[inline]
     pub fn skip_z(mut self, skip: bool) -> Self {
         self.skip_z = skip;
         self

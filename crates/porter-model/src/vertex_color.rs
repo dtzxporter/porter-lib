@@ -4,27 +4,32 @@ use porter_math::PackedU8Vector4;
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct VertexColor {
+    /// The red channel in (0..=255).
     pub r: u8,
+    /// The green channel in (0..=255).
     pub g: u8,
+    /// The blue channel in (0..=255).
     pub b: u8,
+    /// The alpha channel in (0..=255).
     pub a: u8,
 }
 
 impl VertexColor {
     /// Constructs a new vertex color.
-    #[inline]
     pub const fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self { r, g, b, a }
     }
 }
 
 impl From<VertexColor> for u32 {
+    #[inline]
     fn from(value: VertexColor) -> Self {
         u32::from_le_bytes([value.r, value.g, value.b, value.a])
     }
 }
 
 impl From<PackedU8Vector4> for VertexColor {
+    #[inline]
     fn from(value: PackedU8Vector4) -> Self {
         Self::new(value.x, value.y, value.z, value.w)
     }

@@ -6,6 +6,7 @@ use static_assertions::assert_eq_size;
 
 use crate::radians_to_degrees;
 use crate::Angles;
+use crate::Matrix3x3;
 use crate::Quaternion;
 use crate::RMatrix4x4;
 use crate::Vector3;
@@ -153,6 +154,11 @@ impl Matrix4x4 {
     }
 
     #[inline]
+    pub fn create_rotation(rotation: Quaternion) -> Matrix4x4 {
+        rotation.to_4x4()
+    }
+
+    #[inline]
     pub fn create_scale(scale: Vector3) -> Matrix4x4 {
         let mut result = Matrix4x4::new();
 
@@ -288,6 +294,20 @@ impl Matrix4x4 {
 
         for i in 0..16 {
             result.data[i] = f32::from_bits(self.data[i].to_bits().swap_bytes());
+        }
+
+        result
+    }
+
+    #[inline]
+    #[unroll::unroll_for_loops]
+    pub fn transpose(&self) -> Matrix4x4 {
+        let mut result = Matrix4x4::new();
+
+        for i in 0..4 {
+            for j in 0..4 {
+                *result.mat_mut::<i, j>() = self.mat::<j, i>();
+            }
         }
 
         result
@@ -438,6 +458,25 @@ impl Matrix4x4 {
             + self.mat::<0, 0>() * self.mat::<1, 1>() * self.mat::<2, 2>();
 
         result / self.determinant()
+    }
+
+    #[inline]
+    pub fn to_3x3(self) -> Matrix3x3 {
+        let mut result = Matrix3x3::new();
+
+        *result.mat_mut::<0, 0>() = self.mat::<0, 0>();
+        *result.mat_mut::<0, 1>() = self.mat::<0, 1>();
+        *result.mat_mut::<0, 2>() = self.mat::<0, 2>();
+
+        *result.mat_mut::<1, 0>() = self.mat::<1, 0>();
+        *result.mat_mut::<1, 1>() = self.mat::<1, 1>();
+        *result.mat_mut::<1, 2>() = self.mat::<1, 2>();
+
+        *result.mat_mut::<2, 0>() = self.mat::<2, 0>();
+        *result.mat_mut::<2, 1>() = self.mat::<2, 1>();
+        *result.mat_mut::<2, 2>() = self.mat::<2, 2>();
+
+        result
     }
 }
 

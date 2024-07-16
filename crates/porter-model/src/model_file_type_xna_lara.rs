@@ -44,7 +44,7 @@ pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelEr
 
         for i in 0..mesh.vertices.uv_layers() {
             if i < mesh.materials.len() && mesh.materials[i] > -1 {
-                let diffuse = model.materials[i].base_texture();
+                let diffuse = model.materials[i].base_color_texture();
 
                 if let Some(diffuse) = diffuse {
                     writeln!(xna, "{}\n{}", diffuse.file_name, i)?;
@@ -93,11 +93,21 @@ pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelEr
             let mut bones: [u16; 4] = [0; 4];
             let mut values: [f32; 4] = [0.0; 4];
 
-            for w in 0..mesh.vertices.maximum_influence().min(4) {
-                let weight = vertex.weight(w);
+            for w in 0..mesh.vertices.maximum_influence() {
+                let mut weight = vertex.weight(w);
 
-                bones[w] = weight.bone;
-                values[w] = weight.value;
+                for i in 0..4 {
+                    if weight.value > values[i] {
+                        let temp_bone = bones[i];
+                        let temp_value = values[i];
+
+                        bones[i] = weight.bone;
+                        values[i] = weight.value;
+
+                        weight.bone = temp_bone;
+                        weight.value = temp_value;
+                    }
+                }
             }
 
             values = normalize_array_f32(values);

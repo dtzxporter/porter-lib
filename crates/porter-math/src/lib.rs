@@ -1,7 +1,9 @@
 #![deny(unsafe_code)]
 
 mod angles;
+mod matrix3x3;
 mod matrix4x4;
+mod packed_10_2_vector4;
 mod packed_i8_vector4;
 mod packed_u8_vector4;
 mod quaternion;
@@ -12,7 +14,9 @@ mod vector3;
 mod vector4;
 
 pub use angles::*;
+pub use matrix3x3::*;
 pub use matrix4x4::*;
+pub use packed_10_2_vector4::*;
 pub use packed_i8_vector4::*;
 pub use packed_u8_vector4::*;
 pub use quaternion::*;

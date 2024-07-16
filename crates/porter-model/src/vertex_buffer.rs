@@ -41,13 +41,11 @@ pub struct VertexBufferBuilder {
 
 impl VertexBuffer {
     /// Creates a new vertex buffer builder.
-    #[inline]
     pub fn builder() -> VertexBufferBuilder {
         Default::default()
     }
 
     /// Creates a new vertex buffer builder with the given capacity of vertices.
-    #[inline]
     pub fn with_capacity(capacity: usize) -> VertexBufferBuilder {
         VertexBufferBuilder {
             capacity,
@@ -56,7 +54,6 @@ impl VertexBuffer {
     }
 
     /// Adds the given vertex to the buffer.
-    #[inline]
     pub fn create(&mut self) -> VertexMut<'_> {
         self.buffer.resize(
             self.buffer.len() + compute_stride(self.uv_layers, self.maximum_influence, self.colors),
@@ -67,7 +64,6 @@ impl VertexBuffer {
     }
 
     /// Removes the vertex at the given index.
-    #[inline]
     pub fn remove(&mut self, index: usize) {
         debug_assert!(index < self.len());
 
@@ -77,50 +73,42 @@ impl VertexBuffer {
     }
 
     /// Returns the number of uv layers.
-    #[inline]
     pub fn uv_layers(&self) -> usize {
         self.uv_layers
     }
 
     /// Returns the maximum number of weights.
-    #[inline]
     pub fn maximum_influence(&self) -> usize {
         self.maximum_influence
     }
 
     /// Returns whether or not colors are enabled.
-    #[inline]
     pub fn colors(&self) -> bool {
         self.colors
     }
 
     /// Clears the vertex buffer.
-    #[inline]
     pub fn clear(&mut self) {
         self.buffer.clear();
         self.buffer.shrink_to_fit();
     }
 
     /// Whether or not the buffer is empty.
-    #[inline]
     pub fn is_empty(&self) -> bool {
         self.buffer.is_empty()
     }
 
     /// Returns the number of vertices in the buffer.
-    #[inline]
     pub fn len(&self) -> usize {
         self.buffer.len() / self.stride()
     }
 
     /// The stride in bytes of each vertex.
-    #[inline]
     pub fn stride(&self) -> usize {
         compute_stride(self.uv_layers, self.maximum_influence, self.colors)
     }
 
     /// Gets the vertex at the given index.
-    #[inline]
     pub fn vertex(&self, index: usize) -> Vertex {
         debug_assert!(index < self.len());
 
@@ -128,7 +116,6 @@ impl VertexBuffer {
     }
 
     /// Gets a mutable vertex at the given index.
-    #[inline]
     pub fn vertex_mut(&mut self, index: usize) -> VertexMut {
         debug_assert!(index < self.len());
 
@@ -136,7 +123,6 @@ impl VertexBuffer {
     }
 
     /// Returns the internal buffer used by this vertex buffer.
-    #[inline]
     pub fn as_slice(&self) -> &[u8] {
         &self.buffer
     }

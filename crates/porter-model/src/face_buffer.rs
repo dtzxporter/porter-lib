@@ -4,17 +4,29 @@ use static_assertions::assert_eq_size;
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct Face {
+    /// The first index for this face.
     pub i1: u32,
+    /// The second index for this face.
     pub i2: u32,
+    /// The third index for this face.
     pub i3: u32,
 }
 
 assert_eq_size!([u8; 0xC], Face);
 
 impl Face {
-    #[inline]
+    /// Constructs a new face.
     pub fn new(i1: u32, i2: u32, i3: u32) -> Self {
         Self { i1, i2, i3 }
+    }
+
+    /// Swaps the winding order of the face.
+    #[allow(clippy::manual_swap)]
+    pub fn swap_order(&mut self) {
+        let tmp = self.i3;
+
+        self.i3 = self.i1;
+        self.i1 = tmp;
     }
 }
 

@@ -5,6 +5,7 @@ use static_assertions::assert_eq_size;
 
 use crate::degrees_to_radians;
 use crate::Angles;
+use crate::Matrix3x3;
 use crate::Matrix4x4;
 use crate::Vector3;
 
@@ -90,11 +91,53 @@ impl Quaternion {
 
     #[inline]
     pub fn euler_angles(&self, measurment: Angles) -> Vector3 {
-        self.matrix4x4().euler_angles(measurment)
+        self.to_4x4().euler_angles(measurment)
     }
 
     #[inline]
-    pub fn matrix4x4(&self) -> Matrix4x4 {
+    pub fn to_3x3(&self) -> Matrix3x3 {
+        let mut matrix = Matrix3x3::new();
+
+        let len_squared = self.length_squared();
+        let mut two_div_len = 0.0;
+
+        if len_squared > 0.0 {
+            two_div_len = 2.0 / len_squared;
+        }
+
+        let xt = self.x * two_div_len;
+        let yt = self.y * two_div_len;
+        let zt = self.z * two_div_len;
+
+        let wxt = self.w * xt;
+        let wyt = self.w * yt;
+        let wzt = self.w * zt;
+
+        let xxt = self.x * xt;
+        let xyt = self.x * yt;
+        let xzt = self.x * zt;
+
+        let yyt = self.y * yt;
+        let yzt = self.y * zt;
+        let zzt = self.z * zt;
+
+        *matrix.mat_mut::<0, 0>() = 1.0 - (yyt + zzt);
+        *matrix.mat_mut::<1, 0>() = xyt - wzt;
+        *matrix.mat_mut::<2, 0>() = xzt + wyt;
+
+        *matrix.mat_mut::<0, 1>() = xyt + wzt;
+        *matrix.mat_mut::<1, 1>() = 1.0 - (xxt + zzt);
+        *matrix.mat_mut::<2, 1>() = yzt - wxt;
+
+        *matrix.mat_mut::<0, 2>() = xzt - wyt;
+        *matrix.mat_mut::<1, 2>() = yzt + wxt;
+        *matrix.mat_mut::<2, 2>() = 1.0 - (xxt + yyt);
+
+        matrix
+    }
+
+    #[inline]
+    pub fn to_4x4(&self) -> Matrix4x4 {
         let mut matrix = Matrix4x4::new();
 
         let len_squared = self.length_squared();
@@ -137,9 +180,9 @@ impl Quaternion {
 
     #[inline]
     pub fn from_euler_angles(x: f32, y: f32, z: f32, measurment: Angles) -> Self {
-        Self::from_axis_rotation(Vector3::new(1.0, 0.0, 0.0), x, measurment)
+        Self::from_axis_rotation(Vector3::new(0.0, 0.0, 1.0), z, measurment)
             * Self::from_axis_rotation(Vector3::new(0.0, 1.0, 0.0), y, measurment)
-            * Self::from_axis_rotation(Vector3::new(0.0, 0.0, 1.0), z, measurment)
+            * Self::from_axis_rotation(Vector3::new(1.0, 0.0, 0.0), x, measurment)
     }
 
     #[inline]

@@ -4,6 +4,7 @@ use std::ops;
 use static_assertions::assert_eq_size;
 
 use crate::Vector3;
+use crate::Vector4;
 
 /// A 2d XY vector.
 #[repr(C)]
@@ -133,6 +134,19 @@ impl Vector2 {
             y: f32::from_bits(self.y.to_bits().swap_bytes()),
         }
     }
+
+    #[inline]
+    pub fn to_octahedron(self, signed: bool) -> Vector3 {
+        let xy = if signed { self * 2.0 - 1.0 } else { self };
+
+        let mut normal = Vector3::new(xy.x, xy.y, 1.0 - (xy.x.abs()) - (xy.y.abs()));
+        let avg = (-normal.z).clamp(0.0, 1.0);
+
+        normal.x += if normal.x >= 0.0 { -avg } else { avg };
+        normal.y += if normal.y >= 0.0 { -avg } else { avg };
+
+        normal.normalized()
+    }
 }
 
 impl cmp::PartialEq for Vector2 {
@@ -174,6 +188,12 @@ impl From<(f32, f32)> for Vector2 {
 
 impl From<Vector3> for Vector2 {
     fn from(value: Vector3) -> Self {
+        Self::new(value.x, value.y)
+    }
+}
+
+impl From<Vector4> for Vector2 {
+    fn from(value: Vector4) -> Self {
         Self::new(value.x, value.y)
     }
 }

@@ -9,14 +9,16 @@ use crate::IKHandle;
 /// Represents a skeleton, or collection of bones for a model.
 #[derive(Debug, Clone, Default)]
 pub struct Skeleton {
+    /// A collection of 3d bones for this skeleton.
     pub bones: Vec<Bone>,
+    /// A collection of ik handles for this skeleton.
     pub ik_handles: Vec<IKHandle>,
+    /// A collection of constraints for this skeleton.
     pub constraints: Vec<Constraint>,
 }
 
 impl Skeleton {
     /// Constructs a new skeleton.
-    #[inline]
     pub fn new() -> Self {
         Self {
             bones: Vec::new(),
@@ -26,7 +28,6 @@ impl Skeleton {
     }
 
     /// Constructs a new skeleton with the given capacity.
-    #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             bones: Vec::with_capacity(capacity),
@@ -42,7 +43,7 @@ impl Skeleton {
                 let parent_matrix = (!self.bones[self.bones[i].parent as usize]
                     .world_rotation
                     .unwrap_or_default())
-                .matrix4x4();
+                .to_4x4();
 
                 self.bones[i].local_position = Some(
                     (self.bones[i].world_position.unwrap_or_default()
@@ -120,6 +121,30 @@ impl Skeleton {
             }
             if let Some(position) = &mut bone.world_position {
                 *position *= factor;
+            }
+        }
+    }
+
+    /// Transforms the skeleton by the given matrix.
+    pub fn transform(&mut self, matrix: &Matrix4x4) {
+        for bone in &mut self.bones {
+            let has_locals = bone.local_position.is_some();
+            let has_worlds = bone.world_position.is_some();
+
+            if has_locals {
+                let result = bone.local_matrix() * *matrix;
+
+                bone.local_position = Some(result.position());
+                bone.local_rotation = Some(result.rotation());
+                bone.local_scale = Some(result.scale());
+            }
+
+            if has_worlds {
+                let result = bone.world_matrix() * *matrix;
+
+                bone.world_position = Some(result.position());
+                bone.world_rotation = Some(result.rotation());
+                bone.world_scale = Some(result.scale());
             }
         }
     }

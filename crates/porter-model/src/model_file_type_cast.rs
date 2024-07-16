@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
@@ -169,6 +170,8 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             .create_property(CastPropertyId::String, "t")
             .push("pbr");
 
+        let mut used_slots: HashSet<String> = HashSet::new();
+
         for i in 0..material.len() {
             let texture = &material.textures[i];
 
@@ -190,6 +193,13 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 MaterialTextureRefUsage::Unknown | MaterialTextureRefUsage::Anisotropy => {
                     format!("extra{}", i)
                 }
+            };
+
+            let slot = if used_slots.contains(&slot) {
+                format!("extra{}", i)
+            } else {
+                used_slots.insert(slot.clone());
+                slot
             };
 
             let hash = CastPropertyValue::from(file);
@@ -327,29 +337,48 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
     for blend_shape in &*model.blend_shapes {
         let blend_shape_node = model_node.create(CastId::BlendShape);
 
-        if let Some(name) = &blend_shape.name {
-            blend_shape_node
-                .create_property(CastPropertyId::String, "n")
-                .push(name.as_str());
-        }
+        blend_shape_node
+            .create_property(CastPropertyId::String, "n")
+            .push(blend_shape.name.as_str());
 
         blend_shape_node
             .create_property(CastPropertyId::Integer64, "b")
             .push(mesh_map[&blend_shape.base_mesh].clone());
 
-        let targets = blend_shape_node.create_property(CastPropertyId::Integer64, "t");
+        let indices_size = blend_shape
+            .vertex_indices
+            .iter()
+            .copied()
+            .max()
+            .unwrap_or_default();
 
-        for target in &blend_shape.target_meshes {
-            targets.push(mesh_map[target].clone());
-        }
+        let indices = if indices_size <= 0xFF {
+            blend_shape_node.create_property(CastPropertyId::Byte, "vi")
+        } else if indices_size <= 0xFFFF {
+            blend_shape_node.create_property(CastPropertyId::Short, "vi")
+        } else {
+            blend_shape_node.create_property(CastPropertyId::Integer32, "vi")
+        };
 
-        if !blend_shape.target_scales.is_empty() {
-            let scales = blend_shape_node.create_property(CastPropertyId::Float, "ts");
-
-            for scale in &blend_shape.target_scales {
-                scales.push(*scale);
+        for index in &blend_shape.vertex_indices {
+            if indices_size <= 0xFF {
+                indices.push(*index as u8);
+            } else if indices_size <= 0xFFFF {
+                indices.push(*index as u16);
+            } else {
+                indices.push(*index);
             }
         }
+
+        let positions = blend_shape_node.create_property(CastPropertyId::Vector3, "vp");
+
+        for position in &blend_shape.vertex_positions {
+            positions.push(*position);
+        }
+
+        blend_shape_node
+            .create_property(CastPropertyId::Float, "ts")
+            .push(blend_shape.target_scale);
     }
 
     let writer = BufWriter::new(File::create(path.as_ref().with_extension("cast"))?);

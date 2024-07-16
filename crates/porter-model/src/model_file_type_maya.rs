@@ -274,7 +274,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             material.name, material.name, material.name, material.name
         )?;
 
-        if let Some(diffuse) = material.base_texture() {
+        if let Some(diffuse) = material.base_color_texture() {
             writeln!(
                 maya,
                 concat!(
@@ -315,7 +315,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             material.name,
         )?;
 
-        let has_diffuse = material.base_texture().is_some();
+        let has_diffuse = material.base_color_texture().is_some();
 
         if has_diffuse {
             writeln!(

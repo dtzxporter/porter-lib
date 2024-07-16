@@ -33,7 +33,7 @@ impl FbxNode {
     /// Gets the hash of this node, or 0 when no hash value was found.
     pub(crate) fn hash(&self) -> u64 {
         if let Some(Some(FbxPropertyValue::Integer64(value))) =
-            self.properties.get(0).map(|x| x.values().first())
+            self.properties.first().map(|x| x.values().first())
         {
             *value
         } else {

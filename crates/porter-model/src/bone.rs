@@ -32,7 +32,6 @@ pub struct Bone {
 
 impl Bone {
     /// Constructs a new instance of a bone.
-    #[inline]
     pub fn new(name: Option<String>, parent: i32) -> Self {
         Self {
             name: name.map(sanitize_bone_name),
@@ -96,17 +95,16 @@ impl Bone {
     }
 
     /// Gets the local matrix (T * R * S).
-    #[inline]
     pub fn local_matrix(&self) -> Matrix4x4 {
         Matrix4x4::create_position(self.local_position.unwrap_or_default())
-            * self.local_rotation.unwrap_or_default().matrix4x4()
+            * Matrix4x4::create_rotation(self.local_rotation.unwrap_or_default())
             * Matrix4x4::create_scale(self.local_scale.unwrap_or(Vector3::one()))
     }
 
     /// Gets the world matrix (T * R * S).
     pub fn world_matrix(&self) -> Matrix4x4 {
         Matrix4x4::create_position(self.world_position.unwrap_or_default())
-            * self.world_rotation.unwrap_or_default().matrix4x4()
+            * Matrix4x4::create_rotation(self.world_rotation.unwrap_or_default())
             * Matrix4x4::create_scale(self.world_scale.unwrap_or(Vector3::one()))
     }
 }
