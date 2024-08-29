@@ -24,4 +24,4 @@ widestring = "1.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 raw-window-handle = { version = "0.6", default-features = false }
-windows-sys = { version = "0.59", default-features = false, features = ["Win32_Foundation", "Win32_UI_Input_KeyboardAndMouse"] }
+windows-sys = { version = "0.59", default-features = false, features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_System_Console", "Win32_System_ProcessStatus", "Win32_System_WindowsProgramming", "Win32_System_Diagnostics_Debug", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_LibraryLoader", "Wdk_System_SystemInformation"] }
