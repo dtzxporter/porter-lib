@@ -9,6 +9,7 @@ pub enum ImageFileType {
     Dds,
     Png,
     Tiff,
+    Tga,
 }
 
 impl AsRef<OsStr> for ImageFileType {
@@ -17,6 +18,7 @@ impl AsRef<OsStr> for ImageFileType {
             ImageFileType::Dds => OsStr::new("dds"),
             ImageFileType::Png => OsStr::new("png"),
             ImageFileType::Tiff => OsStr::new("tiff"),
+            ImageFileType::Tga => OsStr::new("tga"),
         }
     }
 }

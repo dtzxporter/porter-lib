@@ -5,5 +5,5 @@ edition = "2021"
 
 [dependencies]
 pollster = "0.3"
-wgpu = { version = "0.18", default-features = false, features = ["wgsl"] }
+wgpu = { version = "0.19.4", default-features = false, features = ["wgsl"] }
 once_cell = "1.18"

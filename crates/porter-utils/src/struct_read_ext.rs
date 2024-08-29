@@ -7,6 +7,8 @@ pub trait StructReadExt: Read {
     fn read_struct<S: Copy + 'static>(&mut self) -> Result<S, io::Error>;
     /// Reads a byte length integer from the reader and advances the stream.
     fn read_sized_integer(&mut self, size: usize) -> Result<u64, io::Error>;
+    /// Reads a variable length integer from the reader and advances the stream.
+    fn read_var_integer(&mut self) -> Result<u64, io::Error>;
 }
 
 impl<T> StructReadExt for T
@@ -34,6 +36,28 @@ where
 
         for i in 0..size {
             result |= (self.read_struct::<u8>()? as u64) << (i * std::mem::size_of::<u64>());
+        }
+
+        Ok(result)
+    }
+
+    fn read_var_integer(&mut self) -> Result<u64, io::Error> {
+        let mut result: u64 = 0;
+        let mut shift: u64 = 0;
+
+        loop {
+            let opcode: u8 = self.read_struct()?;
+
+            result |= ((opcode & 0x7F) as u64) << shift;
+            shift += 7;
+
+            if (opcode & 0x80) == 0 {
+                break;
+            }
+
+            if shift == 10 * 7 {
+                return Err(io::Error::from(io::ErrorKind::InvalidData));
+            }
         }
 
         Ok(result)

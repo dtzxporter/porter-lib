@@ -1,59 +1,52 @@
 use std::sync::Arc;
 
-use iced::window::icon;
-use iced::window::Icon;
-use iced::window::Position;
+use iced::multi_window::Application;
 
-use iced::Application;
 use iced::Color;
 use iced::Font;
 use iced::Pixels;
 use iced::Settings;
-use iced::Size;
 
+use crate::porter_main_settings;
 use crate::PorterAssetManager;
 use crate::PorterMain;
 use crate::PorterMainColumn;
 
 /// Used to build and configure the main window.
 pub struct PorterMainBuilder {
-    pub(crate) title: String,
-    pub(crate) name: String,
-    pub(crate) donate_url: String,
-    pub(crate) icon: Option<Icon>,
+    pub(crate) name: &'static str,
+    pub(crate) version: &'static str,
+    pub(crate) description: &'static str,
     pub(crate) file_filters: Vec<(String, Vec<String>)>,
     pub(crate) multi_file: bool,
     pub(crate) preview: bool,
+    pub(crate) animations_enabled: bool,
     pub(crate) materials_enabled: bool,
     pub(crate) sounds_enabled: bool,
+    pub(crate) sounds_convertable: bool,
     pub(crate) raw_files_enabled: bool,
     pub(crate) raw_files_forcable: bool,
+    pub(crate) normal_map_converter: bool,
     pub(crate) columns: Vec<PorterMainColumn>,
     pub(crate) asset_manager: Arc<dyn PorterAssetManager>,
 }
 
 impl PorterMainBuilder {
-    /// Sets the title of the main window.
-    pub fn title<T: Into<String>>(mut self, title: T) -> Self {
-        self.title = title.into();
-        self
-    }
-
     /// The name of the application. Used for the main window header, and the name of settings and crash files.
-    pub fn name<T: Into<String>>(mut self, name: T) -> Self {
-        self.name = name.into();
+    pub fn name(mut self, name: &'static str) -> Self {
+        self.name = name;
         self
     }
 
-    /// The url to open when clicking the donation button.
-    pub fn donate_url<T: Into<String>>(mut self, url: T) -> Self {
-        self.donate_url = url.into();
+    /// The version of the program.
+    pub fn version(mut self, version: &'static str) -> Self {
+        self.version = version;
         self
     }
 
-    /// Loads the icon file from a resource.
-    pub fn icon<T: AsRef<[u8]>>(mut self, icon: T) -> Self {
-        self.icon = icon::from_file_data(icon.as_ref(), Some(image::ImageFormat::Ico)).ok();
+    /// The description of the program.
+    pub fn description(mut self, description: &'static str) -> Self {
+        self.description = description;
         self
     }
 
@@ -78,53 +71,65 @@ impl PorterMainBuilder {
         self
     }
 
-    /// Enable or disable support for loading multiple files at once.
+    /// Enable or disable support for loading multiple files at once (Default: false).
     pub const fn multi_file(mut self, multi_file: bool) -> Self {
         self.multi_file = multi_file;
         self
     }
 
-    /// Enable or disable the asset previewer.
+    /// Enable or disable the asset previewer (Default: true).
     pub const fn preview(mut self, preview: bool) -> Self {
         self.preview = preview;
         self
     }
 
-    /// Enable or disable material support.
+    /// Enable or disable animation support (Default: false).
+    pub const fn animations_enabled(mut self, animations: bool) -> Self {
+        self.animations_enabled = animations;
+        self
+    }
+
+    /// Enable or disable material support (Default: false).
     pub const fn materials_enabled(mut self, materials: bool) -> Self {
         self.materials_enabled = materials;
         self
     }
 
-    /// Enable or disable sounds support.
+    /// Enable or disable sounds support (Default: false).
     pub const fn sounds_enabled(mut self, sounds: bool) -> Self {
         self.sounds_enabled = sounds;
         self
     }
 
-    /// Enables or disables raw file support.
+    /// Enable or disable sound conversion support (Default: true).
+    pub const fn sounds_convertable(mut self, convertable: bool) -> Self {
+        self.sounds_convertable = convertable;
+        self
+    }
+
+    /// Enables or disables raw file support (Default: false).
     pub const fn raw_files_enabled(mut self, raw_files: bool) -> Self {
         self.raw_files_enabled = raw_files;
         self
     }
 
-    /// Enables or disables support for forcing raw files.
+    /// Enables or disables support for forcing raw files (Default: false).
     pub const fn raw_files_forcable(mut self, forcable: bool) -> Self {
         self.raw_files_forcable = forcable;
         self
     }
 
+    /// Enables or disables the normal map converter support (Default: true).
+    pub const fn normal_map_converter(mut self, converter: bool) -> Self {
+        self.normal_map_converter = converter;
+        self
+    }
+
     /// Runs the main window until it closes.
-    pub fn run(mut self) {
+    pub fn run(self) {
         let settings = Settings {
             id: None,
-            window: iced::window::Settings {
-                size: Size::new(920.0, 582.0),
-                position: Position::Centered,
-                min_size: Some(Size::new(920.0, 582.0)),
-                icon: self.icon.take(),
-                ..Default::default()
-            },
+            window: porter_main_settings(),
             flags: self,
             fonts: Vec::new(),
             default_font: Font::DEFAULT,
@@ -143,17 +148,19 @@ impl PorterMainBuilder {
 /// Creates a new main window builder with the given asset manager.
 pub fn create_main<A: PorterAssetManager + 'static>(asset_manager: A) -> PorterMainBuilder {
     PorterMainBuilder {
-        title: String::new(),
-        name: String::new(),
-        donate_url: String::new(),
-        icon: None,
+        name: "<unset>",
+        version: "<unset>",
+        description: "<unset>",
         file_filters: Vec::new(),
         multi_file: false,
         preview: true,
+        animations_enabled: false,
         materials_enabled: false,
         sounds_enabled: false,
+        sounds_convertable: true,
         raw_files_enabled: false,
         raw_files_forcable: false,
+        normal_map_converter: true,
         columns: Vec::new(),
         asset_manager: Arc::new(asset_manager),
     }

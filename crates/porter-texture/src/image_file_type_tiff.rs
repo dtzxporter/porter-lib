@@ -240,10 +240,10 @@ impl TiffValue for IccProfileValue {
 
 /// Utility macro that writes the proper image format.
 macro_rules! write_image_data {
-    ($encoder:expr, $frame:expr, $size:expr, $color:ty, $srgb:expr) => {{
+    ($encoder:expr, $frame:expr, $image:expr, $size:expr, $color:ty, $srgb:expr) => {{
         let mut frame_encoder = $encoder.new_image_with_compression::<$color, Deflate>(
-            $frame.width(),
-            $frame.height(),
+            $image.width(),
+            $image.height(),
             Deflate::with_level(DeflateLevel::Fast),
         )?;
 
@@ -289,9 +289,30 @@ pub const fn pick_format(format: ImageFormat) -> ImageFormat {
         | ImageFormat::R16Sint
         | ImageFormat::R16Uint => ImageFormat::R16Unorm,
 
+        // Red + green 16bit (Converted to RGBA 16 bit).
+        ImageFormat::R16G16Typeless
+        | ImageFormat::R16G16Unorm
+        | ImageFormat::R16G16Uint
+        | ImageFormat::R16G16Snorm
+        | ImageFormat::R16G16Sint
+        | ImageFormat::R16G16Float => ImageFormat::R16G16B16A16Unorm,
+
+        // Red + green + blue + alpha 16bit.
+        ImageFormat::R16G16B16A16Typeless
+        | ImageFormat::R16G16B16A16Float
+        | ImageFormat::R16G16B16A16Unorm
+        | ImageFormat::R16G16B16A16Uint
+        | ImageFormat::R16G16B16A16Snorm
+        | ImageFormat::R16G16B16A16Sint => ImageFormat::R16G16B16A16Unorm,
+
         // Red compressed Bc4.
         ImageFormat::Bc4Typeless | ImageFormat::Bc4Unorm | ImageFormat::Bc4Snorm => {
             ImageFormat::R8Unorm
+        }
+
+        // High dynamic range Bc6.
+        ImageFormat::Bc6HTypeless | ImageFormat::Bc6HUf16 | ImageFormat::Bc6HSf16 => {
+            ImageFormat::R16G16B16A16Unorm
         }
 
         // Various compressed formats.
@@ -310,20 +331,23 @@ pub fn to_tiff<O: Write + Seek>(image: &Image, mut output: &mut O) -> Result<(),
     let mut encoder = TiffEncoder::new(&mut output)?;
 
     for frame in image.frames() {
-        let size = image.frame_size_with_mipmaps(frame.width(), frame.height(), 1);
+        let size = image.frame_size_with_mipmaps(image.width(), image.height(), 1);
 
         match image.format() {
             ImageFormat::R8Unorm => {
-                write_image_data!(encoder, frame, size, colortype::Gray8, false)
+                write_image_data!(encoder, frame, image, size, colortype::Gray8, false)
             }
             ImageFormat::R16Unorm => {
-                write_image_data!(encoder, frame, size, colortype::Gray16, false)
+                write_image_data!(encoder, frame, image, size, colortype::Gray16, false)
             }
             ImageFormat::R8G8B8A8Unorm => {
-                write_image_data!(encoder, frame, size, colortype::RGBA8, false)
+                write_image_data!(encoder, frame, image, size, colortype::RGBA8, false)
             }
             ImageFormat::R8G8B8A8UnormSrgb => {
-                write_image_data!(encoder, frame, size, colortype::RGBA8, true)
+                write_image_data!(encoder, frame, image, size, colortype::RGBA8, true)
+            }
+            ImageFormat::R16G16B16A16Unorm => {
+                write_image_data!(encoder, frame, image, size, colortype::RGBA16, false)
             }
             _ => {
                 return Err(TextureError::ContainerFormatInvalid(
@@ -347,7 +371,7 @@ pub fn from_tiff<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
     let buffer = decoder.read_image()?;
 
     let mut image = Image::new(dimensions.0, dimensions.1, format)?;
-    let frame = image.create_frame(dimensions.0, dimensions.1)?;
+    let frame = image.create_frame()?;
 
     match buffer {
         DecodingResult::U8(buffer) => {

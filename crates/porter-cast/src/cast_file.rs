@@ -1,6 +1,14 @@
-use std::io::Error;
-use std::io::Write;
+use core::slice::Iter;
+use core::slice::IterMut;
 
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Read;
+use std::io::Write;
+use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
+
+use porter_utils::StructReadExt;
 use porter_utils::StructWriteExt;
 
 use crate::CastNode;
@@ -33,6 +41,16 @@ impl CastFile {
         self.root_nodes.push(node);
     }
 
+    /// Returns an iterator over the root nodes in this file.
+    pub fn roots(&self) -> Iter<'_, CastNode> {
+        self.root_nodes.iter()
+    }
+
+    /// Returns an iterator that allows modifying the root nodes in this file.
+    pub fn roots_mut(&mut self) -> IterMut<'_, CastNode> {
+        self.root_nodes.iter_mut()
+    }
+
     /// Serializes the cast file to the writer.
     pub fn write<W: Write>(&self, mut writer: W) -> Result<(), Error> {
         let header = CastHeader {
@@ -49,5 +67,41 @@ impl CastFile {
         }
 
         Ok(())
+    }
+
+    /// Deserializes a cast file from the reader.
+    pub fn read<R: Read>(mut reader: R) -> Result<Self, Error> {
+        let header: CastHeader = reader.read_struct()?;
+
+        if header.magic != 0x74736163 {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "Invalid cast file magic!",
+            ));
+        }
+
+        let mut root_nodes = Vec::new();
+
+        root_nodes
+            .try_reserve_exact(header.root_nodes as usize)
+            .map_err(|x| Error::new(ErrorKind::OutOfMemory, x))?;
+
+        for _ in 0..header.root_nodes {
+            root_nodes.push(CastNode::read(&mut reader)?);
+        }
+
+        let mut largest_hash_next: u64 = 0;
+
+        for root in &root_nodes {
+            largest_hash_next = largest_hash_next.max(root.largest_hash());
+        }
+
+        let hash_next = Arc::new(AtomicU64::new(largest_hash_next.wrapping_add(1)));
+
+        for root in &mut root_nodes {
+            root.set_hash_next(hash_next.clone());
+        }
+
+        Ok(Self { root_nodes })
     }
 }

@@ -9,6 +9,7 @@ use crate::format_to_buffer_size;
 use crate::format_to_wgpu;
 use crate::image_file_type_dds;
 use crate::image_file_type_png;
+use crate::image_file_type_tga;
 use crate::image_file_type_tiff;
 use crate::is_format_compressed;
 use crate::is_format_requires_unpack;
@@ -95,7 +96,7 @@ impl Image {
     pub fn convert(
         &mut self,
         format: ImageFormat,
-        options: Option<ImageConvertOptions>,
+        options: ImageConvertOptions,
     ) -> Result<(), TextureError> {
         if self.format == format {
             return Ok(());
@@ -126,11 +127,14 @@ impl Image {
 
         self.mipmaps = 1;
 
+        let width = self.width;
+        let height = self.height;
+
         for frame in self.frames_mut() {
             let block_dims = target_format.block_dimensions();
 
-            let bytes_per_row = target_format.bytes_per_row(frame.width()) as usize;
-            let size = target_format.buffer_size_aligned(frame.width(), frame.height()) as usize;
+            let bytes_per_row = target_format.bytes_per_row(width) as usize;
+            let size = target_format.buffer_size_aligned(width, height) as usize;
 
             let mut buffer = Vec::new();
 
@@ -140,16 +144,15 @@ impl Image {
 
             buffer.resize(size, 0);
 
-            let mut converter =
-                GPUConverter::new(frame.width(), frame.height(), source_format, target_format);
+            let mut converter = GPUConverter::new(width, height, source_format, target_format);
 
             converter.set_options(options);
             converter.convert(frame.buffer(), &mut buffer)?;
 
-            let truncated_size = target_format.buffer_size(frame.width(), frame.height()) as usize;
+            let truncated_size = target_format.buffer_size(width, height) as usize;
 
             if truncated_size != size {
-                let nbh = (frame.height() + (block_dims.1 - 1)) / block_dims.1;
+                let nbh = (height + (block_dims.1 - 1)) / block_dims.1;
 
                 for y in 0..nbh {
                     let source = y as usize
@@ -201,7 +204,7 @@ impl Image {
             return Err(TextureError::InvalidOperation);
         };
 
-        if src_rect.x > frame_src.width() || src_rect.y > frame_src.height() {
+        if src_rect.x > src.width() || src_rect.y > src.height() {
             return Err(TextureError::InvalidOperation);
         }
 
@@ -235,36 +238,36 @@ impl Image {
         }
 
         // Truncate the right region.
-        if dest_x + src_width > frame_dest.width() as i32 {
-            src_width -= (dest_x + src_width) - frame_dest.width() as i32;
+        if dest_x + src_width > self.width as i32 {
+            src_width -= (dest_x + src_width) - self.width as i32;
         }
 
         // Truncate the bottom region.
-        if dest_y + src_height > frame_dest.height() as i32 {
-            src_height -= (dest_y + src_height) - frame_dest.height() as i32;
+        if dest_y + src_height > self.height as i32 {
+            src_height -= (dest_y + src_height) - self.height as i32;
         }
 
         // Truncate the source width.
-        if src_x + src_width > frame_src.width() as i32 {
-            src_width -= (src_x + src_width) - frame_src.width() as i32;
+        if src_x + src_width > src.width() as i32 {
+            src_width -= (src_x + src_width) - src.width() as i32;
         }
 
         // Truncate the source height.
-        if src_y + src_height > frame_src.height() as i32 {
-            src_height -= (src_y + src_height) - frame_src.height() as i32;
+        if src_y + src_height > src.height() as i32 {
+            src_height -= (src_y + src_height) - src.height() as i32;
         }
 
         if src_width <= 0 || src_height <= 0 {
             return Ok(());
         }
 
-        let src_bytes_per_row = frame_src.width() * bytes_per_pixel;
+        let src_bytes_per_row = src.width() * bytes_per_pixel;
         let src_copy_bytes = (src_width as u32 * bytes_per_pixel) as usize;
 
         let mut src_offset =
             ((src_y as u32 * src_bytes_per_row) + (src_x as u32 * bytes_per_pixel)) as usize;
 
-        let dest_bytes_per_row = frame_dest.width() * bytes_per_pixel;
+        let dest_bytes_per_row = self.width * bytes_per_pixel;
 
         let mut dest_offset =
             ((dest_y as u32 * dest_bytes_per_row) + (dest_x as u32 * bytes_per_pixel)) as usize;
@@ -286,6 +289,7 @@ impl Image {
             ImageFileType::Dds => image_file_type_dds::pick_format(self.format),
             ImageFileType::Png => image_file_type_png::pick_format(self.format),
             ImageFileType::Tiff => image_file_type_tiff::pick_format(self.format),
+            ImageFileType::Tga => image_file_type_tga::pick_format(self.format),
         }
     }
 
@@ -306,6 +310,7 @@ impl Image {
             ImageFileType::Dds => image_file_type_dds::from_dds(input),
             ImageFileType::Png => image_file_type_png::from_png(input),
             ImageFileType::Tiff => image_file_type_tiff::from_tiff(input),
+            ImageFileType::Tga => image_file_type_tga::from_tga(input),
         }
     }
 
@@ -335,6 +340,7 @@ impl Image {
             ImageFileType::Dds => image_file_type_dds::to_dds(self, output),
             ImageFileType::Png => image_file_type_png::to_png(self, output),
             ImageFileType::Tiff => image_file_type_tiff::to_tiff(self, output),
+            ImageFileType::Tga => image_file_type_tga::to_tga(self, output),
         }
     }
 
@@ -360,14 +366,10 @@ impl Image {
     }
 
     /// Allocates and creates a new frame, using the current image format.
-    pub fn create_frame(&mut self, width: u32, height: u32) -> Result<&mut Frame, TextureError> {
-        if width > self.width || height > self.height || width == 0 || height == 0 {
-            return Err(TextureError::InvalidFrameSize(width, height));
-        }
+    pub fn create_frame(&mut self) -> Result<&mut Frame, TextureError> {
+        let size = self.frame_size(self.width, self.height);
 
-        let size = self.frame_size(width, height);
-
-        let frame = Frame::new(width, height, size)?;
+        let frame = Frame::new(size)?;
 
         self.frames
             .try_reserve(1)
@@ -415,11 +417,8 @@ impl Image {
         self.frames.iter_mut()
     }
 
-    /// Image is considered a cubemap if it has exactly 6 frames, all of which are the same size.
+    /// Image is considered a cubemap if it has exactly 6 frames.
     pub fn is_cubemap(&self) -> bool {
-        self.frames().len() == 6
-            && self
-                .frames()
-                .all(|x| x.width() == self.width && x.height() == self.height)
+        self.frames.len() == 6
     }
 }

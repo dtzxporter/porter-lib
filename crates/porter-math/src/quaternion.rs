@@ -22,11 +22,13 @@ pub struct Quaternion {
 assert_eq_size!([u8; 0x10], Quaternion);
 
 impl Quaternion {
+    /// Constructs a new quaternion with the given component values.
     #[inline]
     pub fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
         Self { x, y, z, w }
     }
 
+    /// Constructs a new identity quaternion.
     #[inline]
     pub fn identity() -> Self {
         Self {
@@ -37,16 +39,21 @@ impl Quaternion {
         }
     }
 
+    /// Calculates the length of this quaternion.
+    /// `sqrt(x * x + y * y + z * z + w * w)`
     #[inline]
     pub fn length(&self) -> f32 {
         self.length_squared().sqrt()
     }
 
+    /// Calculates the length squared of this quaternion.
+    /// `x * x + y * y + z * z + w * w`
     #[inline]
     pub fn length_squared(&self) -> f32 {
         self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w
     }
 
+    /// Normalizes the quaternion.
     #[inline]
     pub fn normalize(&mut self) {
         let length = self.length();
@@ -59,6 +66,7 @@ impl Quaternion {
         }
     }
 
+    /// Returns a quaternion that is normalized.
     #[inline]
     pub fn normalized(&self) -> Self {
         let mut normalize = *self;
@@ -66,6 +74,7 @@ impl Quaternion {
         normalize
     }
 
+    /// Calculates the inverse of this quaternion.
     #[inline]
     pub fn inverse(&self) -> Self {
         let length_squared = self.length_squared();
@@ -79,6 +88,7 @@ impl Quaternion {
         }
     }
 
+    /// Reverses the byte order of the quaternion.
     #[inline]
     pub fn swap_bytes(self) -> Self {
         Self {
@@ -89,11 +99,27 @@ impl Quaternion {
         }
     }
 
+    /// Calculates the euler angle rotation of this quaternion.
     #[inline]
-    pub fn euler_angles(&self, measurment: Angles) -> Vector3 {
-        self.to_4x4().euler_angles(measurment)
+    pub fn to_euler(&self, angles: Angles) -> Vector3 {
+        self.to_4x4().to_euler(angles)
     }
 
+    /// Calculates the log vector rotation of this quaternion.
+    #[inline]
+    pub fn to_log_vector(&self) -> Vector3 {
+        let sin_half_angle = (self.x * self.x + self.y * self.y + self.z * self.z).sqrt();
+
+        if sin_half_angle < f32::EPSILON {
+            Vector3::zero()
+        } else {
+            let fac = sin_half_angle.atan2(self.w) / sin_half_angle;
+
+            Vector3::new(fac * self.x, fac * self.y, fac * self.z)
+        }
+    }
+
+    /// Converts this quaternion to a rotation matrix.
     #[inline]
     pub fn to_3x3(&self) -> Matrix3x3 {
         let mut matrix = Matrix3x3::new();
@@ -136,6 +162,7 @@ impl Quaternion {
         matrix
     }
 
+    /// Converts this quaternion to a matrix.
     #[inline]
     pub fn to_4x4(&self) -> Matrix4x4 {
         let mut matrix = Matrix4x4::new();
@@ -178,13 +205,15 @@ impl Quaternion {
         matrix
     }
 
+    /// Constructs a new quaternion from the given euler angles.
     #[inline]
-    pub fn from_euler_angles(x: f32, y: f32, z: f32, measurment: Angles) -> Self {
-        Self::from_axis_rotation(Vector3::new(0.0, 0.0, 1.0), z, measurment)
-            * Self::from_axis_rotation(Vector3::new(0.0, 1.0, 0.0), y, measurment)
-            * Self::from_axis_rotation(Vector3::new(1.0, 0.0, 0.0), x, measurment)
+    pub fn from_euler(euler: Vector3, angles: Angles) -> Self {
+        Self::from_axis_rotation(Vector3::new(0.0, 0.0, 1.0), euler.z, angles)
+            * Self::from_axis_rotation(Vector3::new(0.0, 1.0, 0.0), euler.y, angles)
+            * Self::from_axis_rotation(Vector3::new(1.0, 0.0, 0.0), euler.x, angles)
     }
 
+    /// Constructs a new quaternion from the given axis rotation.
     #[inline]
     pub fn from_axis_rotation(axis: Vector3, angle: f32, measurment: Angles) -> Self {
         let radians = match measurment {
@@ -204,6 +233,25 @@ impl Quaternion {
             w: quaternion_scale,
         }
     }
+
+    /// Constructs a new quaternion from the given log vector rotation.
+    #[inline]
+    pub fn from_log_vector(vector: Vector3) -> Self {
+        let half_angle = vector.length_squared().sqrt();
+
+        if half_angle < f32::EPSILON {
+            Self::identity()
+        } else {
+            let fac = half_angle.sin() / half_angle;
+
+            Self {
+                x: fac * vector.x,
+                y: fac * vector.y,
+                z: fac * vector.z,
+                w: half_angle.cos(),
+            }
+        }
+    }
 }
 
 impl Default for Quaternion {
@@ -214,6 +262,17 @@ impl Default for Quaternion {
             y: 0.0,
             z: 0.0,
             w: 1.0,
+        }
+    }
+}
+
+impl From<[f32; 4]> for Quaternion {
+    fn from(value: [f32; 4]) -> Self {
+        Self {
+            x: value[0],
+            y: value[1],
+            z: value[2],
+            w: value[3],
         }
     }
 }
@@ -294,6 +353,20 @@ impl ops::Mul<Quaternion> for Quaternion {
             y: self.w * rhs.y - self.x * rhs.z + self.y * rhs.w + self.z * rhs.x,
             z: self.w * rhs.z + self.x * rhs.y - self.y * rhs.x + self.z * rhs.w,
             w: self.w * rhs.w - self.x * rhs.x - self.y * rhs.y - self.z * rhs.z,
+        }
+    }
+}
+
+impl ops::Mul<f32> for Quaternion {
+    type Output = Quaternion;
+
+    #[inline]
+    fn mul(self, rhs: f32) -> Self::Output {
+        Self {
+            x: self.x * rhs,
+            y: self.y * rhs,
+            z: self.z * rhs,
+            w: self.w * rhs,
         }
     }
 }

@@ -1,6 +1,7 @@
 use crate::ImageFileType;
 use crate::ImageFormat;
 
+/// Errors that can occur in the texture crate.
 #[derive(Debug)]
 pub enum TextureError {
     InvalidImageFormat(ImageFormat),

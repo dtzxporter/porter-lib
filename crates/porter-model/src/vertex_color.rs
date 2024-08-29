@@ -34,3 +34,10 @@ impl From<PackedU8Vector4> for VertexColor {
         Self::new(value.x, value.y, value.z, value.w)
     }
 }
+
+impl From<[u8; 4]> for VertexColor {
+    #[inline]
+    fn from(value: [u8; 4]) -> Self {
+        Self::new(value[0], value[1], value[2], value[3])
+    }
+}

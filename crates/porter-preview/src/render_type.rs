@@ -1,7 +1,7 @@
-use porter_model::MaterialTextureRefUsage;
 use wgpu::*;
 
 use porter_gpu::GPUInstance;
+use porter_model::MaterialTextureRefUsage;
 use porter_model::Model;
 use porter_texture::Image;
 

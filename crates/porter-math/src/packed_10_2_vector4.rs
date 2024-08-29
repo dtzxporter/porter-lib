@@ -14,21 +14,25 @@ pub struct Packed102Vector4 {
 assert_eq_size!([u8; 0x4], Packed102Vector4);
 
 impl Packed102Vector4 {
+    /// Constructs a new packed vector from the given packed value.
     #[inline]
     pub const fn new(packed: u32) -> Self {
         Self { packed }
     }
 
+    /// Converts this vector to a four component floating point vector.
     #[inline]
     pub fn vector4(self) -> Vector4 {
         self.into()
     }
 
+    /// Converts this vector to a three component floating point vector.
     #[inline]
     pub fn vector3(self) -> Vector3 {
         Vector4::from(self).into()
     }
 
+    /// Converts this vector to a two component floating point vector.
     #[inline]
     pub fn vector2(self) -> Vector2 {
         Vector4::from(self).into()

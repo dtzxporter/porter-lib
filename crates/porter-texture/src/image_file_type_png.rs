@@ -17,6 +17,11 @@ use crate::ImageFileType;
 use crate::ImageFormat;
 use crate::TextureError;
 
+/// Maximum number of png frames to expand.
+const MAXIMUM_PNG_FRAMES: usize = 6;
+/// Maximum size in bytes of a png frame buffer.
+const MAXIMUM_PNG_BUFFER: usize = 16 * 1024;
+
 /// Converts an image format to a png specification.
 const fn format_to_png(format: ImageFormat) -> Result<(ColorType, BitDepth, bool), TextureError> {
     Ok(match format {
@@ -27,6 +32,7 @@ const fn format_to_png(format: ImageFormat) -> Result<(ColorType, BitDepth, bool
         ImageFormat::R16G16Unorm => (ColorType::GrayscaleAlpha, BitDepth::Sixteen, false),
         ImageFormat::R8G8B8A8Unorm => (ColorType::Rgba, BitDepth::Eight, false),
         ImageFormat::R8G8B8A8UnormSrgb => (ColorType::Rgba, BitDepth::Eight, true),
+        ImageFormat::R16G16B16A16Unorm => (ColorType::Rgba, BitDepth::Sixteen, false),
         _ => {
             return Err(TextureError::ContainerFormatInvalid(
                 format,
@@ -70,20 +76,13 @@ pub const fn pick_format(format: ImageFormat) -> ImageFormat {
         | ImageFormat::R16Sint
         | ImageFormat::R16Uint => ImageFormat::R16Unorm,
 
-        // Grayscale + alpha 8bit.
-        ImageFormat::R8G8Typeless
-        | ImageFormat::R8G8Unorm
-        | ImageFormat::R8G8Uint
-        | ImageFormat::R8G8Snorm
-        | ImageFormat::R8G8Sint => ImageFormat::R8G8Unorm,
-
-        // Grayscale + alpha 16bit.
+        // Red + green 16bit (Converted to RGBA 16 bit).
         ImageFormat::R16G16Typeless
         | ImageFormat::R16G16Unorm
         | ImageFormat::R16G16Uint
         | ImageFormat::R16G16Snorm
         | ImageFormat::R16G16Sint
-        | ImageFormat::R16G16Float => ImageFormat::R16G16Unorm,
+        | ImageFormat::R16G16Float => ImageFormat::R16G16B16A16Unorm,
 
         // Red + green + blue + alpha 16bit.
         ImageFormat::R16G16B16A16Typeless
@@ -96,6 +95,11 @@ pub const fn pick_format(format: ImageFormat) -> ImageFormat {
         // Red compressed Bc4.
         ImageFormat::Bc4Typeless | ImageFormat::Bc4Unorm | ImageFormat::Bc4Snorm => {
             ImageFormat::R8Unorm
+        }
+
+        // High dynamic range Bc6.
+        ImageFormat::Bc6HTypeless | ImageFormat::Bc6HUf16 | ImageFormat::Bc6HSf16 => {
+            ImageFormat::R16G16B16A16Unorm
         }
 
         // Various compressed formats.
@@ -113,7 +117,11 @@ pub const fn pick_format(format: ImageFormat) -> ImageFormat {
 pub fn to_png<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), TextureError> {
     let (color_type, bit_depth, is_srgb) = format_to_png(image.format())?;
 
-    let mut encoder = Encoder::new(output, image.width(), image.height());
+    let frames = image.frames().len();
+    let height = image.height() * frames.min(MAXIMUM_PNG_FRAMES) as u32;
+    let width = image.width();
+
+    let mut encoder = Encoder::new(output, width, height);
 
     encoder.set_compression(Compression::Fast);
     encoder.set_color(color_type);
@@ -126,11 +134,24 @@ pub fn to_png<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), Text
     encoder.add_text_chunk("Author".into(), "DTZxPorter".into())?;
 
     let mut encoder = encoder.write_header()?;
+    let mut writer = encoder.stream_writer_with_size(MAXIMUM_PNG_BUFFER)?;
 
-    if let Some(frame) = image.frames().next() {
-        let size = image.frame_size_with_mipmaps(frame.width(), frame.height(), 1);
+    for frame in image.frames().take(MAXIMUM_PNG_FRAMES) {
+        let size = image.frame_size_with_mipmaps(image.width(), image.height(), 1);
 
-        encoder.write_image_data(&frame.buffer()[..size as usize])?;
+        if matches!(bit_depth, BitDepth::Sixteen) {
+            let mut temp: Vec<u8> = Vec::with_capacity(size as usize);
+
+            // Png requires big-endian format for 16bit formats.
+            for pixel in frame.buffer()[..size as usize].chunks_exact(2) {
+                temp.push(pixel[1]);
+                temp.push(pixel[0]);
+            }
+
+            writer.write_all(&temp)?;
+        } else {
+            writer.write_all(&frame.buffer()[..size as usize])?;
+        }
     }
 
     Ok(())
@@ -144,16 +165,25 @@ pub fn from_png<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
 
     let mut decoder = decoder.read_info()?;
 
-    let mut format = png_to_format(decoder.output_color_type())?;
+    let (color_type, bit_depth) = decoder.output_color_type();
+
+    let mut format = png_to_format((color_type, bit_depth))?;
 
     if decoder.info().srgb.is_some() {
         format = format_to_srgb(format);
     }
 
     let mut image = Image::new(decoder.info().width, decoder.info().height, format)?;
-    let frame = image.create_frame(decoder.info().width, decoder.info().height)?;
+    let frame = image.create_frame()?;
 
     decoder.next_frame(frame.buffer_mut())?;
+
+    // Png has a big-endian 16bit format.
+    if matches!(bit_depth, BitDepth::Sixteen) {
+        for pixel in frame.buffer_mut().chunks_exact_mut(2) {
+            pixel.swap(0, 1);
+        }
+    }
 
     Ok(image)
 }

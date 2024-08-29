@@ -70,7 +70,7 @@ pub fn to_smd<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
         let local_rotation = bone
             .local_rotation
             .unwrap_or_default()
-            .euler_angles(Angles::Radians);
+            .to_euler(Angles::Radians);
         let local_position = bone.local_position.unwrap_or_default();
 
         writeln!(
@@ -91,9 +91,9 @@ pub fn to_smd<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
     for mesh in &model.meshes {
         writeln!(smd, "triangles")?;
 
-        let material = match mesh.materials.first() {
-            Some(-1) | None => "default_material",
-            Some(index) => model.materials[*index as usize].name.as_str(),
+        let material = match mesh.material {
+            Some(index) => model.materials[index].name.as_str(),
+            None => "default_material",
         };
 
         for face in &mesh.faces {

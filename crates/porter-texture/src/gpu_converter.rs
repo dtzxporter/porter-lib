@@ -1,9 +1,11 @@
+use wgpu::util::BufferInitDescriptor;
+use wgpu::util::DeviceExt;
 use wgpu::*;
 
 use std::sync::mpsc;
-use std::sync::Mutex;
 
 use porter_utils::AsAligned;
+use porter_utils::AsByteSlice;
 
 use porter_gpu::gpu_instance;
 use porter_gpu::GPUInstance;
@@ -12,9 +14,13 @@ use crate::ImageConvertOptions;
 use crate::TextureError;
 use crate::TextureExtensions;
 
-/// As of wgpu 0.18, there is a deadlock on device. Once 0.18.2/0.19 releases, we'll remove this again and test.
-/// TODO: Remove once a newer version of wgpu releases.
-static CONVERTER_MUTEX: Mutex<()> = Mutex::new(());
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy)]
+struct GPUOptionsUniform {
+    input_unorm: u32,
+    output_unorm: u32,
+    invert_y: u32,
+}
 
 /// Converts textures from one format to another (uncompressed only).
 pub struct GPUConverter {
@@ -22,7 +28,7 @@ pub struct GPUConverter {
     height: u32,
     input_format: TextureFormat,
     output_format: TextureFormat,
-    options: Option<ImageConvertOptions>,
+    options: ImageConvertOptions,
     instance: &'static GPUInstance,
 }
 
@@ -39,13 +45,13 @@ impl GPUConverter {
             height,
             input_format,
             output_format,
-            options: None,
+            options: Default::default(),
             instance: gpu_instance(),
         }
     }
 
     /// Sets conversion options.
-    pub fn set_options(&mut self, options: Option<ImageConvertOptions>) {
+    pub fn set_options(&mut self, options: ImageConvertOptions) {
         self.options = options;
     }
 
@@ -67,6 +73,25 @@ impl GPUConverter {
             bytes_per_row: Some(self.input_format.bytes_per_row(self.width)),
             rows_per_image: None,
         }
+    }
+
+    /// Creates the input options buffer for the converter.
+    fn create_input_options(&self) -> Buffer {
+        let uniforms = GPUOptionsUniform {
+            input_unorm: self.input_format.is_unorm() as u32,
+            output_unorm: self.output_format.is_unorm() as u32,
+            invert_y: (matches!(self.options, ImageConvertOptions::ReconstructZInvertY)
+                || matches!(self.options, ImageConvertOptions::AutoReconstructZInvertY))
+                as u32,
+        };
+
+        self.instance
+            .device()
+            .create_buffer_init(&BufferInitDescriptor {
+                label: None,
+                contents: uniforms.as_byte_slice(),
+                usage: BufferUsages::UNIFORM,
+            })
     }
 
     /// Creates an input texture that matches our input format and texture size.
@@ -98,17 +123,27 @@ impl GPUConverter {
                     BindGroupLayoutEntry {
                         binding: 0,
                         visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: true },
-                            view_dimension: TextureViewDimension::D2,
-                            multisampled: false,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
                         },
                         count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 1,
                         visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: false },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
                         count: None,
                     },
                 ],
@@ -119,6 +154,7 @@ impl GPUConverter {
     fn create_bind_group(
         &self,
         bind_group_layout: &BindGroupLayout,
+        input_options: &Buffer,
         input_texture_view: &TextureView,
         input_texture_sampler: &Sampler,
     ) -> BindGroup {
@@ -130,10 +166,14 @@ impl GPUConverter {
                 entries: &[
                     BindGroupEntry {
                         binding: 0,
-                        resource: BindingResource::TextureView(input_texture_view),
+                        resource: input_options.as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 1,
+                        resource: BindingResource::TextureView(input_texture_view),
+                    },
+                    BindGroupEntry {
+                        binding: 2,
                         resource: BindingResource::Sampler(input_texture_sampler),
                     },
                 ],
@@ -152,9 +192,18 @@ impl GPUConverter {
                 });
 
         let fragment_entry = match self.options {
-            Some(ImageConvertOptions::ReconstructZ) => "fs_reconstructz_main",
-            Some(ImageConvertOptions::ReconstructZInvertY) => "fs_reconstructzinverty_main",
-            _ => "fs_main",
+            ImageConvertOptions::None => "fs_main",
+            ImageConvertOptions::ReconstructZ | ImageConvertOptions::ReconstructZInvertY => {
+                "fs_rz_main"
+            }
+            ImageConvertOptions::AutoReconstructZ
+            | ImageConvertOptions::AutoReconstructZInvertY => {
+                if matches!(self.input_format, TextureFormat::Bc5RgUnorm) {
+                    "fs_rz_main"
+                } else {
+                    "fs_main"
+                }
+            }
         };
 
         self.instance
@@ -337,18 +386,18 @@ impl GPUConverter {
         input: I,
         output: O,
     ) -> Result<(), TextureError> {
-        let _guard = CONVERTER_MUTEX.lock().unwrap();
-
         let input_texture = self.create_input_texture();
 
         self.upload_cpu_texture_gpu(input, &input_texture);
 
+        let input_options = self.create_input_options();
         let input_texture_view = input_texture.create_view(&Default::default());
         let input_texture_sampler = self.create_input_sampler();
 
         let bind_group_layout = self.create_bind_group_layout();
         let bind_group = self.create_bind_group(
             &bind_group_layout,
+            &input_options,
             &input_texture_view,
             &input_texture_sampler,
         );

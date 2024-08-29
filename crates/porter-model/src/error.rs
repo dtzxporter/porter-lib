@@ -1,3 +1,4 @@
+/// Errors that can occur in the model crate.
 #[derive(Debug)]
 pub enum ModelError {
     IoError(std::io::Error),

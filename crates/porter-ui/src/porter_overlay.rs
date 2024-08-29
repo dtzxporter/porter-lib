@@ -1,6 +1,5 @@
 use iced::advanced::*;
 use iced::Renderer;
-use iced::Theme;
 use iced::Vector;
 use iced::{event, mouse, Event, Length, Point, Rectangle};
 use iced::{Element, Size};
@@ -20,18 +19,14 @@ where
     .into()
 }
 
-struct PorterOverlay<'a, Message> {
-    base: Element<'a, Message>,
-    overlay: Element<'a, Message>,
+struct PorterOverlay<'a, Message, Theme> {
+    base: Element<'a, Message, Theme>,
+    overlay: Element<'a, Message, Theme>,
 }
 
-impl<'a, Message> Widget<Message, Renderer> for PorterOverlay<'a, Message> {
-    fn width(&self) -> Length {
-        self.base.as_widget().width()
-    }
-
-    fn height(&self) -> Length {
-        self.base.as_widget().height()
+impl<'a, Message, Theme> Widget<Message, Theme, Renderer> for PorterOverlay<'a, Message, Theme> {
+    fn size(&self) -> Size<Length> {
+        self.base.as_widget().size()
     }
 
     fn layout(
@@ -134,41 +129,37 @@ impl<'a, Message> Widget<Message, Renderer> for PorterOverlay<'a, Message> {
         tree: &'b mut widget::Tree,
         layout: Layout<'_>,
         _renderer: &Renderer,
-    ) -> Option<overlay::Element<'b, Message, Renderer>> {
-        Some(overlay::Element::new(
-            layout.position(),
-            Box::new(PorterOverlayChild {
-                content: &mut self.overlay,
-                tree: &mut tree.children[1],
-                size: layout.bounds().size(),
-            }),
-        ))
+        translation: Vector,
+    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+        Some(overlay::Element::new(Box::new(PorterOverlayChild {
+            position: layout.position() + translation,
+            content: &mut self.overlay,
+            tree: &mut tree.children[1],
+            size: layout.bounds().size(),
+        })))
     }
 }
 
-impl<'a, Message> From<PorterOverlay<'a, Message>> for Element<'a, Message>
+impl<'a, Message, Theme: 'a> From<PorterOverlay<'a, Message, Theme>> for Element<'a, Message, Theme>
 where
     Message: 'a,
 {
-    fn from(double_pass: PorterOverlay<'a, Message>) -> Self {
+    fn from(double_pass: PorterOverlay<'a, Message, Theme>) -> Self {
         Element::new(double_pass)
     }
 }
 
-struct PorterOverlayChild<'a, 'b, Message> {
-    content: &'b mut Element<'a, Message>,
+struct PorterOverlayChild<'a, 'b, Message, Theme> {
+    position: Point,
+    content: &'b mut Element<'a, Message, Theme>,
     tree: &'b mut widget::Tree,
     size: Size,
 }
 
-impl<'a, 'b, Message> overlay::Overlay<Message, Renderer> for PorterOverlayChild<'a, 'b, Message> {
-    fn layout(
-        &mut self,
-        renderer: &Renderer,
-        _bounds: iced::Size,
-        position: Point,
-        _translation: Vector,
-    ) -> layout::Node {
+impl<'a, 'b, Message, Theme> overlay::Overlay<Message, Theme, Renderer>
+    for PorterOverlayChild<'a, 'b, Message, Theme>
+{
+    fn layout(&mut self, renderer: &Renderer, _bounds: iced::Size) -> layout::Node {
         let limits = layout::Limits::new(Size::ZERO, self.size)
             .width(Length::Fill)
             .height(Length::Fill);
@@ -178,10 +169,9 @@ impl<'a, 'b, Message> overlay::Overlay<Message, Renderer> for PorterOverlayChild
             .as_widget()
             .layout(self.tree, renderer, &limits);
 
-        let mut node = layout::Node::with_children(self.size, vec![child]);
-        node.move_to(position);
+        let node = layout::Node::with_children(self.size, vec![child]);
 
-        node
+        node.move_to(self.position)
     }
 
     fn draw(
@@ -258,10 +248,13 @@ impl<'a, 'b, Message> overlay::Overlay<Message, Renderer> for PorterOverlayChild
         &'c mut self,
         layout: Layout<'_>,
         renderer: &Renderer,
-    ) -> Option<overlay::Element<'c, Message, Renderer>> {
-        self.content
-            .as_widget_mut()
-            .overlay(self.tree, layout.children().next().unwrap(), renderer)
+    ) -> Option<overlay::Element<'c, Message, Theme, Renderer>> {
+        self.content.as_widget_mut().overlay(
+            self.tree,
+            layout.children().next().unwrap(),
+            renderer,
+            Vector::ZERO,
+        )
     }
 
     fn is_over(&self, _layout: Layout<'_>, _renderer: &Renderer, _cursor_position: Point) -> bool {

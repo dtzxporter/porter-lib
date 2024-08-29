@@ -18,7 +18,7 @@ fn default_image() -> Image {
     let mut image = Image::new(4, 4, ImageFormat::R8G8B8A8Unorm).unwrap();
 
     image
-        .create_frame(4, 4)
+        .create_frame()
         .unwrap()
         .buffer_mut()
         .copy_from_slice([0xFFA1A1A1u32; 4 * 4].as_slice().as_this_slice());
@@ -61,12 +61,14 @@ impl RenderMaterialTexture {
             instance.device().create_texture_with_data(
                 instance.queue(),
                 &texture_desc,
+                TextureDataOrder::LayerMajor,
                 frame.buffer(),
             )
         } else {
             instance.device().create_texture_with_data(
                 instance.queue(),
                 &texture_desc,
+                TextureDataOrder::LayerMajor,
                 &vec![0; image.width() as usize * image.height() as usize * 0x4],
             )
         };
@@ -78,8 +80,6 @@ impl RenderMaterialTexture {
             address_mode_v: AddressMode::Repeat,
             address_mode_w: AddressMode::Repeat,
             mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Nearest,
-            mipmap_filter: FilterMode::Nearest,
             ..Default::default()
         });
 

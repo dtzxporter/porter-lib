@@ -2,19 +2,14 @@ use wgpu::util::*;
 use wgpu::*;
 
 use porter_gpu::GPUInstance;
+
 use porter_math::Angles;
+use porter_math::Axis;
 use porter_math::Matrix4x4;
 use porter_math::Quaternion;
 use porter_math::Vector3;
-use porter_utils::AsByteSlice;
 
-/// The axis which points up in 3d.
-#[derive(Debug, Clone, Copy)]
-pub enum PreviewCameraUpAxis {
-    #[allow(unused)]
-    Y,
-    Z,
-}
+use porter_utils::AsByteSlice;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -44,17 +39,14 @@ pub struct PreviewCamera {
 
 impl PreviewCamera {
     /// Constructs a new preview camera instance.
-    pub fn new(
-        instance: &GPUInstance,
-        theta: f32,
-        phi: f32,
-        radius: f32,
-        up_axis: PreviewCameraUpAxis,
-    ) -> Self {
+    pub fn new(instance: &GPUInstance, theta: f32, phi: f32, radius: f32, up_axis: Axis) -> Self {
         let model_matrix = match up_axis {
-            PreviewCameraUpAxis::Y => Matrix4x4::new(),
-            PreviewCameraUpAxis::Z => {
-                Quaternion::from_euler_angles(-90.0, 0.0, 0.0, Angles::Degrees).to_4x4()
+            Axis::X => {
+                Quaternion::from_euler(Vector3::new(0.0, 0.0, -90.0), Angles::Degrees).to_4x4()
+            }
+            Axis::Y => Matrix4x4::new(),
+            Axis::Z => {
+                Quaternion::from_euler(Vector3::new(-90.0, 0.0, 0.0), Angles::Degrees).to_4x4()
             }
         };
 
@@ -150,7 +142,7 @@ impl PreviewCamera {
     }
 
     /// Updates the current uniforms on the gpu.
-    pub fn update(&mut self, instance: &GPUInstance, width: f32, height: f32) {
+    pub fn update(&mut self, instance: &GPUInstance, width: f32, height: f32, far_clip: f32) {
         if let Some((o_width, o_height, o_scale)) = self.orthographic {
             self.uniforms.projection_matrix =
                 Matrix4x4::orthographic(0.0, width, height, 0.0, -1.0, 1.0);
@@ -166,7 +158,7 @@ impl PreviewCamera {
             self.uniforms.inverse_model_matrix = self.uniforms.model_matrix.inverse();
         } else {
             self.uniforms.projection_matrix =
-                Matrix4x4::perspective_fov(65.0, width / height, 0.1, 10000.0);
+                Matrix4x4::perspective_fov(65.0, width / height, 0.1, far_clip);
             self.uniforms.view_matrix = Matrix4x4::look_at(
                 self.camera_position(),
                 self.uniforms.target,

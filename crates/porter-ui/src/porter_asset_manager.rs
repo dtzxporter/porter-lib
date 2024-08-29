@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use iced::Color;
 
+use crate::PorterSearch;
 use crate::PorterSettings;
 use crate::PorterUI;
 
@@ -22,7 +23,7 @@ pub trait PorterAssetManager: Send + Sync + 'static {
     fn loaded_len(&self) -> usize;
 
     /// Searches for assets, or resets the asset list when empty.
-    fn search_assets(&self, search_term: String);
+    fn search_assets(&self, search: Option<PorterSearch>);
 
     /// Whether or not load files is supported.
     fn supports_load_files(&self) -> bool;

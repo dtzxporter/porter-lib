@@ -7,17 +7,19 @@ use porter_utils::SanitizeFilename;
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MaterialTextureRefUsage {
-    Unknown = 0,
-    Albedo = 1,
-    Diffuse = 2,
-    Specular = 3,
-    Normal = 4,
-    Emissive = 5,
-    Gloss = 6,
-    Roughness = 7,
-    AmbientOcclusion = 8,
-    Anisotropy = 9,
-    Cavity = 10,
+    Unknown,
+    Albedo,
+    Diffuse,
+    Specular,
+    Normal,
+    Emissive,
+    Gloss,
+    Roughness,
+    AmbientOcclusion,
+    Anisotropy,
+    Cavity,
+    Metalness,
+    Count,
 }
 
 /// A texture reference for a material.
@@ -182,6 +184,8 @@ impl MaterialTextureRef {
         usage: MaterialTextureRefUsage,
         alias: A,
     ) -> Self {
+        debug_assert!(!matches!(usage, MaterialTextureRefUsage::Count));
+
         Self {
             file_name: file_name.into(),
             texture_usage: usage,
@@ -197,6 +201,8 @@ impl MaterialTextureRef {
         usage: MaterialTextureRefUsage,
         hash: u64,
     ) -> Self {
+        debug_assert!(!matches!(usage, MaterialTextureRefUsage::Count));
+
         Self {
             file_name: file_name.into(),
             texture_usage: usage,
@@ -233,6 +239,8 @@ impl fmt::Display for MaterialTextureRefUsage {
             MaterialTextureRefUsage::AmbientOcclusion => write!(f, "Ambient Occlusion"),
             MaterialTextureRefUsage::Anisotropy => write!(f, "Anisotropy"),
             MaterialTextureRefUsage::Cavity => write!(f, "Cavity"),
+            MaterialTextureRefUsage::Metalness => write!(f, "Metalness"),
+            MaterialTextureRefUsage::Count => write!(f, "Count"),
         }
     }
 }

@@ -21,6 +21,7 @@ pub struct Matrix4x4 {
 assert_eq_size!([u8; 64], Matrix4x4);
 
 impl Matrix4x4 {
+    /// Constructs a new identity matrix.
     #[inline]
     pub const fn new() -> Self {
         let mut data: [f32; 16] = [0.0; 16];
@@ -45,6 +46,7 @@ impl Matrix4x4 {
         Self { data }
     }
 
+    /// Constructs a new perspective fov matrix.
     #[inline]
     pub fn perspective_fov(fov: f32, aspect: f32, near: f32, far: f32) -> Self {
         let mut result = Matrix4x4::new();
@@ -84,6 +86,7 @@ impl Matrix4x4 {
         result
     }
 
+    /// Constructs a new look at matrix.
     #[inline]
     pub fn look_at(from: Vector3, to: Vector3, right: Vector3) -> Self {
         let mut result = Matrix4x4::new();
@@ -115,6 +118,7 @@ impl Matrix4x4 {
         result
     }
 
+    /// Constructs a new orthographic matrix.
     #[inline]
     pub fn orthographic(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
         let mut result = Matrix4x4::new();
@@ -142,6 +146,7 @@ impl Matrix4x4 {
         result
     }
 
+    /// Creates a new position matrix.
     #[inline]
     pub fn create_position(position: Vector3) -> Matrix4x4 {
         let mut result = Matrix4x4::new();
@@ -153,11 +158,13 @@ impl Matrix4x4 {
         result
     }
 
+    /// Creates a new rotation matrix.
     #[inline]
     pub fn create_rotation(rotation: Quaternion) -> Matrix4x4 {
         rotation.to_4x4()
     }
 
+    /// Creates a new scale matrix.
     #[inline]
     pub fn create_scale(scale: Vector3) -> Matrix4x4 {
         let mut result = Matrix4x4::new();
@@ -169,21 +176,27 @@ impl Matrix4x4 {
         result
     }
 
+    /// Access a single matrix value.
+    /// `m[X][Y]`
     #[inline]
     pub fn mat<const X: usize, const Y: usize>(&self) -> f32 {
         self.data[X * 4 + Y]
     }
 
+    /// Mutably access a single matrix value.
+    /// `m[X][Y]`
     #[inline]
     pub fn mat_mut<const X: usize, const Y: usize>(&mut self) -> &mut f32 {
         &mut self.data[X * 4 + Y]
     }
 
+    /// Returns the position of this matrix.
     #[inline]
     pub fn position(&self) -> Vector3 {
         Vector3::new(self.mat::<3, 0>(), self.mat::<3, 1>(), self.mat::<3, 2>())
     }
 
+    /// Returns the rotation of this matrix.
     #[inline]
     pub fn rotation(&self) -> Quaternion {
         let trace = self.mat::<0, 0>() + self.mat::<1, 1>() + self.mat::<2, 2>();
@@ -233,6 +246,7 @@ impl Matrix4x4 {
         }
     }
 
+    /// Returns the scale of this matrix.
     #[inline]
     pub fn scale(&self) -> Vector3 {
         let x = Vector3::new(self.mat::<0, 0>(), self.mat::<0, 1>(), self.mat::<0, 2>());
@@ -242,8 +256,9 @@ impl Matrix4x4 {
         Vector3::new(x.length(), y.length(), z.length())
     }
 
+    /// Returns the rotation of this matrix as euler angles.
     #[inline]
-    pub fn euler_angles(&self, measurment: Angles) -> Vector3 {
+    pub fn to_euler(&self, angles: Angles) -> Vector3 {
         let square_sum = (self.mat::<0, 0>() * self.mat::<0, 0>()
             + self.mat::<0, 1>() * self.mat::<0, 1>())
         .sqrt();
@@ -262,7 +277,7 @@ impl Matrix4x4 {
             )
         };
 
-        if measurment == Angles::Degrees {
+        if angles == Angles::Degrees {
             Vector3::new(
                 radians_to_degrees(result.x),
                 radians_to_degrees(result.y),
@@ -273,23 +288,10 @@ impl Matrix4x4 {
         }
     }
 
+    /// Reverses the byte order of the matrix.
     #[inline]
     #[unroll::unroll_for_loops]
-    pub fn row_major(&self) -> RMatrix4x4 {
-        let mut result = RMatrix4x4::new();
-
-        for i in 0..4 {
-            for j in 0..4 {
-                *result.mat_mut::<i, j>() = self.mat::<j, i>();
-            }
-        }
-
-        result
-    }
-
-    #[inline]
-    #[unroll::unroll_for_loops]
-    pub fn swap_bytes(&self) -> Matrix4x4 {
+    pub fn swap_bytes(self) -> Matrix4x4 {
         let mut result = Matrix4x4::new();
 
         for i in 0..16 {
@@ -299,6 +301,19 @@ impl Matrix4x4 {
         result
     }
 
+    /// Swaps the handedness of this matrix.
+    #[inline]
+    pub fn swap_handedness(self) -> Self {
+        let pos = self.position();
+        let rot = self.rotation();
+        let sca = self.scale();
+
+        Self::create_position(Vector3::new(pos.z, -pos.x, pos.y))
+            * Self::create_rotation(Quaternion::new(-rot.z, rot.x, -rot.y, rot.w))
+            * Self::create_scale(Vector3::new(sca.z, sca.x, sca.y))
+    }
+
+    /// Returns the transpose of this matrix.
     #[inline]
     #[unroll::unroll_for_loops]
     pub fn transpose(&self) -> Matrix4x4 {
@@ -313,6 +328,7 @@ impl Matrix4x4 {
         result
     }
 
+    /// Calculates the matrix determinant.
     #[inline]
     pub fn determinant(&self) -> f32 {
         self.mat::<3, 0>() * self.mat::<2, 1>() * self.mat::<1, 2>() * self.mat::<0, 3>()
@@ -341,6 +357,7 @@ impl Matrix4x4 {
             + self.mat::<0, 0>() * self.mat::<1, 1>() * self.mat::<2, 2>() * self.mat::<3, 3>()
     }
 
+    /// Calculates the inverse of this matrix.
     #[inline]
     pub fn inverse(&self) -> Self {
         let mut result = Matrix4x4::new();
@@ -460,6 +477,7 @@ impl Matrix4x4 {
         result / self.determinant()
     }
 
+    /// Converts this matrix to a rotation matrix.
     #[inline]
     pub fn to_3x3(self) -> Matrix3x3 {
         let mut result = Matrix3x3::new();
@@ -475,6 +493,21 @@ impl Matrix4x4 {
         *result.mat_mut::<2, 0>() = self.mat::<2, 0>();
         *result.mat_mut::<2, 1>() = self.mat::<2, 1>();
         *result.mat_mut::<2, 2>() = self.mat::<2, 2>();
+
+        result
+    }
+
+    /// Converts this column major matrix to row matrix order.
+    #[inline]
+    #[unroll::unroll_for_loops]
+    pub fn to_row_major(&self) -> RMatrix4x4 {
+        let mut result = RMatrix4x4::new();
+
+        for i in 0..4 {
+            for j in 0..4 {
+                *result.mat_mut::<i, j>() = self.mat::<j, i>();
+            }
+        }
 
         result
     }
@@ -498,6 +531,12 @@ impl Default for Matrix4x4 {
     #[inline]
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl From<[f32; 16]> for Matrix4x4 {
+    fn from(value: [f32; 16]) -> Self {
+        Self { data: value }
     }
 }
 

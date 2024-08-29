@@ -3,6 +3,9 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
 
+use static_assertions::const_assert;
+
+use crate::MaterialTextureRefUsage;
 use crate::Model;
 use crate::ModelError;
 
@@ -81,14 +84,11 @@ pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
     let mut global_face_index = 1;
 
     for mesh in &model.meshes {
-        let material_index = mesh.materials.first().copied().unwrap_or(-1);
-
-        if material_index > 0 && material_index < model.materials.len() as isize {
+        if let Some(material_index) = mesh.material {
             writeln!(
                 obj,
                 "g {}\nusemtl {}",
-                model.materials[material_index as usize].name,
-                model.materials[material_index as usize].name
+                model.materials[material_index].name, model.materials[material_index].name
             )?;
         } else {
             writeln!(obj, "g default_material\nusemtl default_material")?;
@@ -129,7 +129,7 @@ pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
     }
 
     // These must match the enumeration for texture usage.
-    const MATERIAL_MAPPINGS: [&str; 11] = [
+    const MATERIAL_MAPPINGS: [&str; 12] = [
         "map_Unk", // Unknown (Custom extension)
         "map_Kd",  // Albedo (Diffuse)
         "map_Kd",  // Diffuse (Diffuse)
@@ -141,7 +141,10 @@ pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
         "map_RMA", // AmbientOcclusion (RMA Extension)
         "aniso",   // Anisotropy (Anisotropy extension)
         "detail",  // Cavity (Custom extension)
+        "map_Pm",  // Metallic (Metallic extension)
     ];
+
+    const_assert!(MATERIAL_MAPPINGS.len() == MaterialTextureRefUsage::Count as usize);
 
     for material in &model.materials {
         writeln!(

@@ -8,6 +8,7 @@ use iced::mouse;
 use iced::time::Instant;
 use iced::widget::canvas;
 use iced::window::{self, RedrawRequest};
+use iced::Radians;
 use iced::{Background, Color, Element, Event, Length, Rectangle, Size, Vector};
 
 use crate::porter_easing::*;
@@ -215,7 +216,7 @@ struct State {
     cache: canvas::Cache,
 }
 
-impl<'a, Message, Theme> Widget<Message, iced::Renderer<Theme>> for Circular<'a, Theme>
+impl<'a, Message, Theme> Widget<Message, Theme, iced::Renderer> for Circular<'a, Theme>
 where
     Message: 'a + Clone,
     Theme: StyleSheet,
@@ -228,24 +229,20 @@ where
         tree::State::new(State::default())
     }
 
-    fn width(&self) -> Length {
-        Length::Fixed(self.size)
-    }
-
-    fn height(&self) -> Length {
-        Length::Fixed(self.size)
+    fn size(&self) -> Size<Length> {
+        Size {
+            width: Length::Fixed(self.size),
+            height: Length::Fixed(self.size),
+        }
     }
 
     fn layout(
         &self,
         _tree: &mut Tree,
-        _renderer: &iced::Renderer<Theme>,
+        _renderer: &iced::Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let limits = limits.width(self.size).height(self.size);
-        let size = limits.resolve(Size::ZERO);
-
-        layout::Node::new(size)
+        layout::atomic(limits, self.size, self.size)
     }
 
     fn on_event(
@@ -254,7 +251,7 @@ where
         event: Event,
         _layout: Layout<'_>,
         _cursor: mouse::Cursor,
-        _renderer: &iced::Renderer<Theme>,
+        _renderer: &iced::Renderer,
         _clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
@@ -281,7 +278,7 @@ where
     fn draw(
         &self,
         tree: &Tree,
-        renderer: &mut iced::Renderer<Theme>,
+        renderer: &mut iced::Renderer,
         theme: &Theme,
         _style: &renderer::Style,
         layout: Layout<'_>,
@@ -312,18 +309,18 @@ where
                     builder.arc(canvas::path::Arc {
                         center: frame.center(),
                         radius: track_radius,
-                        start_angle: start,
-                        end_angle: start
-                            + MIN_RADIANS
-                            + WRAP_RADIANS * (self.easing.y_at_x(progress)),
+                        start_angle: Radians(start),
+                        end_angle: Radians(
+                            start + MIN_RADIANS + WRAP_RADIANS * (self.easing.y_at_x(progress)),
+                        ),
                     });
                 }
                 Animation::Contracting { progress, .. } => {
                     builder.arc(canvas::path::Arc {
                         center: frame.center(),
                         radius: track_radius,
-                        start_angle: start + WRAP_RADIANS * (self.easing.y_at_x(progress)),
-                        end_angle: start + MIN_RADIANS + WRAP_RADIANS,
+                        start_angle: Radians(start + WRAP_RADIANS * (self.easing.y_at_x(progress))),
+                        end_angle: Radians(start + MIN_RADIANS + WRAP_RADIANS),
                     });
                 }
             }
@@ -346,7 +343,7 @@ where
     }
 }
 
-impl<'a, Message, Theme> From<Circular<'a, Theme>> for Element<'a, Message, iced::Renderer<Theme>>
+impl<'a, Message, Theme> From<Circular<'a, Theme>> for Element<'a, Message, Theme, iced::Renderer>
 where
     Message: Clone + 'a,
     Theme: StyleSheet + 'a,

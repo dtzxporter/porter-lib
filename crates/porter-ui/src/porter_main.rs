@@ -17,6 +17,7 @@ use iced::futures::StreamExt;
 use iced::keyboard::Modifiers;
 
 use iced::widget::button;
+use iced::widget::canvas;
 use iced::widget::column;
 use iced::widget::container;
 use iced::widget::image;
@@ -28,8 +29,8 @@ use iced::widget::text;
 use iced::widget::text_input;
 use iced::widget::vertical_space;
 
+use iced::multi_window::Application;
 use iced::Alignment;
-use iced::Application;
 use iced::Color;
 use iced::Command;
 use iced::Element;
@@ -42,8 +43,13 @@ use iced::Theme;
 
 use porter_preview::PreviewRenderer;
 
+use porter_utils::OptionExt;
+use porter_utils::StringCaseExt;
+
 use crate::porter_overlay;
 use crate::porter_spinner;
+use crate::porter_splash_settings;
+use crate::ImageNormalMapProcessing;
 use crate::PorterAssetManager;
 use crate::PorterBackgroundStyle;
 use crate::PorterButtonStyle;
@@ -53,6 +59,7 @@ use crate::PorterDividerStyle;
 use crate::PorterExecutor;
 use crate::PorterHeaderBackgroundStyle;
 use crate::PorterLabelStyle;
+use crate::PorterLinkStyle;
 use crate::PorterMainBuilder;
 use crate::PorterMainColumn;
 use crate::PorterOverlayBackgroundStyle;
@@ -64,12 +71,18 @@ use crate::PorterRowStyle;
 use crate::PorterScrollStyle;
 use crate::PorterSettings;
 use crate::PorterSpinnerStyle;
+use crate::PorterSplash;
+use crate::PorterSplashBackgroundStyle;
+use crate::PorterSplashLeftStyle;
 use crate::PorterSwitchButtonBackgroundStyle;
 use crate::PorterSwitchButtonStyle;
 use crate::PorterText;
 use crate::PorterTextInputStyle;
 use crate::PorterTitleFont;
 use crate::PorterViewport;
+use crate::PORTER_COPYRIGHT;
+use crate::PORTER_DISCLAIMER;
+use crate::PORTER_SITE_URL;
 
 /// The height of each row in px.
 pub const ROW_HEIGHT: f32 = 26.0;
@@ -95,25 +108,29 @@ pub const PREVIEW_CONTROLS: &[(&str, &str)] = &[
     ("Toggle Bones:", "[B]"),
     ("Toggle Wireframe:", "[W]"),
     ("Toggle Shaded:", "[M]"),
+    ("Toggle Grid:", "[G]"),
     ("Reset View:", "[R]"),
     ("Cycle Image:", "[N]"),
 ];
 
 /// Main window of the porter ui application.
 pub struct PorterMain {
-    pub(crate) title: String,
-    pub(crate) name: String,
-    pub(crate) donate_url: String,
+    pub(crate) name: &'static str,
+    pub(crate) version: &'static str,
+    pub(crate) description: &'static str,
     pub(crate) item_range: Range<usize>,
     pub(crate) item_selection: BTreeSet<usize>,
     pub(crate) asset_manager: Arc<dyn PorterAssetManager>,
     pub(crate) file_filters: Vec<(String, Vec<String>)>,
     pub(crate) multi_file: bool,
     pub(crate) preview_enabled: bool,
+    pub(crate) animations_enabled: bool,
     pub(crate) materials_enabled: bool,
     pub(crate) sounds_enabled: bool,
+    pub(crate) sounds_convertable: bool,
     pub(crate) raw_files_enabled: bool,
     pub(crate) raw_files_forcable: bool,
+    pub(crate) normal_map_converter: bool,
     pub(crate) row_press: Option<usize>,
     pub(crate) row_press_last: Instant,
     pub(crate) loading: bool,
@@ -125,6 +142,7 @@ pub struct PorterMain {
     pub(crate) search_id: text_input::Id,
     pub(crate) search_value: String,
     pub(crate) scroll_id: scrollable::Id,
+    pub(crate) scroll_header_id: scrollable::Id,
     pub(crate) scroll_container_id: container::Id,
     pub(crate) scroll_viewport_size: Rectangle,
     pub(crate) scroll_viewport_state: PorterViewport,
@@ -140,6 +158,9 @@ pub struct PorterMain {
     pub(crate) file_dropped: Vec<PathBuf>,
     pub(crate) reload_required: bool,
     pub(crate) settings: PorterSettings,
+    pub(crate) splash_id: Option<iced::window::Id>,
+    pub(crate) splash_animation: f32,
+    pub(crate) export_cancel: bool,
 }
 
 /// Messages for the porter ui application.
@@ -152,11 +173,14 @@ pub enum Message {
     Preview(Option<PorterPreviewAsset>, u64),
     PreviewResize(Option<Rectangle>),
     ClosePreview,
+    CloseSplash(()),
+    UpdateSplash(f32),
     Sync(bool, u32),
     RowPress(usize),
     RowRelease(usize),
     LoadFile,
     LoadFileDropped,
+    LoadFiles(Vec<PathBuf>),
     LoadGame,
     LoadResult(Result<(), String>),
     SearchInput(String),
@@ -164,6 +188,7 @@ pub enum Message {
     SearchSubmit,
     CancelExport,
     Donate,
+    Website,
     ToggleAbout,
     ToggleSettings,
     ExportSelected,
@@ -171,6 +196,8 @@ pub enum Message {
     SaveSettings(PorterSettings),
     OpenConfigFolder,
     PickExportFolder,
+    OpenExportFolder,
+    SaveExportFolder(PathBuf),
     ColumnDrag(usize, f32),
     ColumnDragEnd(usize),
     Noop,
@@ -178,15 +205,16 @@ pub enum Message {
 
 impl Application for PorterMain {
     type Executor = PorterExecutor;
-
     type Message = Message;
-
     type Theme = Theme;
-
     type Flags = PorterMainBuilder;
 
     fn new(flags: Self::Flags) -> (Self, Command<Self::Message>) {
-        let mut settings = PorterSettings::load(flags.name.clone());
+        let mut settings = PorterSettings::load(flags.name);
+
+        if !flags.animations_enabled {
+            settings.set_load_animations(false);
+        }
 
         if !flags.materials_enabled {
             settings.set_load_materials(false);
@@ -204,21 +232,30 @@ impl Application for PorterMain {
             settings.set_force_raw_files(false);
         }
 
+        if !flags.normal_map_converter {
+            settings.set_image_normal_map_processing(ImageNormalMapProcessing::None);
+        }
+
+        let (splash_id, splash_command) = iced::window::spawn(porter_splash_settings());
+
         (
             Self {
-                title: flags.title,
                 name: flags.name,
-                donate_url: flags.donate_url,
+                version: flags.version,
+                description: flags.description,
                 item_range: 0..0,
                 item_selection: BTreeSet::new(),
                 asset_manager: flags.asset_manager,
                 file_filters: flags.file_filters,
                 multi_file: flags.multi_file,
                 preview_enabled: flags.preview,
+                animations_enabled: flags.animations_enabled,
                 materials_enabled: flags.materials_enabled,
                 sounds_enabled: flags.sounds_enabled,
+                sounds_convertable: flags.sounds_convertable,
                 raw_files_enabled: flags.raw_files_enabled,
                 raw_files_forcable: flags.raw_files_forcable,
+                normal_map_converter: flags.normal_map_converter,
                 row_press: None,
                 row_press_last: Instant::now(),
                 loading: false,
@@ -230,6 +267,7 @@ impl Application for PorterMain {
                 search_id: text_input::Id::unique(),
                 search_value: String::new(),
                 scroll_id: scrollable::Id::unique(),
+                scroll_header_id: scrollable::Id::unique(),
                 scroll_container_id: container::Id::unique(),
                 scroll_viewport_size: Rectangle::with_size(Size::ZERO),
                 scroll_viewport_state: PorterViewport::zero(),
@@ -245,13 +283,16 @@ impl Application for PorterMain {
                 file_dropped: Vec::new(),
                 reload_required: false,
                 settings,
+                splash_id: Some(splash_id),
+                splash_animation: 0.0,
+                export_cancel: false,
             },
-            Command::none(),
+            splash_command,
         )
     }
 
-    fn title(&self) -> String {
-        self.title.clone()
+    fn title(&self, _: iced::window::Id) -> String {
+        format!("{} v{}", self.name.to_titlecase(), self.version)
     }
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
@@ -263,11 +304,14 @@ impl Application for PorterMain {
             Message::Preview(asset, request_id) => self.on_preview(asset, request_id),
             Message::PreviewResize(viewport) => self.on_preview_resize(viewport),
             Message::ClosePreview => self.on_close_preview(),
+            Message::CloseSplash(_) => self.on_close_splash(),
+            Message::UpdateSplash(splash_animation) => self.on_update_splash(splash_animation),
             Message::Sync(exporting, progress) => self.on_sync(exporting, progress),
             Message::RowPress(index) => self.on_row_press(index),
             Message::RowRelease(index) => self.on_row_release(index),
             Message::LoadFile => self.on_load_file(),
             Message::LoadFileDropped => self.on_load_file_dropped(),
+            Message::LoadFiles(files) => self.on_load_files(files),
             Message::LoadGame => self.on_load_game(),
             Message::LoadResult(result) => self.on_load_result(result),
             Message::SearchInput(input) => self.on_search_input(input),
@@ -275,6 +319,7 @@ impl Application for PorterMain {
             Message::SearchSubmit => self.on_search_submit(),
             Message::CancelExport => self.on_cancel_export(),
             Message::Donate => self.on_donate(),
+            Message::Website => self.on_website(),
             Message::ToggleSettings => self.on_toggle_settings(),
             Message::ToggleAbout => self.on_toggle_about(),
             Message::ExportSelected => self.on_export_selected(),
@@ -282,6 +327,8 @@ impl Application for PorterMain {
             Message::SaveSettings(settings) => self.on_save_settings(settings),
             Message::OpenConfigFolder => self.on_open_config_folder(),
             Message::PickExportFolder => self.on_pick_export_folder(),
+            Message::OpenExportFolder => self.on_open_export_folder(),
+            Message::SaveExportFolder(path) => self.on_save_export_folder(path),
             Message::ColumnDrag(index, offset) => self.on_column_drag(index, offset),
             Message::ColumnDragEnd(index) => self.on_column_drag_end(index),
             Message::Noop => self.on_noop(),
@@ -307,46 +354,144 @@ impl Application for PorterMain {
             }
         });
 
-        iced::Subscription::batch([events, channel])
+        if self.splash_id.is_some() {
+            let splash = iced::subscription::channel("splash", 0, |mut output| async move {
+                let mut splash = 0.0;
+
+                loop {
+                    // We are using a threadpool based executor, eventually
+                    // iced should provide sleep primitives so we don't block a thread.
+                    std::thread::sleep(Duration::from_millis(16));
+
+                    let timeout = if cfg!(debug_assertions) {
+                        // 30 / 3 * 50ms = 500ms.
+                        30.0
+                    } else {
+                        // 225 / 0.96 * 50ms = 3072ms.
+                        200.0
+                    };
+
+                    if splash >= timeout {
+                        let _ = output.send(Message::CloseSplash(())).await;
+                    } else {
+                        splash += 0.96;
+
+                        let _ = output.send(Message::UpdateSplash(splash)).await;
+                    }
+                }
+            });
+
+            iced::Subscription::batch([events, channel, splash])
+        } else {
+            iced::Subscription::batch([events, channel])
+        }
     }
 
-    fn view(&self) -> Element<'_, Self::Message, iced::Renderer<Self::Theme>> {
-        let panels = if self.show_about {
-            vec![self.header(), self.about()]
-        } else if self.show_settings {
-            vec![self.header(), self.settings()]
-        } else if let Some(preview) = &self.previewer {
-            vec![
-                self.header(),
-                self.search(),
-                row(vec![self.list(), self.preview(preview)])
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .align_items(Alignment::Center)
-                    .spacing(4.0)
-                    .padding([0.0, 8.0])
-                    .into(),
-                self.controls(),
-            ]
-        } else {
-            vec![
-                self.header(),
-                self.search(),
-                row(vec![self.list()])
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .align_items(Alignment::Center)
-                    .padding([0.0, 8.0])
-                    .into(),
-                self.controls(),
-            ]
-        };
+    fn view(&self, id: iced::window::Id) -> Element<'_, Self::Message> {
+        if id == iced::window::Id::MAIN {
+            let panels = if self.show_about {
+                vec![self.header(), self.about()]
+            } else if self.show_settings {
+                vec![self.header(), self.settings()]
+            } else if let Some(preview) = &self.previewer {
+                vec![
+                    self.header(),
+                    self.search(),
+                    row([self.list(), self.preview(preview)])
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .align_items(Alignment::Center)
+                        .spacing(4.0)
+                        .padding([0.0, 8.0])
+                        .into(),
+                    self.controls(),
+                ]
+            } else {
+                vec![
+                    self.header(),
+                    self.search(),
+                    row([self.list()])
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .align_items(Alignment::Center)
+                        .padding([0.0, 8.0])
+                        .into(),
+                    self.controls(),
+                ]
+            };
 
-        container(column(panels))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(PorterBackgroundStyle)
-            .into()
+            container(column(panels))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(PorterBackgroundStyle)
+                .into()
+        } else if self.splash_id.contains(&id) {
+            let splash = row([
+                container(
+                    column([
+                        vertical_space().height(20.0).into(),
+                        text(self.name.to_uppercase())
+                            .size(32.0)
+                            .font(PorterTitleFont)
+                            .into(),
+                        text(self.description).into(),
+                        vertical_space().height(42.0).into(),
+                        text(format!("Version {}", self.version)).into(),
+                        row([
+                            text("Developed by:").into(),
+                            text("DTZxPorter")
+                                .style(Color::from_rgb8(236, 52, 202))
+                                .into(),
+                        ])
+                        .spacing(4.0)
+                        .into(),
+                        button(text(PORTER_SITE_URL))
+                            .on_press(Message::Website)
+                            .style(PorterLinkStyle)
+                            .padding(0.0)
+                            .into(),
+                        container(column([
+                            text(PORTER_DISCLAIMER)
+                                .size(14.0)
+                                .style(Color::from_rgb8(0xC1, 0xC1, 0xC1))
+                                .into(),
+                            vertical_space().height(10.0).into(),
+                            text(PORTER_COPYRIGHT).into(),
+                            vertical_space().height(20.0).into(),
+                        ]))
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .align_y(Vertical::Bottom)
+                        .into(),
+                    ])
+                    .padding([0.0, 16.0, 0.0, 16.0])
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+                )
+                .width(Length::FillPortion(1))
+                .height(Length::Fill)
+                .align_x(Horizontal::Center)
+                .style(PorterSplashLeftStyle)
+                .into(),
+                canvas(PorterSplash(self.splash_animation))
+                    .width(Length::FillPortion(2))
+                    .height(Length::Fill)
+                    .into(),
+            ]);
+
+            container(splash)
+                .padding(1.0)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(PorterSplashBackgroundStyle)
+                .into()
+        } else {
+            container(row([]))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(PorterBackgroundStyle)
+                .into()
+        }
     }
 }
 
@@ -357,13 +502,13 @@ impl PorterMain {
         let handle = image::Handle::from_pixels(width, height, pixels);
 
         let mut columns = column(Vec::new())
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .spacing(4.0);
+            .width(Length::Shrink)
+            .height(Length::Shrink)
+            .spacing(2.0);
 
         for (stat_header, stat_value) in preview.statistics() {
             columns = columns.push(
-                row(vec![
+                row([
                     text(stat_header)
                         .size(16.0)
                         .width(75.0)
@@ -376,6 +521,7 @@ impl PorterMain {
                     text(stat_value).size(16.0).style(Color::WHITE).into(),
                 ])
                 .width(Length::Shrink)
+                .padding(2.0)
                 .spacing(8.0),
             );
         }
@@ -391,13 +537,13 @@ impl PorterMain {
         .padding(4.0);
 
         let mut controls = column(Vec::new())
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .spacing(4.0);
+            .width(Length::Shrink)
+            .height(Length::Shrink)
+            .spacing(2.0);
 
         for (control_name, control) in PREVIEW_CONTROLS {
             controls = controls.push(
-                row(vec![
+                row([
                     text(control_name)
                         .size(16.0)
                         .style(Color::from_rgb8(0x27, 0x9B, 0xD4))
@@ -405,6 +551,7 @@ impl PorterMain {
                     text(control).size(16.0).style(Color::WHITE).into(),
                 ])
                 .width(Length::Shrink)
+                .padding(2.0)
                 .spacing(8.0),
             );
         }
@@ -421,9 +568,9 @@ impl PorterMain {
         .padding(4.0);
 
         container(
-            column(vec![
+            column([
                 container(
-                    row(vec![
+                    row([
                         text("Asset Preview")
                             .width(Length::Fill)
                             .style(Color::WHITE)
@@ -450,11 +597,11 @@ impl PorterMain {
                         .width(Length::Fill)
                         .height(Length::Fill),
                     if self.settings.preview_overlay() {
-                        column(vec![columns.into(), controls.into()])
+                        column([columns.into(), controls.into()])
                             .width(Length::Fill)
                             .height(Length::Fill)
                     } else {
-                        column(vec![columns.into()])
+                        column([columns.into()])
                             .width(Length::Fill)
                             .height(Length::Fill)
                     },
@@ -476,7 +623,7 @@ impl PorterMain {
 
     /// Constructs the header view element, with app info, version, about and settings.
     pub fn header(&self) -> Element<Message> {
-        container(row(vec![
+        container(row([
             container(
                 button("Donate")
                     .on_press(Message::Donate)
@@ -488,8 +635,8 @@ impl PorterMain {
             .align_y(Vertical::Center)
             .into(),
             container(
-                row(vec![
-                    text(self.name.clone())
+                row([
+                    text(self.name.to_uppercase())
                         .style(Color::WHITE)
                         .font(PorterTitleFont)
                         .size(32.0)
@@ -511,7 +658,7 @@ impl PorterMain {
             .into(),
             container(
                 container(
-                    row(vec![
+                    row([
                         button("About")
                             .on_press(Message::ToggleAbout)
                             .style(PorterSwitchButtonStyle(self.show_about))
@@ -682,34 +829,42 @@ impl PorterMain {
             );
 
         if self.exporting {
-            row = row
-                .push(
+            if self.export_cancel {
+                row = row.push(
+                    button("Canceling...")
+                        .padding([5.0, 8.0])
+                        .style(PorterButtonStyle),
+                );
+            } else {
+                row = row.push(
                     button("Cancel")
                         .padding([5.0, 8.0])
                         .style(PorterButtonStyle)
                         .on_press(Message::CancelExport),
-                )
-                .push(
-                    container(porter_overlay(
-                        progress_bar(0.0..=100.0, self.export_progress.min(100).max(0) as f32)
-                            .width(200.0)
-                            .height(32.0)
-                            .style(PorterProgressStyle),
-                        container(
-                            text(format!("{}%", self.export_progress.min(100).max(0)))
-                                .size(16.0)
-                                .style(Color::WHITE),
-                        )
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .align_x(Horizontal::Center)
-                        .align_y(Vertical::Center),
-                    ))
+                );
+            }
+
+            row = row.push(
+                container(porter_overlay(
+                    progress_bar(0.0..=100.0, self.export_progress.clamp(0, 100) as f32)
+                        .width(200.0)
+                        .height(32.0)
+                        .style(PorterProgressStyle),
+                    container(
+                        text(format!("{}%", self.export_progress.clamp(0, 100)))
+                            .size(16.0)
+                            .style(Color::WHITE),
+                    )
                     .width(Length::Fill)
                     .height(Length::Fill)
-                    .align_x(Horizontal::Right)
+                    .align_x(Horizontal::Center)
                     .align_y(Vertical::Center),
-                )
+                ))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(Horizontal::Right)
+                .align_y(Vertical::Center),
+            );
         }
 
         container(row).width(Length::Fill).height(52.0).into()
@@ -720,8 +875,8 @@ impl PorterMain {
         let item_size = ROW_HEIGHT + ROW_PADDING;
         let item_range = self.item_range.clone();
 
-        let top_gap = vertical_space((item_range.start as f32) * item_size);
-        let bottom_gap = vertical_space(
+        let top_gap = vertical_space().height((item_range.start as f32) * item_size);
+        let bottom_gap = vertical_space().height(
             ((self.asset_manager.len() - (item_range.start + item_range.len())) as f32) * item_size,
         );
 
@@ -741,19 +896,19 @@ impl PorterMain {
             {
                 columns.push(
                     PorterText::new(value)
-                        .width(column.width.min(COLUMN_MAX).max(COLUMN_MIN).add(5.0))
+                        .width(column.width.clamp(COLUMN_MIN, COLUMN_MAX).add(6.0))
                         .height(Length::Fill)
                         .vertical_alignment(Vertical::Center)
-                        .color(selected.then_some(Color::WHITE).unwrap_or_else(|| {
+                        .style(selected.then_some(Color::WHITE).unwrap_or_else(|| {
                             color.unwrap_or_else(|| column.color.unwrap_or(Color::WHITE))
                         }))
-                        .build()
                         .into(),
                 );
             }
 
             let row = container(
                 row(columns)
+                    .clip(true)
                     .width(Length::Fill)
                     .height(Length::Fill)
                     .spacing(4.0)
@@ -783,21 +938,22 @@ impl PorterMain {
 
         rows.push(bottom_gap.into());
 
-        let scroller = scrollable(
+        let scroller = scrollable::Scrollable::with_direction(
             column(rows)
                 .spacing(ROW_PADDING)
                 .padding([0.0, 17.0, 0.0, 0.0])
                 .align_items(Alignment::Center),
+            scrollable::Direction::Vertical(
+                scrollable::Properties::new()
+                    .width(16.0)
+                    .scroller_width(16.0)
+                    .show_always(true),
+            ),
         )
         .id(self.scroll_id.clone())
         .width(Length::Fill)
         .height(Length::Fill)
         .style(PorterScrollStyle)
-        .direction(scrollable::Direction::Vertical(
-            scrollable::Properties::new()
-                .width(16.0)
-                .scroller_width(16.0),
-        ))
         .on_scroll(Message::Scroll);
 
         let scroller = container(scroller)
@@ -810,11 +966,10 @@ impl PorterMain {
         for (index, column) in self.columns.iter().enumerate() {
             columns.push(
                 PorterText::new(column.header.clone())
-                    .width(column.width.min(COLUMN_MAX).max(COLUMN_MIN))
+                    .width(column.width.clamp(COLUMN_MIN, COLUMN_MAX))
                     .height(Length::Fill)
                     .vertical_alignment(Vertical::Center)
-                    .color(Color::WHITE)
-                    .build()
+                    .style(Color::WHITE)
                     .into(),
             );
 
@@ -826,18 +981,28 @@ impl PorterMain {
                 .height(Length::Fixed(28.0))
                 .width(3.0)
                 .style(PorterDividerStyle)
-                .build()
                 .into(),
             );
         }
 
         let header = container(
-            row(columns)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .spacing(4.0)
-                .padding([0.0, 4.0])
-                .align_items(Alignment::Center),
+            scrollable::Scrollable::with_direction(
+                row(columns)
+                    .width(Length::Shrink)
+                    .height(Length::Fill)
+                    .spacing(4.0)
+                    .padding([0.0, 4.0])
+                    .align_items(Alignment::Center),
+                scrollable::Direction::Horizontal(
+                    scrollable::Properties::new()
+                        .width(0)
+                        .scroller_width(0)
+                        .margin(0),
+                ),
+            )
+            .id(self.scroll_header_id.clone())
+            .width(Length::Fill)
+            .height(Length::Fill),
         )
         .width(Length::Fill)
         .height(30.0)
@@ -896,7 +1061,7 @@ impl PorterMain {
         .padding(1.0)
         .style(PorterHeaderBackgroundStyle);
 
-        column(vec![header.into(), list.into()])
+        column([header.into(), list.into()])
             .align_items(Alignment::Start)
             .width(Length::Fill)
             .height(Length::Fill)

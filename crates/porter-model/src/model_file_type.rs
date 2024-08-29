@@ -8,7 +8,6 @@ pub enum ModelFileType {
     Smd,
     XnaLara,
     XModelExport,
-    SEModel,
     Cast,
     Maya,
     Fbx,

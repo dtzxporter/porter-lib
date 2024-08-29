@@ -9,12 +9,15 @@ pub enum CastId {
     Bone = 0x656E6F62,
     Animation = 0x6D696E61,
     Curve = 0x76727563,
+    CurveModeOverride = 0x564F4D43,
     NotificationTrack = 0x6669746E,
     Material = 0x6C74616D,
     File = 0x656C6966,
     BlendShape = 0x68736C62,
     IKHandle = 0x64686B69,
     Constraint = 0x74736E63,
+    Instance = 0x74736E69,
+    Metadata = 0x6174656D,
 }
 
 /// The cast property type id.
@@ -31,4 +34,5 @@ pub enum CastPropertyId {
     Vector2 = u16::from_be_bytes(*b"v2"),
     Vector3 = u16::from_be_bytes(*b"v3"),
     Vector4 = u16::from_be_bytes(*b"v4"),
+    Unknown = 0,
 }

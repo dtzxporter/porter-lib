@@ -3,7 +3,6 @@ mod macros;
 mod color;
 
 pub use color::*;
-pub use macros::*;
 
 pub use pico_args::Arguments;
 pub use pico_args::Error as PicoError;
@@ -20,7 +19,7 @@ use termcolor::WriteColor;
 pub(crate) fn standard_stream() -> &'static BufferWriter {
     static STANDARD_STREAM: OnceLock<BufferWriter> = OnceLock::new();
 
-    STANDARD_STREAM.get_or_init(|| BufferWriter::stdout(ColorChoice::Always))
+    STANDARD_STREAM.get_or_init(|| BufferWriter::stdout(ColorChoice::Auto))
 }
 
 #[doc(hidden)]
@@ -94,6 +93,31 @@ pub fn press_any_key() {
     // This doesn't make sense on non-windows platforms.
 }
 
+#[cfg(target_os = "windows")]
+mod win32 {
+    use windows_sys::Win32::System::Console::*;
+
+    /// Alt key code.
+    pub const ALT_VK_CODE: u16 = 0x12;
+
+    /// Utility to check if a key is down.
+    pub fn is_keydown_event(record: &INPUT_RECORD) -> bool {
+        // SAFETY: The caller must uphold that the event is a KeyEvent.
+        record.EventType == KEY_EVENT as u16 && unsafe { record.Event.KeyEvent.bKeyDown } > 0
+    }
+
+    /// Utility to check if a mod key is down.
+    pub fn is_mod_key(record: &INPUT_RECORD) -> bool {
+        // SAFETY: The caller must uphold that the event is a KeyEvent.
+        let key_code = unsafe { record.Event.KeyEvent.wVirtualKeyCode };
+
+        (0x10..=0x12).contains(&key_code)
+            || key_code == 0x14
+            || key_code == 0x90
+            || key_code == 0x91
+    }
+}
+
 /// Informs the user they must press enter to continue.
 #[cfg(target_os = "windows")]
 pub fn press_any_key() {
@@ -117,27 +141,25 @@ pub fn press_any_key() {
     loop {
         unsafe { ReadConsoleInputW(stdin, &mut rec, 1, &mut read) };
 
-        if rec.EventType != KEY_EVENT as u16 && unsafe { rec.Event.KeyEvent.bKeyDown } > 0 {
+        let key_code = unsafe { rec.Event.KeyEvent.wVirtualKeyCode };
+
+        if !win32::is_keydown_event(&rec) && key_code != win32::ALT_VK_CODE {
             continue;
-        } else {
-            break;
         }
+
+        let ch = unsafe { rec.Event.KeyEvent.uChar.AsciiChar } as i8;
+
+        if ch == 0 && win32::is_mod_key(&rec) {
+            continue;
+        }
+
+        break;
     }
 }
 
 /// Initializes the console, theme, and buffer sizes.
-#[cfg(not(target_os = "windows"))]
 pub fn initialize_console<T: AsRef<str>, D: AsRef<str>>(title: T, desc: D) {
-    console!(header = "Info", <hr>);
-    console!(header = "Info", "{}", title.as_ref());
-    console!(header = "Info", { color = Color::White, "Author: "} , { color = Color::Pink, "DTZxPorter" }, { color = Color::White, " (https://dtzxporter.com)" });
-    console!(header = "Info", "Desc: {}", desc.as_ref());
-    console!(header = "Info", <hr>);
-}
-
-/// Initializes the console, theme, and buffer sizes.
-#[cfg(target_os = "windows")]
-pub fn initialize_console<T: AsRef<str>, D: AsRef<str>>(title: T, desc: D) {
+    #[cfg(target_os = "windows")]
     setup_windows_console(title.as_ref());
 
     console!(header = "Info", <hr>);

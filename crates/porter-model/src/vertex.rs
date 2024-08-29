@@ -7,6 +7,7 @@ use porter_math::Vector3;
 use crate::VertexBuffer;
 use crate::VertexColor;
 use crate::VertexWeight;
+use crate::WeightBoneId;
 
 /// A single vertex of a polygon mesh.
 pub struct Vertex<'a> {
@@ -55,7 +56,7 @@ impl<'a> Vertex<'a> {
     }
 
     /// Returns the unique weights for this vertex.
-    pub fn unique_weights(&self) -> BTreeMap<u16, f32> {
+    pub fn unique_weights(&self) -> BTreeMap<WeightBoneId, f32> {
         let mut result = BTreeMap::new();
 
         for w in 0..self.buffer.maximum_influence() {
@@ -68,13 +69,14 @@ impl<'a> Vertex<'a> {
     }
 
     /// Returns the color for this vertex.
-    pub fn color(&self) -> VertexColor {
-        debug_assert!(self.buffer.colors());
+    pub fn color(&self, index: usize) -> VertexColor {
+        debug_assert!(index < self.buffer.colors());
 
         self.read(
             (std::mem::size_of::<Vector3>() * 2)
                 + (std::mem::size_of::<Vector2>() * self.buffer.uv_layers())
-                + (std::mem::size_of::<VertexWeight>() * self.buffer.maximum_influence()),
+                + (std::mem::size_of::<VertexWeight>() * self.buffer.maximum_influence())
+                + (std::mem::size_of::<VertexColor>() * index),
         )
     }
 
@@ -149,7 +151,7 @@ impl<'a> VertexMut<'a> {
     }
 
     /// Returns the unique weights for this vertex.
-    pub fn unique_weights(&self) -> BTreeMap<u16, f32> {
+    pub fn unique_weights(&self) -> BTreeMap<WeightBoneId, f32> {
         let mut result = BTreeMap::new();
 
         for w in 0..self.buffer.maximum_influence() {
@@ -176,7 +178,7 @@ impl<'a> VertexMut<'a> {
     }
 
     /// Sets the weight bone index for this vertex.
-    pub fn set_weight_bone(&mut self, index: usize, bone: u16) -> &mut Self {
+    pub fn set_weight_bone(&mut self, index: usize, bone: WeightBoneId) -> &mut Self {
         let mut weight = self.weight(index);
         weight.bone = bone;
 
@@ -196,24 +198,26 @@ impl<'a> VertexMut<'a> {
     }
 
     /// Returns the color for this vertex.
-    pub fn color(&self) -> VertexColor {
-        debug_assert!(self.buffer.colors());
+    pub fn color(&self, index: usize) -> VertexColor {
+        debug_assert!(index < self.buffer.colors());
 
         self.read(
             (std::mem::size_of::<Vector3>() * 2)
                 + (std::mem::size_of::<Vector2>() * self.buffer.uv_layers())
-                + (std::mem::size_of::<VertexWeight>() * self.buffer.maximum_influence()),
+                + (std::mem::size_of::<VertexWeight>() * self.buffer.maximum_influence())
+                + (std::mem::size_of::<VertexColor>() * index),
         )
     }
 
     /// Returns the color for this vertex.
-    pub fn set_color(&mut self, color: VertexColor) -> &mut Self {
-        debug_assert!(self.buffer.colors());
+    pub fn set_color(&mut self, index: usize, color: VertexColor) -> &mut Self {
+        debug_assert!(index < self.buffer.colors());
 
         self.write(
             (std::mem::size_of::<Vector3>() * 2)
                 + (std::mem::size_of::<Vector2>() * self.buffer.uv_layers())
-                + (std::mem::size_of::<VertexWeight>() * self.buffer.maximum_influence()),
+                + (std::mem::size_of::<VertexWeight>() * self.buffer.maximum_influence())
+                + (std::mem::size_of::<VertexColor>() * index),
             color,
         );
 
@@ -300,8 +304,8 @@ impl<'a> fmt::Debug for Vertex<'a> {
             debug.field(&format!("weight[{}]", i), &self.weight(i));
         }
 
-        if self.buffer.colors() {
-            debug.field("color", &self.color());
+        for i in 0..self.buffer.colors() {
+            debug.field(&format!("color[{}]", i), &self.color(i));
         }
 
         debug.finish()
@@ -324,8 +328,8 @@ impl<'a> fmt::Debug for VertexMut<'a> {
             debug.field(&format!("weight[{}]", i), &self.weight(i));
         }
 
-        if self.buffer.colors() {
-            debug.field("color", &self.color());
+        for i in 0..self.buffer.colors() {
+            debug.field(&format!("color[{}]", i), &self.color(i));
         }
 
         debug.finish()

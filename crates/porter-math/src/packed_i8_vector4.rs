@@ -17,21 +17,25 @@ pub struct PackedI8Vector4 {
 assert_eq_size!([u8; 0x4], PackedI8Vector4);
 
 impl PackedI8Vector4 {
+    /// Constructs a new packed vector from the given components.
     #[inline]
     pub const fn new(x: i8, y: i8, z: i8, w: i8) -> Self {
         Self { x, y, z, w }
     }
 
+    /// Converts this vector to a four component floating point vector.
     #[inline]
     pub fn vector4(self) -> Vector4 {
         self.into()
     }
 
+    /// Converts this vector to a three component floating point vector.
     #[inline]
     pub fn vector3(self) -> Vector3 {
         Vector4::from(self).into()
     }
 
+    /// Converts this vector to a two component floating point vector.
     #[inline]
     pub fn vector2(self) -> Vector2 {
         Vector4::from(self).into()

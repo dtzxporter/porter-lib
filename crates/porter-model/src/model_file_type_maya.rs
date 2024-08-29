@@ -100,20 +100,20 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         )?;
 
         for face in &mesh.faces {
-            let vertex1 = if mesh.vertices.colors() {
-                mesh.vertices.vertex(face.i3 as usize).color()
+            let vertex1 = if mesh.vertices.colors() > 0 {
+                mesh.vertices.vertex(face.i3 as usize).color(0)
             } else {
                 VertexColor::new(255, 255, 255, 255)
             };
 
-            let vertex2 = if mesh.vertices.colors() {
-                mesh.vertices.vertex(face.i2 as usize).color()
+            let vertex2 = if mesh.vertices.colors() > 0 {
+                mesh.vertices.vertex(face.i2 as usize).color(0)
             } else {
                 VertexColor::new(255, 255, 255, 255)
             };
 
-            let vertex3 = if mesh.vertices.colors() {
-                mesh.vertices.vertex(face.i1 as usize).color()
+            let vertex3 = if mesh.vertices.colors() > 0 {
+                mesh.vertices.vertex(face.i1 as usize).color(0)
             } else {
                 VertexColor::new(255, 255, 255, 255)
             };
@@ -407,20 +407,14 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             mesh_index
         )?;
 
-        for u in 0..mesh.vertices.uv_layers() {
-            if u >= mesh.materials.len() {
-                break;
+        if mesh.vertices.uv_layers() > 0 {
+            if let Some(material_index) = mesh.material {
+                writeln!(
+                    maya,
+                    "connectAttr \"MeshShape_{}.iog[{}]\" \"{}SG.dsm\" -na;",
+                    mesh_index, 0, model.materials[material_index].name
+                )?;
             }
-
-            if mesh.materials[u] < 0 {
-                continue;
-            }
-
-            writeln!(
-                maya,
-                "connectAttr \"MeshShape_{}.iog[{}]\" \"{}SG.dsm\" -na;",
-                mesh_index, u, model.materials[mesh.materials[u] as usize].name
-            )?;
         }
     }
 
@@ -459,7 +453,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         let rotation = bone
             .local_rotation
             .unwrap_or_default()
-            .euler_angles(Angles::Degrees);
+            .to_euler(Angles::Degrees);
         let position = bone.local_position.unwrap_or_default();
         let scale = bone.local_scale.unwrap_or_else(Vector3::one);
 

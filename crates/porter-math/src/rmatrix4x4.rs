@@ -15,6 +15,7 @@ pub struct RMatrix4x4 {
 assert_eq_size!([u8; 64], RMatrix4x4);
 
 impl RMatrix4x4 {
+    /// Constructs a new identity matrix.
     #[inline]
     pub const fn new() -> Self {
         let mut data: [f32; 16] = [0.0; 16];
@@ -39,37 +40,43 @@ impl RMatrix4x4 {
         Self { data }
     }
 
+    /// Access a single matrix value.
+    /// `m[X][Y]`
     #[inline]
     pub fn mat<const X: usize, const Y: usize>(&self) -> f32 {
         self.data[X * 4 + Y]
     }
 
+    /// Mutably access a single matrix value.
+    /// `m[X][Y]`
     #[inline]
     pub fn mat_mut<const X: usize, const Y: usize>(&mut self) -> &mut f32 {
         &mut self.data[X * 4 + Y]
     }
 
+    /// Reverses the byte order of the matrix.
     #[inline]
     #[unroll::unroll_for_loops]
-    pub fn column_major(&self) -> Matrix4x4 {
+    pub fn swap_bytes(self) -> RMatrix4x4 {
+        let mut result = RMatrix4x4::new();
+
+        for i in 0..16 {
+            result.data[i] = f32::from_bits(self.data[i].to_bits().swap_bytes());
+        }
+
+        result
+    }
+
+    /// Converts this row major matrix to column matrix order.
+    #[inline]
+    #[unroll::unroll_for_loops]
+    pub fn to_column_major(&self) -> Matrix4x4 {
         let mut result = Matrix4x4::new();
 
         for i in 0..4 {
             for j in 0..4 {
                 *result.mat_mut::<i, j>() = self.mat::<j, i>();
             }
-        }
-
-        result
-    }
-
-    #[inline]
-    #[unroll::unroll_for_loops]
-    pub fn swap_bytes(&self) -> RMatrix4x4 {
-        let mut result = RMatrix4x4::new();
-
-        for i in 0..16 {
-            result.data[i] = f32::from_bits(self.data[i].to_bits().swap_bytes());
         }
 
         result
@@ -82,9 +89,15 @@ impl Default for RMatrix4x4 {
     }
 }
 
+impl From<[f32; 16]> for RMatrix4x4 {
+    fn from(value: [f32; 16]) -> Self {
+        Self { data: value }
+    }
+}
+
 impl From<Matrix4x4> for RMatrix4x4 {
     fn from(value: Matrix4x4) -> Self {
-        value.row_major()
+        value.to_row_major()
     }
 }
 

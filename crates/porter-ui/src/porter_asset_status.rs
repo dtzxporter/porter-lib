@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
@@ -90,14 +91,14 @@ impl PorterAssetStatus {
     }
 }
 
-impl ToString for PorterAssetStatus {
-    fn to_string(&self) -> String {
+impl fmt::Display for PorterAssetStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.status.load(Ordering::Relaxed) {
-            0 => String::from("Loaded"),
-            1 => String::from("Exported"),
-            2 => String::from("Error"),
-            3 => String::from("Placeholder"),
-            4 => String::from("Exporting..."),
+            0 => write!(f, "Loaded"),
+            1 => write!(f, "Exported"),
+            2 => write!(f, "Error"),
+            3 => write!(f, "Placeholder"),
+            4 => write!(f, "Exporting..."),
             _ => unreachable!(),
         }
     }

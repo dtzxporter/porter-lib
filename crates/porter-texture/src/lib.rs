@@ -13,6 +13,7 @@ mod texture_extension;
 
 pub(crate) mod image_file_type_dds;
 pub(crate) mod image_file_type_png;
+pub(crate) mod image_file_type_tga;
 pub(crate) mod image_file_type_tiff;
 
 pub use error::*;

@@ -9,7 +9,7 @@ use crate::VertexMut;
 use crate::VertexWeight;
 
 /// Utility to compute the stride of each vertex in bytes.
-const fn compute_stride(uv_layers: usize, maximum_influence: usize, colors: bool) -> usize {
+const fn compute_stride(uv_layers: usize, maximum_influence: usize, colors: usize) -> usize {
     // Vector3: Position
     // Vector3: Normal
     // Vector2[self.uv_layers]: UV layer
@@ -18,14 +18,14 @@ const fn compute_stride(uv_layers: usize, maximum_influence: usize, colors: bool
     (std::mem::size_of::<Vector3>() * 2)
         + (std::mem::size_of::<Vector2>() * uv_layers)
         + (std::mem::size_of::<VertexWeight>() * maximum_influence)
-        + (std::mem::size_of::<VertexColor>() * colors as usize)
+        + (std::mem::size_of::<VertexColor>() * colors)
 }
 
 // A buffer of vertices for a mesh.
 #[derive(Clone)]
 pub struct VertexBuffer {
     buffer: Vec<u8>,
-    colors: bool,
+    colors: usize,
     uv_layers: usize,
     maximum_influence: usize,
 }
@@ -34,7 +34,7 @@ pub struct VertexBuffer {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct VertexBufferBuilder {
     pub(crate) capacity: usize,
-    pub(crate) colors: bool,
+    pub(crate) colors: usize,
     pub(crate) uv_layers: usize,
     pub(crate) maximum_influence: usize,
 }
@@ -82,8 +82,8 @@ impl VertexBuffer {
         self.maximum_influence
     }
 
-    /// Returns whether or not colors are enabled.
-    pub fn colors(&self) -> bool {
+    /// Returns the number of color layers.
+    pub fn colors(&self) -> usize {
         self.colors
     }
 
@@ -129,8 +129,8 @@ impl VertexBuffer {
 }
 
 impl VertexBufferBuilder {
-    /// Sets whether or not vertex colors are enabled.
-    pub fn colors(mut self, colors: bool) -> Self {
+    /// Sets the maximum number of color layers per vertex.
+    pub fn colors(mut self, colors: usize) -> Self {
         self.colors = colors;
         self
     }

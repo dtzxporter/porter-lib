@@ -49,12 +49,14 @@ impl RenderImage {
             instance.device().create_texture_with_data(
                 instance.queue(),
                 &texture_desc,
+                TextureDataOrder::LayerMajor,
                 frame.buffer(),
             )
         } else {
             instance.device().create_texture_with_data(
                 instance.queue(),
                 &texture_desc,
+                TextureDataOrder::LayerMajor,
                 &vec![0; image.width() as usize * image.height() as usize * 0x4],
             )
         };
@@ -62,12 +64,7 @@ impl RenderImage {
         let texture_view = texture.create_view(&Default::default());
 
         let texture_sampler = instance.device().create_sampler(&SamplerDescriptor {
-            address_mode_u: AddressMode::ClampToEdge,
-            address_mode_v: AddressMode::ClampToEdge,
-            address_mode_w: AddressMode::ClampToEdge,
             mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Nearest,
-            mipmap_filter: FilterMode::Nearest,
             ..Default::default()
         });
 

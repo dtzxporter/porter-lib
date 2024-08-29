@@ -10,14 +10,37 @@ use porter_cast::CastNode;
 use porter_cast::CastPropertyId;
 use porter_cast::CastPropertyValue;
 
+use porter_math::Axis;
+
 use crate::ConstraintType;
 use crate::MaterialTextureRefUsage;
 use crate::Model;
 use crate::ModelError;
+use crate::SkinningMethod;
 
 /// Writes a model in cast format to the given path.
 pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> {
     let mut root = CastNode::root();
+
+    let meta_node = root.create(CastId::Metadata);
+
+    meta_node
+        .create_property(CastPropertyId::String, "a")
+        .push("DTZxPorter");
+
+    meta_node
+        .create_property(CastPropertyId::String, "s")
+        .push("Exported by PorterLib");
+
+    let up_axis = match model.up_axis {
+        Axis::X => "x",
+        Axis::Y => "y",
+        Axis::Z => "z",
+    };
+
+    meta_node
+        .create_property(CastPropertyId::String, "up")
+        .push(up_axis);
 
     let model_node = root.create(CastId::Model);
 
@@ -190,7 +213,9 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 MaterialTextureRefUsage::Roughness => String::from("roughness"),
                 MaterialTextureRefUsage::AmbientOcclusion => String::from("ao"),
                 MaterialTextureRefUsage::Cavity => String::from("cavity"),
-                MaterialTextureRefUsage::Unknown | MaterialTextureRefUsage::Anisotropy => {
+                MaterialTextureRefUsage::Metalness => String::from("metal"),
+                MaterialTextureRefUsage::Anisotropy => String::from("aniso"),
+                MaterialTextureRefUsage::Unknown | MaterialTextureRefUsage::Count => {
                     format!("extra{}", i)
                 }
             };
@@ -230,6 +255,18 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         mesh_node
             .create_property(CastPropertyId::Byte, "mi")
             .push(mesh.vertices.maximum_influence() as u8);
+        mesh_node
+            .create_property(CastPropertyId::Byte, "cl")
+            .push(mesh.vertices.colors() as u8);
+
+        let sm = match mesh.skinning_method {
+            SkinningMethod::Linear => "linear",
+            SkinningMethod::DualQuaternion => "quaternion",
+        };
+
+        mesh_node
+            .create_property(CastPropertyId::String, "sm")
+            .push(sm);
 
         let vertex_positions = mesh_node.create_property(CastPropertyId::Vector3, "vp");
 
@@ -243,11 +280,12 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             vertex_normals.push(mesh.vertices.vertex(i).normal());
         }
 
-        if mesh.vertices.colors() {
-            let vertex_colors = mesh_node.create_property(CastPropertyId::Integer32, "vc");
+        for cl in 0..mesh.vertices.colors() {
+            let color_layer =
+                mesh_node.create_property(CastPropertyId::Integer32, format!("c{}", cl));
 
             for i in 0..mesh.vertices.len() {
-                vertex_colors.push(u32::from(mesh.vertices.vertex(i).color()));
+                color_layer.push(u32::from(mesh.vertices.vertex(i).color(cl)));
             }
         }
 
@@ -323,62 +361,70 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             }
         }
 
-        if !mesh.materials.is_empty() && mesh.materials[0] > -1 {
-            if let Some(material) = material_map.get(&(mesh.materials[0] as usize)) {
+        if let Some(material_index) = mesh.material {
+            if let Some(material) = material_map.get(&material_index) {
                 mesh_node
                     .create_property(CastPropertyId::Integer64, "m")
                     .push(material.clone());
             }
         }
 
-        mesh_map.insert(mesh_index, CastPropertyValue::from(mesh_node));
-    }
+        let mesh_hash = CastPropertyValue::from(mesh_node);
 
-    for blend_shape in &*model.blend_shapes {
-        let blend_shape_node = model_node.create(CastId::BlendShape);
+        mesh_map.insert(mesh_index, mesh_hash.clone());
 
-        blend_shape_node
-            .create_property(CastPropertyId::String, "n")
-            .push(blend_shape.name.as_str());
+        for blend_shape in &*mesh.blend_shapes {
+            let blend_shape_node = model_node.create(CastId::BlendShape);
+            let blend_shape_mesh = &mesh;
 
-        blend_shape_node
-            .create_property(CastPropertyId::Integer64, "b")
-            .push(mesh_map[&blend_shape.base_mesh].clone());
+            blend_shape_node
+                .create_property(CastPropertyId::String, "n")
+                .push(blend_shape.name.as_str());
 
-        let indices_size = blend_shape
-            .vertex_indices
-            .iter()
-            .copied()
-            .max()
-            .unwrap_or_default();
+            blend_shape_node
+                .create_property(CastPropertyId::Integer64, "b")
+                .push(mesh_hash.clone());
 
-        let indices = if indices_size <= 0xFF {
-            blend_shape_node.create_property(CastPropertyId::Byte, "vi")
-        } else if indices_size <= 0xFFFF {
-            blend_shape_node.create_property(CastPropertyId::Short, "vi")
-        } else {
-            blend_shape_node.create_property(CastPropertyId::Integer32, "vi")
-        };
+            blend_shape_node
+                .create_property(CastPropertyId::Float, "ts")
+                .push(blend_shape.target_scale);
 
-        for index in &blend_shape.vertex_indices {
-            if indices_size <= 0xFF {
-                indices.push(*index as u8);
+            let indices_size = blend_shape
+                .vertex_deltas
+                .keys()
+                .copied()
+                .max()
+                .unwrap_or_default();
+
+            let indices = if indices_size <= 0xFF {
+                blend_shape_node.create_property(CastPropertyId::Byte, "vi")
             } else if indices_size <= 0xFFFF {
-                indices.push(*index as u16);
+                blend_shape_node.create_property(CastPropertyId::Short, "vi")
             } else {
-                indices.push(*index);
+                blend_shape_node.create_property(CastPropertyId::Integer32, "vi")
+            };
+
+            for index in blend_shape.vertex_deltas.keys() {
+                if indices_size <= 0xFF {
+                    indices.push(*index as u8);
+                } else if indices_size <= 0xFFFF {
+                    indices.push(*index as u16);
+                } else {
+                    indices.push(*index);
+                }
+            }
+
+            let positions = blend_shape_node.create_property(CastPropertyId::Vector3, "vp");
+
+            for (vertex_index, vertex_position_delta) in &blend_shape.vertex_deltas {
+                let vertex_position = blend_shape_mesh
+                    .vertices
+                    .vertex(*vertex_index as usize)
+                    .position();
+
+                positions.push(vertex_position + *vertex_position_delta);
             }
         }
-
-        let positions = blend_shape_node.create_property(CastPropertyId::Vector3, "vp");
-
-        for position in &blend_shape.vertex_positions {
-            positions.push(*position);
-        }
-
-        blend_shape_node
-            .create_property(CastPropertyId::Float, "ts")
-            .push(blend_shape.target_scale);
     }
 
     let writer = BufWriter::new(File::create(path.as_ref().with_extension("cast"))?);

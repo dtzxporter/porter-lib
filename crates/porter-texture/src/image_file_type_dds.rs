@@ -44,10 +44,10 @@ macro_rules! make_four_cc {
 static BITMASK_TO_FORMAT: [(u32, u32, u32, u32, u32, ImageFormat); 9] = [
     (32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000, ImageFormat::R8G8B8A8Unorm),
     (32, 0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000, ImageFormat::B8G8R8A8Unorm),
-    (32, 0x0000ffff, 0xffff0000, 0, 0, ImageFormat::R16G16Unorm),
-    (24, 0xff000000, 0x00ff0000, 0x0000ff00, 0, ImageFormat::R8G8B8Unorm),
+    (32, 0xffff, 0xffff0000, 0, 0, ImageFormat::R16G16Unorm),
+    (24, 0xff0000, 0xff00, 0xff, 0, ImageFormat::R8G8B8Unorm),
     (16, 0x0f00, 0x00f0, 0x000f, 0xf000, ImageFormat::B4G4R4A4Unorm),
-    (16, 0x00ff, 0, 0, 0xff00, ImageFormat::R8G8Unorm),
+    (16, 0xff, 0, 0, 0xff00, ImageFormat::R8G8Unorm),
     (16, 0xffff, 0, 0, 0, ImageFormat::R16Unorm),
     (8, 0xff, 0, 0, 0, ImageFormat::R8Unorm),
     (8, 0, 0, 0, 0xff, ImageFormat::A8Unorm),
@@ -95,7 +95,7 @@ struct DdsHeaderDx10 {
     pub misc_flags2: u32,
 }
 
-/// Calculates the pitch and slice of  the given format.
+/// Calculates the pitch and slice of the given format.
 fn compute_pitch_slice(format: ImageFormat, width: u32, height: u32) -> (u32, u32) {
     match format {
         ImageFormat::Bc1Typeless
@@ -146,10 +146,42 @@ fn compute_pitch_slice(format: ImageFormat, width: u32, height: u32) -> (u32, u3
 }
 
 /// Converts an image format to a pixel format and optional dx10 header.
-const fn format_to_pf_dx10(
+fn format_to_pf_dx10(
     format: ImageFormat,
+    array_size: u32,
     is_cubemap: bool,
 ) -> (DdsPixelFormat, Option<DdsHeaderDx10>) {
+    let dx10_fallback = || {
+        let pixel_format = DdsPixelFormat {
+            size: std::mem::size_of::<DdsPixelFormat>() as u32,
+            flags: DDS_FOURCC,
+            four_cc: make_four_cc!('D', 'X', '1', '0'),
+            rgb_bit_count: 0,
+            rbit_mask: 0,
+            gbit_mask: 0,
+            bbit_mask: 0,
+            abit_mask: 0,
+        };
+
+        let header_dx10 = DdsHeaderDx10 {
+            dxgi_format: format as u32,
+            resource_dimension: DDS_TEX_DIMENSION_TEXTURE2D,
+            misc_flag: if is_cubemap {
+                DDS_TEX_MISC_TEXTURECUBE
+            } else {
+                0
+            },
+            array_size,
+            misc_flags2: 0,
+        };
+
+        (pixel_format, Some(header_dx10))
+    };
+
+    if array_size > 1 && !is_cubemap {
+        return dx10_fallback();
+    }
+
     match format {
         ImageFormat::Bc1Unorm => (
             DdsPixelFormat {
@@ -222,40 +254,15 @@ const fn format_to_pf_dx10(
                 flags: DDS_RGB,
                 four_cc: 0,
                 rgb_bit_count: 24,
-                rbit_mask: 0xff000000,
-                gbit_mask: 0x00ff0000,
-                bbit_mask: 0x0000ff00,
-                abit_mask: 0x00000000,
+                rbit_mask: 0xff0000,
+                gbit_mask: 0xff00,
+                bbit_mask: 0xff,
+                abit_mask: 0x0,
             },
             None,
         ),
         // Fall back to directx 10 header, which uses format directly.
-        _ => {
-            let pixel_format = DdsPixelFormat {
-                size: std::mem::size_of::<DdsPixelFormat>() as u32,
-                flags: DDS_FOURCC,
-                four_cc: make_four_cc!('D', 'X', '1', '0'),
-                rgb_bit_count: 0,
-                rbit_mask: 0,
-                gbit_mask: 0,
-                bbit_mask: 0,
-                abit_mask: 0,
-            };
-
-            let header_dx10 = DdsHeaderDx10 {
-                dxgi_format: format as u32,
-                resource_dimension: DDS_TEX_DIMENSION_TEXTURE2D,
-                misc_flag: if is_cubemap {
-                    DDS_TEX_MISC_TEXTURECUBE
-                } else {
-                    0
-                },
-                array_size: if is_cubemap { 6 } else { 1 },
-                misc_flags2: 0,
-            };
-
-            (pixel_format, Some(header_dx10))
-        }
+        _ => dx10_fallback(),
     }
 }
 
@@ -290,7 +297,8 @@ fn format_to_dds(image: &Image) -> (DdsHeader, Option<DdsHeaderDx10>) {
         pitch
     };
 
-    let (pixel_format, header_dx10) = format_to_pf_dx10(image.format(), is_cubemap);
+    let (pixel_format, header_dx10) =
+        format_to_pf_dx10(image.format(), image.frames().len() as u32, is_cubemap);
 
     let header = DdsHeader {
         size: std::mem::size_of::<DdsHeader>() as u32,
@@ -369,7 +377,11 @@ fn dds_to_format(pixel_format: &DdsPixelFormat) -> Result<ImageFormat, TextureEr
 
 /// Picks the proper format required to save the input format to a dds file type.
 pub const fn pick_format(format: ImageFormat) -> ImageFormat {
-    format
+    match format {
+        ImageFormat::B8G8R8Unorm => ImageFormat::R8G8B8A8Unorm,
+        ImageFormat::A8R8G8B8Unorm => ImageFormat::R8G8B8A8Unorm,
+        _ => format,
+    }
 }
 
 /// Writes an image to a dds file to the output stream.
@@ -411,9 +423,7 @@ pub fn from_dds<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
         if header.pixel_format.four_cc == make_four_cc!('D', 'X', '1', '0') {
             let header_dx10: DdsHeaderDx10 = input.read_struct()?;
 
-            if header_dx10.array_size == 6 {
-                frames = 6;
-            }
+            frames = frames.max(header_dx10.array_size);
 
             ImageFormat::try_from(header_dx10.dxgi_format)?
         } else {
@@ -434,7 +444,7 @@ pub fn from_dds<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
     )?;
 
     for _ in 0..frames {
-        let frame = image.create_frame(header.width, header.height)?;
+        let frame = image.create_frame()?;
 
         input.read_exact(frame.buffer_mut())?;
     }

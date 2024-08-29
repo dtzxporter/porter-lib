@@ -8,6 +8,7 @@ use porter_math::normalize_array_f32;
 use crate::Model;
 use crate::ModelError;
 use crate::VertexColor;
+use crate::WeightBoneId;
 
 /// Writes a model in xna lara format to the given path.
 pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> {
@@ -43,8 +44,8 @@ pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelEr
         )?;
 
         for i in 0..mesh.vertices.uv_layers() {
-            if i < mesh.materials.len() && mesh.materials[i] > -1 {
-                let diffuse = model.materials[i].base_color_texture();
+            if let Some(material_index) = mesh.material {
+                let diffuse = model.materials[material_index].base_color_texture();
 
                 if let Some(diffuse) = diffuse {
                     writeln!(xna, "{}\n{}", diffuse.file_name, i)?;
@@ -63,8 +64,8 @@ pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelEr
 
             let position = vertex.position();
             let normal = vertex.normal();
-            let color = if mesh.vertices.colors() {
-                vertex.color()
+            let color = if mesh.vertices.colors() > 0 {
+                vertex.color(0)
             } else {
                 VertexColor::new(255, 255, 255, 255)
             };
@@ -90,7 +91,7 @@ pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelEr
                 writeln!(xna, "{:.6} {:.6}", uv.x, uv.y)?;
             }
 
-            let mut bones: [u16; 4] = [0; 4];
+            let mut bones: [WeightBoneId; 4] = [0; 4];
             let mut values: [f32; 4] = [0.0; 4];
 
             for w in 0..mesh.vertices.maximum_influence() {

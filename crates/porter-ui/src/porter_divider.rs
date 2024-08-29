@@ -1,18 +1,26 @@
+use std::marker::PhantomData;
+
+use iced::advanced;
+use iced::advanced::graphics::core::event::Status;
+use iced::advanced::layout;
+use iced::advanced::layout::Limits;
+use iced::advanced::layout::Node;
+use iced::advanced::mouse::Cursor;
+use iced::advanced::mouse::Interaction;
+use iced::advanced::widget::tree::State;
+use iced::advanced::widget::Tree;
+use iced::advanced::Widget;
+
 use iced::mouse;
-use iced::widget::canvas;
-use iced::widget::canvas::gradient::Linear;
-use iced::widget::canvas::Fill;
-use iced::widget::canvas::Geometry;
-use iced::widget::canvas::Program;
 use iced::widget::container;
-use iced::widget::Canvas;
 use iced::Background;
 use iced::Color;
+use iced::Element;
+use iced::Event;
 use iced::Length;
 use iced::Point;
 use iced::Rectangle;
-use iced::Renderer;
-use iced::Theme;
+use iced::Size;
 
 /// State of a divider.
 #[derive(Default, Clone, Copy)]
@@ -22,18 +30,24 @@ pub struct PorterDividerState {
 }
 
 /// A column header divider that supports resize operations.
-pub struct PorterDivider<Message> {
+pub struct PorterDivider<'a, Message, Theme, Renderer>
+where
+    Theme: container::StyleSheet,
+    Renderer: advanced::Renderer,
+{
     width: Length,
     height: Length,
-    style: container::Appearance,
+    style: <Theme as container::StyleSheet>::Style,
     on_drag: Box<dyn Fn(f32) -> Message>,
     on_release: Message,
-    cache: canvas::Cache,
+    _phantom: PhantomData<&'a Renderer>,
 }
 
-impl<Message> PorterDivider<Message>
+impl<'a, Message, Theme, Renderer> PorterDivider<'a, Message, Theme, Renderer>
 where
     Message: Clone,
+    Theme: container::StyleSheet,
+    Renderer: advanced::Renderer,
 {
     /// Constructs a new instance of [`PorterDivider`].
     pub fn new(on_drag: impl Fn(f32) -> Message + 'static, on_release: Message) -> Self {
@@ -43,7 +57,7 @@ where
             style: Default::default(),
             on_drag: Box::new(on_drag),
             on_release,
-            cache: canvas::Cache::new(),
+            _phantom: PhantomData,
         }
     }
 
@@ -60,33 +74,45 @@ where
     }
 
     /// Sets the style of the [`PorterDivider`].
-    pub fn style(mut self, style: impl container::StyleSheet) -> Self {
-        self.style = style.appearance(&Default::default());
+    pub fn style(mut self, style: impl Into<Theme::Style>) -> Self {
+        self.style = style.into();
         self
-    }
-
-    /// Builds the final divider.
-    pub fn build(self) -> Canvas<Self, Message> {
-        let width = self.width;
-        let height = self.height;
-
-        canvas(self).width(width).height(height)
     }
 }
 
-impl<Message> Program<Message, Renderer> for PorterDivider<Message>
+impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
+    for PorterDivider<'a, Message, Theme, Renderer>
 where
     Message: Clone,
+    Theme: container::StyleSheet,
+    Renderer: advanced::Renderer,
 {
-    type State = PorterDividerState;
+    fn size(&self) -> Size<Length> {
+        Size::new(self.width, self.height)
+    }
 
-    fn update(
-        &self,
-        state: &mut Self::State,
-        event: canvas::Event,
-        bounds: iced::Rectangle,
-        cursor: iced::advanced::mouse::Cursor,
-    ) -> (canvas::event::Status, Option<Message>) {
+    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+        layout::atomic(limits, self.width, self.height)
+    }
+
+    fn state(&self) -> State {
+        State::new(PorterDividerState::default())
+    }
+
+    fn on_event(
+        &mut self,
+        tree: &mut Tree,
+        event: Event,
+        layout: advanced::Layout<'_>,
+        cursor: Cursor,
+        _renderer: &Renderer,
+        _clipboard: &mut dyn advanced::Clipboard,
+        shell: &mut advanced::Shell<'_, Message>,
+        _viewport: &Rectangle,
+    ) -> Status {
+        let state: &mut PorterDividerState = tree.state.downcast_mut();
+
+        let bounds = layout.bounds();
         let bounds = Rectangle {
             x: bounds.x - 5.0,
             y: bounds.y,
@@ -96,31 +122,28 @@ where
 
         state.is_hovered = cursor.is_over(bounds);
 
-        if let iced::widget::canvas::Event::Mouse(event) = event {
+        if let Event::Mouse(event) = event {
             match event {
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
                     if let Some(origin) = cursor.position_over(bounds) {
                         state.drag_origin = Some(origin);
-                        return (canvas::event::Status::Captured, None);
+                        return Status::Captured;
                     }
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) => {
                     if state.drag_origin.take().is_some() {
-                        return (
-                            canvas::event::Status::Captured,
-                            Some(self.on_release.clone()),
-                        );
+                        shell.publish(self.on_release.clone());
+                        return Status::Captured;
                     }
                 }
-                mouse::Event::CursorMoved { .. } => {
-                    if let Some(position) = cursor.position() {
-                        if let Some(origin) = &mut state.drag_origin {
-                            let shift = (position - *origin).x;
+                mouse::Event::CursorMoved { position } => {
+                    if let Some(origin) = &mut state.drag_origin {
+                        let shift = (position - *origin).x;
 
-                            *origin = position;
+                        *origin = position;
 
-                            return (canvas::event::Status::Captured, Some((self.on_drag)(shift)));
-                        }
+                        shell.publish((self.on_drag)(shift));
+                        return Status::Captured;
                     }
                 }
                 _ => {
@@ -129,60 +152,61 @@ where
             }
         }
 
-        (canvas::event::Status::Ignored, None)
+        Status::Ignored
     }
 
     fn draw(
         &self,
-        _state: &Self::State,
-        renderer: &Renderer,
-        _theme: &Theme,
-        bounds: Rectangle,
-        _cursor: mouse::Cursor,
-    ) -> Vec<Geometry> {
-        let background = self
-            .style
-            .background
-            .unwrap_or(Background::Color(Color::TRANSPARENT));
+        _tree: &Tree,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        _style: &advanced::renderer::Style,
+        layout: advanced::Layout<'_>,
+        _cursor: Cursor,
+        _viewport: &Rectangle,
+    ) {
+        let style = theme.appearance(&self.style);
 
-        let geometry = self.cache.draw(renderer, bounds.size(), |frame| {
-            frame.fill_rectangle(
-                Point::ORIGIN,
-                bounds.size(),
-                match background {
-                    Background::Color(color) => Fill::from(color),
-                    Background::Gradient(iced::Gradient::Linear(linear)) => {
-                        let result = Linear::new(
-                            Point::ORIGIN,
-                            Point {
-                                x: bounds.width,
-                                y: bounds.height,
-                            },
-                        );
-
-                        for stop in linear.stops.into_iter().flatten() {
-                            result.add_stop(stop.offset, stop.color);
-                        }
-
-                        Fill::from(result)
-                    }
-                },
-            )
-        });
-
-        vec![geometry]
+        renderer.fill_quad(
+            advanced::renderer::Quad {
+                bounds: layout.bounds(),
+                border: style.border,
+                shadow: style.shadow,
+            },
+            style
+                .background
+                .unwrap_or(Background::Color(Color::TRANSPARENT)),
+        );
     }
 
     fn mouse_interaction(
         &self,
-        _state: &Self::State,
-        _bounds: iced::Rectangle,
-        _cursor: iced::advanced::mouse::Cursor,
-    ) -> iced::advanced::mouse::Interaction {
-        if _state.drag_origin.is_some() || _state.is_hovered {
-            iced::advanced::mouse::Interaction::ResizingHorizontally
+        tree: &Tree,
+        _layout: advanced::Layout<'_>,
+        _cursor: Cursor,
+        _viewport: &Rectangle,
+        _renderer: &Renderer,
+    ) -> Interaction {
+        let state: &PorterDividerState = tree.state.downcast_ref();
+
+        if state.drag_origin.is_some() || state.is_hovered {
+            Interaction::ResizingHorizontally
         } else {
-            iced::advanced::mouse::Interaction::Idle
+            Interaction::Idle
         }
+    }
+}
+
+impl<'a, Message, Theme, Renderer> From<PorterDivider<'a, Message, Theme, Renderer>>
+    for Element<'a, Message, Theme, Renderer>
+where
+    Message: Clone + 'static,
+    Theme: container::StyleSheet + 'a,
+    Renderer: advanced::Renderer + 'a,
+{
+    fn from(
+        divider: PorterDivider<'a, Message, Theme, Renderer>,
+    ) -> Element<'a, Message, Theme, Renderer> {
+        Element::new(divider)
     }
 }

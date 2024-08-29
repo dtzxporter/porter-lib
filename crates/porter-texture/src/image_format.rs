@@ -2,7 +2,7 @@ use wgpu::TextureFormat;
 
 use crate::TextureError;
 
-/// Image formats supported by scylla, matches DXGI_FORMAT from DirectX.
+/// Image formats, matches DXGI_FORMAT from DirectX.
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageFormat {
@@ -131,6 +131,8 @@ pub enum ImageFormat {
 
     // Non-standard formats used to convert on the software side.
     R8G8B8Unorm = 0x400,
+    B8G8R8Unorm,
+    A8R8G8B8Unorm,
 }
 
 /// Gets whether or not an image format is palettized.
@@ -185,15 +187,30 @@ pub const fn is_format_srgb(format: ImageFormat) -> bool {
 
 /// Gets whether or not an image format is software convertable.
 pub const fn is_format_requires_unpack(format: ImageFormat) -> bool {
-    matches!(format, ImageFormat::R1Unorm | ImageFormat::R8G8B8Unorm)
+    matches!(
+        format,
+        ImageFormat::R1Unorm
+            | ImageFormat::R8G8B8Unorm
+            | ImageFormat::B8G8R8Unorm
+            | ImageFormat::R32G32B32Typeless
+            | ImageFormat::R32G32B32Float
+            | ImageFormat::R32G32B32Uint
+            | ImageFormat::R32G32B32Sint
+    )
 }
 
-/// Gets wwhether or not an image format and the target format are just swizzled.
+/// Gets whether or not an image format and the target format are just swizzled.
 pub const fn is_format_swizzled(format: ImageFormat, target: ImageFormat) -> bool {
     #[allow(clippy::match_like_matches_macro)]
     match (format, target) {
+        (ImageFormat::R8G8B8Unorm, ImageFormat::B8G8R8Unorm) => true,
+        (ImageFormat::B8G8R8Unorm, ImageFormat::R8G8B8Unorm) => true,
         (ImageFormat::R8G8B8A8Unorm, ImageFormat::B8G8R8A8Unorm) => true,
+        (ImageFormat::R8G8B8A8Unorm, ImageFormat::A8R8G8B8Unorm) => true,
         (ImageFormat::B8G8R8A8Unorm, ImageFormat::R8G8B8A8Unorm) => true,
+        (ImageFormat::B8G8R8A8Unorm, ImageFormat::A8R8G8B8Unorm) => true,
+        (ImageFormat::A8R8G8B8Unorm, ImageFormat::R8G8B8A8Unorm) => true,
+        (ImageFormat::A8R8G8B8Unorm, ImageFormat::B8G8R8A8Unorm) => true,
         (ImageFormat::R8G8B8A8UnormSrgb, ImageFormat::B8G8R8A8UnormSrgb) => true,
         (ImageFormat::B8G8R8A8UnormSrgb, ImageFormat::R8G8B8A8UnormSrgb) => true,
         (ImageFormat::R8G8B8A8Typeless, ImageFormat::B8G8R8A8Typeless) => true,
@@ -455,7 +472,11 @@ pub const fn format_to_bpp(format: ImageFormat) -> u32 {
         | ImageFormat::V208 => 16,
 
         // 24 bits per pixel
-        ImageFormat::P010 | ImageFormat::P016 | ImageFormat::V408 | ImageFormat::R8G8B8Unorm => 24,
+        ImageFormat::P010
+        | ImageFormat::P016
+        | ImageFormat::V408
+        | ImageFormat::R8G8B8Unorm
+        | ImageFormat::B8G8R8Unorm => 24,
 
         // 32 bits per pixel
         ImageFormat::R10G10B10A2Typeless
@@ -495,7 +516,8 @@ pub const fn format_to_bpp(format: ImageFormat) -> u32 {
         | ImageFormat::B8G8R8X8UnormSrgb
         | ImageFormat::Ayuv
         | ImageFormat::Y410
-        | ImageFormat::Yuy2 => 32,
+        | ImageFormat::Yuy2
+        | ImageFormat::A8R8G8B8Unorm => 32,
 
         // 64 bits per pixel
         ImageFormat::R16G16B16A16Typeless
@@ -536,9 +558,9 @@ impl TryFrom<u32> for ImageFormat {
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         if value >= ImageFormat::Unknown as u32 && value < ImageFormat::Count as u32 {
             // SAFETY: We check that the value is within the bounds of the enum, and that
-            // the enum has no caps or holes.
+            // the enum has no gaps or holes.
             #[allow(unsafe_code)]
-            Ok(unsafe { std::mem::transmute(value) })
+            Ok(unsafe { std::mem::transmute::<u32, ImageFormat>(value) })
         } else {
             Err(TextureError::InvalidImageFormat(ImageFormat::Unknown))
         }

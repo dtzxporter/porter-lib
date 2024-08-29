@@ -1,35 +1,38 @@
-#![allow(unused)]
-use std::ops::Sub;
+use std::borrow::Cow;
+use std::marker::PhantomData;
 
+use iced::advanced;
+use iced::advanced::layout;
+use iced::advanced::layout::Limits;
+use iced::advanced::layout::Node;
+use iced::advanced::mouse::Cursor;
 use iced::advanced::text::Paragraph;
-use iced::advanced::text::Renderer as TextRenderer;
+use iced::advanced::widget::Tree;
+use iced::advanced::Widget;
+
 use iced::alignment;
 use iced::alignment::Horizontal;
 use iced::alignment::Vertical;
-use iced::mouse;
-use iced::widget::canvas;
-use iced::widget::canvas::Geometry;
-use iced::widget::canvas::Program;
-use iced::widget::canvas::Text;
 use iced::widget::text;
 use iced::widget::text::LineHeight;
 use iced::widget::text::Shaping;
-use iced::widget::Canvas;
-use iced::Color;
+use iced::Element;
 use iced::Font;
 use iced::Length;
 use iced::Pixels;
 use iced::Point;
 use iced::Rectangle;
-use iced::Renderer;
-use iced::Theme;
+use iced::Size;
 
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Used to render better text wrapping.
-#[derive(Debug)]
-pub struct PorterText {
-    content: String,
+pub struct PorterText<'a, Message, Theme, Renderer>
+where
+    Theme: text::StyleSheet,
+    Renderer: advanced::text::Renderer,
+{
+    content: Cow<'a, str>,
     size: Option<Pixels>,
     line_height: LineHeight,
     width: Length,
@@ -38,13 +41,18 @@ pub struct PorterText {
     vertical_alignment: alignment::Vertical,
     font: Option<Font>,
     shaping: Shaping,
-    style: text::Appearance,
-    cache: canvas::Cache,
+    style: <Theme as text::StyleSheet>::Style,
+    _phantom: PhantomData<&'a (Message, Renderer)>,
 }
 
-impl PorterText {
+impl<'a, Message, Theme, Renderer> PorterText<'a, Message, Theme, Renderer>
+where
+    Message: Clone,
+    Theme: text::StyleSheet,
+    Renderer: advanced::text::Renderer,
+{
     /// Constructs a new instance of [`PorterText`].
-    pub fn new<T: Into<String>>(content: T) -> Self {
+    pub fn new(content: impl Into<Cow<'a, str>>) -> Self {
         Self {
             content: content.into(),
             size: None,
@@ -56,7 +64,7 @@ impl PorterText {
             vertical_alignment: alignment::Vertical::Top,
             shaping: Shaping::Basic,
             style: Default::default(),
-            cache: canvas::Cache::new(),
+            _phantom: PhantomData,
         }
     }
 
@@ -81,8 +89,8 @@ impl PorterText {
     }
 
     /// Sets the style of the [`PorterText`].
-    pub fn color(mut self, color: Color) -> Self {
-        self.style = text::Appearance { color: Some(color) };
+    pub fn style(mut self, style: impl Into<Theme::Style>) -> Self {
+        self.style = style.into();
         self
     }
 
@@ -115,99 +123,121 @@ impl PorterText {
         self.shaping = shaping;
         self
     }
-
-    /// Builds the final text element.
-    pub fn build<Message>(self) -> Canvas<PorterText, Message> {
-        let width = self.width;
-        let height = self.height;
-
-        canvas(self).width(width).height(height)
-    }
 }
 
-impl<Message> Program<Message, Renderer> for PorterText {
-    type State = ();
+impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
+    for PorterText<'a, Message, Theme, Renderer>
+where
+    Message: Clone,
+    Theme: text::StyleSheet,
+    Renderer: advanced::text::Renderer<Font = Font>,
+{
+    fn size(&self) -> Size<Length> {
+        Size::new(self.width, self.height)
+    }
+
+    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+        layout::atomic(limits, self.width, self.height)
+    }
 
     fn draw(
         &self,
-        _state: &Self::State,
-        renderer: &Renderer,
-        _theme: &Theme,
-        bounds: Rectangle,
-        _cursor: mouse::Cursor,
-    ) -> Vec<Geometry> {
-        let geometry = self.cache.draw(renderer, bounds.size(), |frame| {
-            let width = bounds.width;
+        _tree: &Tree,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        style: &advanced::renderer::Style,
+        layout: advanced::Layout<'_>,
+        _cursor: Cursor,
+        viewport: &Rectangle,
+    ) {
+        let bounds = layout.bounds();
+        let width = bounds.width;
 
-            let size = self.size.unwrap_or_else(|| renderer.default_size());
-            let font = self.font.unwrap_or_else(|| renderer.default_font());
+        let size = self.size.unwrap_or_else(|| renderer.default_size());
+        let font = self.font.unwrap_or_else(|| renderer.default_font());
 
-            let text = iced::advanced::text::Text {
-                content: &self.content,
-                size,
-                line_height: self.line_height,
-                bounds: iced::Size::INFINITY,
-                font,
-                horizontal_alignment: Horizontal::Left,
-                vertical_alignment: Vertical::Top,
-                shaping: Shaping::Basic,
-            };
+        let text = advanced::text::Text {
+            content: &self.content,
+            size,
+            line_height: self.line_height,
+            bounds: Size::INFINITY,
+            font,
+            horizontal_alignment: Horizontal::Left,
+            vertical_alignment: Vertical::Top,
+            shaping: Shaping::Basic,
+        };
 
-            let paragraph =
-                <Renderer as iced::advanced::text::Renderer>::Paragraph::with_text(text);
-            let measure_full = paragraph.min_bounds().width;
+        let paragraph = <Renderer as advanced::text::Renderer>::Paragraph::with_text(text);
+        let measure_full = paragraph.min_bounds().width;
 
-            let render_str = if measure_full > width {
-                let mut index = 0;
+        let render_str = if measure_full > width {
+            let mut index = 0;
 
-                while let Some(position) = paragraph.grapheme_position(0, index) {
-                    if position.x + size.0 > width {
-                        break;
-                    }
-                    index += 1;
+            while let Some(position) = paragraph.grapheme_position(0, index) {
+                if position.x + size.0 > width {
+                    break;
                 }
+                index += 1;
+            }
 
-                if index > 1 {
-                    index -= 1;
-                }
+            if index > 1 {
+                index -= 1;
+            }
 
-                self.content
-                    .graphemes(true)
-                    .take(index)
-                    .chain(["…"])
-                    .collect::<Vec<_>>()
-                    .join("")
-            } else {
-                self.content.clone()
-            };
+            self.content
+                .graphemes(true)
+                .take(index)
+                .chain(["…"])
+                .collect::<Vec<_>>()
+                .join("")
+        } else {
+            self.content.to_string()
+        };
 
-            let x = match self.horizontal_alignment {
-                alignment::Horizontal::Left => 0.0,
-                alignment::Horizontal::Center => bounds.center_x() - bounds.x,
-                alignment::Horizontal::Right => bounds.width,
-            };
+        let x = match self.horizontal_alignment {
+            Horizontal::Left => bounds.x,
+            Horizontal::Center => bounds.center_x(),
+            Horizontal::Right => bounds.x + bounds.width,
+        };
 
-            let y = match self.vertical_alignment {
-                alignment::Vertical::Top => 0.0,
-                alignment::Vertical::Center => bounds.center_y() - bounds.y,
-                alignment::Vertical::Bottom => bounds.height,
-            };
+        let y = match self.vertical_alignment {
+            Vertical::Top => bounds.y,
+            Vertical::Center => bounds.center_y(),
+            Vertical::Bottom => bounds.y + bounds.height,
+        };
 
-            let text = Text {
-                content: render_str,
+        if width > 0.0 {
+            let text = iced::advanced::Text {
+                content: &render_str,
                 size,
+                bounds: bounds.size(),
                 line_height: self.line_height,
-                position: Point { x, y },
-                color: self.style.color.unwrap_or(Color::BLACK),
                 font,
                 horizontal_alignment: self.horizontal_alignment,
                 vertical_alignment: self.vertical_alignment,
                 shaping: self.shaping,
             };
 
-            frame.fill_text(text);
-        });
+            let color = theme
+                .appearance(self.style.clone())
+                .color
+                .unwrap_or(style.text_color);
 
-        vec![geometry]
+            renderer.fill_text(text, Point { x, y }, color, *viewport);
+        }
+    }
+}
+
+impl<'a, Message, Theme, Renderer> From<PorterText<'a, Message, Theme, Renderer>>
+    for Element<'a, Message, Theme, Renderer>
+where
+    Message: Clone + 'static,
+    Theme: text::StyleSheet + 'a,
+    Renderer: advanced::text::Renderer<Font = iced::Font> + 'a,
+{
+    fn from(
+        text: PorterText<'a, Message, Theme, Renderer>,
+    ) -> Element<'a, Message, Theme, Renderer> {
+        Element::new(text)
     }
 }

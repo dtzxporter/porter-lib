@@ -478,7 +478,7 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
                 let rotation = bone
                     .local_rotation
                     .unwrap_or_default()
-                    .euler_angles(Angles::Degrees);
+                    .to_euler(Angles::Degrees);
 
                 props
                     .create_property(FbxPropertyType::String)
@@ -798,43 +798,6 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
             normals_buffer.push(normal.z as f64);
         }
 
-        if mesh.vertices.colors() {
-            let layer_color = geometry.create("LayerElementColor");
-
-            layer_color
-                .create_property(FbxPropertyType::Integer32)
-                .push(0u32);
-            layer_color
-                .create("Name")
-                .create_property(FbxPropertyType::String)
-                .push_string("colorSet1");
-            layer_color
-                .create("Version")
-                .create_property(FbxPropertyType::Integer32)
-                .push(101u32);
-            layer_color
-                .create("MappingInformationType")
-                .create_property(FbxPropertyType::String)
-                .push_string("ByVertice");
-            layer_color
-                .create("ReferenceInformationType")
-                .create_property(FbxPropertyType::String)
-                .push_string("Direct");
-
-            let color_buffer = layer_color
-                .create("Colors")
-                .create_property(FbxPropertyType::Float64Array);
-
-            for v in 0..mesh.vertices.len() {
-                let color = mesh.vertices.vertex(v).color();
-
-                color_buffer.push(color.r as f64 / 255.0);
-                color_buffer.push(color.g as f64 / 255.0);
-                color_buffer.push(color.b as f64 / 255.0);
-                color_buffer.push(color.a as f64 / 255.0);
-            }
-        }
-
         for i in 0..mesh.vertices.uv_layers() {
             let layer_uvs = geometry.create("LayerElementUV");
 
@@ -870,7 +833,44 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
             }
         }
 
-        if !mesh.materials.is_empty() && mesh.materials[0] >= 0 {
+        for i in 0..mesh.vertices.colors() {
+            let layer_color = geometry.create("LayerElementColor");
+
+            layer_color
+                .create_property(FbxPropertyType::Integer32)
+                .push(i as u32);
+            layer_color
+                .create("Name")
+                .create_property(FbxPropertyType::String)
+                .push_string(format!("colorSet{}", i));
+            layer_color
+                .create("Version")
+                .create_property(FbxPropertyType::Integer32)
+                .push(101u32);
+            layer_color
+                .create("MappingInformationType")
+                .create_property(FbxPropertyType::String)
+                .push_string("ByVertice");
+            layer_color
+                .create("ReferenceInformationType")
+                .create_property(FbxPropertyType::String)
+                .push_string("Direct");
+
+            let color_buffer = layer_color
+                .create("Colors")
+                .create_property(FbxPropertyType::Float64Array);
+
+            for v in 0..mesh.vertices.len() {
+                let color = mesh.vertices.vertex(v).color(0);
+
+                color_buffer.push(color.r as f64 / 255.0);
+                color_buffer.push(color.g as f64 / 255.0);
+                color_buffer.push(color.b as f64 / 255.0);
+                color_buffer.push(color.a as f64 / 255.0);
+            }
+        }
+
+        if mesh.material.is_some() {
             let layer_material = geometry.create("LayerElementMaterial");
 
             layer_material
@@ -900,86 +900,69 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
                 .push(0u32);
         }
 
-        let layer_info = geometry.create("Layer");
-
-        layer_info
-            .create_property(FbxPropertyType::Integer32)
-            .push(0u32);
-
-        layer_info
-            .create("Version")
-            .create_property(FbxPropertyType::Integer32)
-            .push(100u32);
-
-        {
-            let layer_element = layer_info.create("LayerElement");
-
-            layer_element
-                .create("Type")
-                .create_property(FbxPropertyType::String)
-                .push_string("LayerElementNormal");
-            layer_element
-                .create("TypeIndex")
-                .create_property(FbxPropertyType::Integer32)
-                .push(0u32);
-        }
-
-        if mesh.vertices.colors() {
-            let layer_element = layer_info.create("LayerElement");
-
-            layer_element
-                .create("Type")
-                .create_property(FbxPropertyType::String)
-                .push_string("LayerElementColor");
-            layer_element
-                .create("TypeIndex")
-                .create_property(FbxPropertyType::Integer32)
-                .push(0u32);
-        }
-
-        if mesh.vertices.uv_layers() > 0 {
-            let layer_element = layer_info.create("LayerElement");
-
-            layer_element
-                .create("Type")
-                .create_property(FbxPropertyType::String)
-                .push_string("LayerElementUV");
-            layer_element
-                .create("TypeIndex")
-                .create_property(FbxPropertyType::Integer32)
-                .push(0u32);
-        }
-
-        if !mesh.materials.is_empty() && mesh.materials[0] >= 0 {
-            let layer_element = layer_info.create("LayerElement");
-
-            layer_element
-                .create("Type")
-                .create_property(FbxPropertyType::String)
-                .push_string("LayerElementMaterial");
-            layer_element
-                .create("TypeIndex")
-                .create_property(FbxPropertyType::Integer32)
-                .push(0u32);
-        }
-
-        for i in 1..mesh.vertices.uv_layers() {
+        for layer in 0..mesh.vertices.uv_layers().max(mesh.vertices.colors()).max(1) {
             let layer_info = geometry.create("Layer");
 
             layer_info
                 .create_property(FbxPropertyType::Integer32)
-                .push(i as u32);
+                .push(layer as u32);
 
-            let layer_element = layer_info.create("LayerElement");
-
-            layer_element
-                .create("Type")
-                .create_property(FbxPropertyType::String)
-                .push_string("LayerElementUV");
-            layer_element
-                .create("TypeIndex")
+            layer_info
+                .create("Version")
                 .create_property(FbxPropertyType::Integer32)
-                .push(i as u32);
+                .push(100u32);
+
+            if layer == 0 {
+                let layer_element = layer_info.create("LayerElement");
+
+                layer_element
+                    .create("Type")
+                    .create_property(FbxPropertyType::String)
+                    .push_string("LayerElementNormal");
+                layer_element
+                    .create("TypedIndex")
+                    .create_property(FbxPropertyType::Integer32)
+                    .push(layer as u32);
+
+                if mesh.material.is_some() {
+                    let layer_element = layer_info.create("LayerElement");
+
+                    layer_element
+                        .create("Type")
+                        .create_property(FbxPropertyType::String)
+                        .push_string("LayerElementMaterial");
+                    layer_element
+                        .create("TypedIndex")
+                        .create_property(FbxPropertyType::Integer32)
+                        .push(layer as u32);
+                }
+            }
+
+            if layer < mesh.vertices.uv_layers() {
+                let layer_element = layer_info.create("LayerElement");
+
+                layer_element
+                    .create("Type")
+                    .create_property(FbxPropertyType::String)
+                    .push_string("LayerElementUV");
+                layer_element
+                    .create("TypedIndex")
+                    .create_property(FbxPropertyType::Integer32)
+                    .push(layer as u32);
+            }
+
+            if layer < mesh.vertices.colors() {
+                let layer_element = layer_info.create("LayerElement");
+
+                layer_element
+                    .create("Type")
+                    .create_property(FbxPropertyType::String)
+                    .push_string("LayerElementColor");
+                layer_element
+                    .create("TypedIndex")
+                    .create_property(FbxPropertyType::Integer32)
+                    .push(layer as u32);
+            }
         }
 
         let geometry_hash = FbxPropertyValue::from(geometry);
@@ -987,8 +970,8 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
         add_object_connection(root.connections_node(), mesh_hash, model_hash);
         add_object_connection(root.connections_node(), geometry_hash, mesh_hash);
 
-        if !mesh.materials.is_empty() && mesh.materials[0] >= 0 {
-            if let Some(material) = material_map.get(&(mesh.materials[0] as usize)) {
+        if let Some(material_index) = mesh.material {
+            if let Some(material) = material_map.get(&material_index) {
                 add_object_connection(root.connections_node(), *material, mesh_hash);
             }
         }

@@ -1,9 +1,15 @@
+use core::slice::Iter;
+use core::slice::IterMut;
+
 use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Read;
 use std::io::Write;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use porter_utils::StructReadExt;
 use porter_utils::StructWriteExt;
 
 use crate::CastId;
@@ -77,8 +83,35 @@ impl CastNode {
         self.properties.get_mut(index).unwrap()
     }
 
+    /// Finds a property by the given name.
+    pub fn property<N: AsRef<str>>(&self, name: N) -> Option<&CastProperty> {
+        self.properties.iter().find(|x| x.name() == name.as_ref())
+    }
+
+    /// Iterates over the children of this node.
+    pub fn children(&self) -> Iter<'_, Self> {
+        self.children.iter()
+    }
+
+    /// Iterates and optionally change children of this node.
+    pub fn children_mut(&mut self) -> IterMut<'_, Self> {
+        self.children.iter_mut()
+    }
+
+    /// Iterates over all children of the given type.
+    pub fn children_of_type(&self, identifier: CastId) -> impl Iterator<Item = &CastNode> {
+        self.children
+            .iter()
+            .filter(move |x| x.identifier == identifier)
+    }
+
+    /// Finds a child by the given hash.
+    pub fn child_by_hash(&self, hash: u64) -> Option<&CastNode> {
+        self.children.iter().find(|x| x.hash == hash)
+    }
+
     /// Serializes the node to the writer.
-    pub fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub(crate) fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         let header = CastNodeHeader {
             identifier: self.identifier,
             node_size: self.length(),
@@ -100,9 +133,61 @@ impl CastNode {
         Ok(())
     }
 
+    /// Deserializes the node from the reader.
+    pub(crate) fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let header: CastNodeHeader = reader.read_struct()?;
+
+        let mut properties = Vec::new();
+
+        properties
+            .try_reserve_exact(header.property_count as usize)
+            .map_err(|x| Error::new(ErrorKind::OutOfMemory, x))?;
+
+        for _ in 0..header.property_count {
+            properties.push(CastProperty::read(reader)?);
+        }
+
+        let mut children = Vec::new();
+
+        children
+            .try_reserve_exact(header.child_count as usize)
+            .map_err(|x| Error::new(ErrorKind::OutOfMemory, x))?;
+
+        for _ in 0..header.child_count {
+            children.push(Self::read(reader)?);
+        }
+
+        Ok(Self {
+            identifier: header.identifier,
+            hash: header.node_hash,
+            hash_next: Arc::new(AtomicU64::new(0)),
+            properties,
+            children,
+        })
+    }
+
     /// Gets the hash of this cast node.
     pub(crate) fn hash(&self) -> u64 {
         self.hash
+    }
+
+    /// Gets the largest hash value of this cast node and it's children.
+    pub(crate) fn largest_hash(&self) -> u64 {
+        self.children
+            .iter()
+            .map(|x| x.hash)
+            .max()
+            .unwrap_or(0)
+            .max(self.hash)
+    }
+
+    /// Sets a new hash next value for this cast node and it's children.
+    pub(crate) fn set_hash_next(&mut self, hash_next: Arc<AtomicU64>) {
+        for child in &mut self.children {
+            child.set_hash_next(hash_next.clone());
+        }
+
+        self.hash_next = hash_next;
     }
 
     /// Gets the length in bytes of this cast node.

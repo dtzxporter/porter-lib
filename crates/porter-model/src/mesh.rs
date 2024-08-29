@@ -1,7 +1,14 @@
-use porter_math::Matrix4x4;
+use std::collections::BTreeMap;
 
+use porter_math::Matrix4x4;
+use porter_math::Vector3;
+
+use crate::BlendShape;
 use crate::FaceBuffer;
+use crate::Skeleton;
+use crate::SkinningMethod;
 use crate::VertexBuffer;
+use crate::WeightBoneId;
 
 /// A polygon mesh for a model.
 #[derive(Debug, Clone)]
@@ -12,8 +19,12 @@ pub struct Mesh {
     pub faces: FaceBuffer,
     /// The vertex buffer for this mesh.
     pub vertices: VertexBuffer,
-    /// A list of material indices for this mesh.
-    pub materials: Vec<isize>,
+    /// The material index for this mesh.
+    pub material: Option<usize>,
+    /// A collection of blend shapes that go with this mesh.
+    pub blend_shapes: Vec<BlendShape>,
+    /// The method used to skin this mesh.
+    pub skinning_method: SkinningMethod,
 }
 
 impl Mesh {
@@ -21,9 +32,27 @@ impl Mesh {
     pub fn new(faces: FaceBuffer, vertices: VertexBuffer) -> Self {
         Self {
             name: None,
-            materials: Vec::with_capacity(vertices.uv_layers()),
+            material: None,
             faces,
             vertices,
+            blend_shapes: Vec::new(),
+            skinning_method: SkinningMethod::Linear,
+        }
+    }
+
+    /// Constructs a new mesh instance with the given skinning method.
+    pub fn with_skinning_method(
+        faces: FaceBuffer,
+        vertices: VertexBuffer,
+        skinning_method: SkinningMethod,
+    ) -> Self {
+        Self {
+            name: None,
+            material: None,
+            faces,
+            vertices,
+            blend_shapes: Vec::new(),
+            skinning_method,
         }
     }
 
@@ -40,6 +69,10 @@ impl Mesh {
 
             vertex.set_position(vertex.position() * factor);
         }
+
+        for blend_shape in &mut self.blend_shapes {
+            blend_shape.scale(factor);
+        }
     }
 
     /// Transforms the mesh by the given matrix.
@@ -53,10 +86,52 @@ impl Mesh {
             vertex.set_normal(vertex.normal().transform(&normal).normalized());
         }
 
+        for blend_shape in &mut self.blend_shapes {
+            blend_shape.transform(matrix)
+        }
+
         if matrix.determinant() < 0.0 {
             for face in &mut self.faces {
                 face.swap_order();
             }
+        }
+    }
+
+    /// Applies a different bind pose to the mesh.
+    pub fn apply_bind_pose(
+        &mut self,
+        skeleton: &Skeleton,
+        inv_bind_poses: &BTreeMap<WeightBoneId, Matrix4x4>,
+    ) {
+        let maximum_influence = self.vertices.maximum_influence();
+
+        if maximum_influence == 0 {
+            return;
+        }
+
+        for v in 0..self.vertices.len() {
+            let mut vertex = self.vertices.vertex_mut(v);
+
+            let mut position = Vector3::zero();
+            let mut normal = Vector3::zero();
+
+            for w in 0..maximum_influence {
+                let weight = vertex.weight(w);
+
+                let inv_bind_pose = inv_bind_poses
+                    .get(&{ weight.bone })
+                    .copied()
+                    .unwrap_or_default();
+
+                let transform = skeleton.bones[weight.bone as usize].world_matrix() * inv_bind_pose;
+                let transform_normal = transform.to_3x3().to_4x4();
+
+                position += vertex.position().transform(&transform) * weight.value;
+                normal += vertex.normal().transform(&transform_normal) * weight.value;
+            }
+
+            vertex.set_position(position);
+            vertex.set_normal(normal.normalized());
         }
     }
 
@@ -81,7 +156,7 @@ impl Mesh {
             for w in 0..self.vertices.maximum_influence() {
                 let weight = vertex.weight(w);
 
-                if weight.bone >= bone_count as u16 {
+                if weight.bone >= bone_count as WeightBoneId {
                     println!(
                         "Validation Error: Found weight bone outside of skeleton: {} [{}:{}]",
                         { weight.bone },
@@ -115,6 +190,41 @@ impl Mesh {
                 { face.i3 },
                 index
             );
+        }
+
+        for (index, face) in self.faces.iter().enumerate() {
+            let degenerate = face.i1 == face.i2 || face.i1 == face.i3 || face.i2 == face.i3;
+
+            if !degenerate {
+                continue;
+            }
+
+            println!(
+                "Validate Error: Found face with degenerate tris: {}, {}, {} [{}]",
+                { face.i1 },
+                { face.i2 },
+                { face.i3 },
+                index
+            );
+        }
+
+        for blend_shape in self.blend_shapes.iter() {
+            if blend_shape.vertex_deltas.len() > self.vertices.len() {
+                println!(
+                    "Validate Error: Found invalid blend shape too much data: {:?}",
+                    blend_shape.name
+                );
+                continue;
+            }
+
+            for (index, vertex_index) in blend_shape.vertex_deltas.keys().enumerate() {
+                if *vertex_index as usize >= self.vertices.len() {
+                    println!(
+                        "Validate Error: Found invalid blend shape index: {:?} [{}:{}]",
+                        vertex_index, blend_shape.name, index
+                    );
+                }
+            }
         }
     }
 }

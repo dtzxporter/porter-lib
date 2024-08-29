@@ -20,8 +20,8 @@ macro_rules! write_face_vertex {
         let vertex = $mesh.vertices.vertex($face as usize);
         let normal = vertex.normal();
 
-        if $mesh.vertices.colors() && $mesh.vertices.uv_layers() > 0 {
-            let color = vertex.color();
+        if $mesh.vertices.colors() > 0 && $mesh.vertices.uv_layers() > 0 {
+            let color = vertex.color(0);
 
             write!(
                 $xmodel,
@@ -43,8 +43,8 @@ macro_rules! write_face_vertex {
             }
 
             writeln!($xmodel)?;
-        } else if $mesh.vertices.colors() {
-            let color = vertex.color();
+        } else if $mesh.vertices.colors() > 0 {
+            let color = vertex.color(0);
 
             writeln!(
                 $xmodel,
@@ -178,12 +178,12 @@ pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), Mo
 
     for (mesh_index, mesh) in model.meshes.iter().enumerate() {
         for face in &mesh.faces {
-            let material_index = match mesh.materials.first() {
-                Some(-1) | None => {
+            let material_index = match mesh.material {
+                Some(index) => index,
+                None => {
                     needs_default_material = true;
                     model.materials.len()
                 }
-                Some(x) => *x as usize,
             };
 
             if mesh_index > u8::MAX as usize {

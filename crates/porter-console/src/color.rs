@@ -28,9 +28,12 @@ fn color_mode() -> bool {
     static MODE: OnceLock<bool> = OnceLock::new();
 
     *MODE.get_or_init(|| {
+        // SAFETY: It's safe to pass INVALID_HANDLE_VALUE to `GetConsoleMode` which will return an error.
         let stdout = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
+        // SAFETY: Initializing CONSOLE_MODE to 0 is default value.
         let mut mode: CONSOLE_MODE = unsafe { std::mem::zeroed() };
 
+        // SAFETY: If this method fails, mode was initialized to 0, and will have the default configuration.
         unsafe { GetConsoleMode(stdout, &mut mode as *mut _) };
 
         mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING == ENABLE_VIRTUAL_TERMINAL_PROCESSING

@@ -4,6 +4,7 @@ use wgpu::*;
 use porter_gpu::gpu_instance;
 use porter_gpu::GPUInstance;
 
+use porter_math::Axis;
 use porter_math::Vector2;
 use porter_math::Vector3;
 
@@ -13,7 +14,6 @@ use porter_utils::AsThisSlice;
 use porter_texture::TextureExtensions;
 
 use crate::PreviewCamera;
-use crate::PreviewCameraUpAxis;
 use crate::PreviewKeyState;
 use crate::RenderType;
 use crate::ToRenderType;
@@ -23,8 +23,10 @@ pub struct PreviewRenderer {
     instance: &'static GPUInstance,
     wireframe: bool,
     show_bones: bool,
+    show_grid: bool,
     width: f32,
     height: f32,
+    far_clip: f32,
     output_texture: Texture,
     output_texture_view: TextureView,
     output_buffer: Buffer,
@@ -238,7 +240,7 @@ impl PreviewRenderer {
             0.5 * std::f32::consts::PI,
             0.45 * std::f32::consts::PI,
             100.0,
-            PreviewCameraUpAxis::Z,
+            Axis::Z,
         );
 
         let (grid_size, grid_render_buffer, grid_render_pipeline) =
@@ -248,8 +250,10 @@ impl PreviewRenderer {
             instance,
             wireframe: false,
             show_bones: true,
+            show_grid: true,
             width: MIN_SIZE as f32,
             height: MIN_SIZE as f32,
+            far_clip: 10000.0,
             output_texture_view: output_texture.create_view(&Default::default()),
             output_texture,
             output_buffer,
@@ -300,7 +304,8 @@ impl PreviewRenderer {
             }
         }
 
-        self.camera.update(self.instance, self.width, self.height);
+        self.camera
+            .update(self.instance, self.width, self.height, self.far_clip);
 
         self.render = Some(render);
         self.render_name = Some(name);
@@ -313,9 +318,17 @@ impl PreviewRenderer {
     }
 
     /// Resizes the renderer output.
-    pub fn resize(&mut self, width: f32, height: f32) {
-        self.width = width.max(1.0);
-        self.height = height.max(1.0);
+    pub fn resize(&mut self, width: f32, height: f32, far_clip: f32) {
+        let width = width.max(1.0);
+        let height = height.max(1.0);
+
+        if self.width == width && self.height == height && self.far_clip == far_clip {
+            return;
+        }
+
+        self.width = width;
+        self.height = height;
+        self.far_clip = far_clip;
 
         self.output_texture =
             create_output_texture(self.instance, self.width as u32, self.height as u32);
@@ -331,7 +344,8 @@ impl PreviewRenderer {
             create_msaa_texture(self.instance, self.width as u32, self.height as u32);
         self.msaa_texture_view = self.msaa_texture.create_view(&Default::default());
 
-        self.camera.update(self.instance, self.width, self.height);
+        self.camera
+            .update(self.instance, self.width, self.height, self.far_clip);
     }
 
     /// Cycles to the next material in the list.
@@ -350,7 +364,8 @@ impl PreviewRenderer {
                 self.scale as f32 / 100.0,
             )));
 
-            self.camera.update(self.instance, self.width, self.height);
+            self.camera
+                .update(self.instance, self.width, self.height, self.far_clip);
         }
     }
 
@@ -364,10 +379,16 @@ impl PreviewRenderer {
         self.show_bones = !self.show_bones;
     }
 
+    /// Toggles the grid view.
+    pub fn toggle_grid(&mut self) {
+        self.show_grid = !self.show_grid;
+    }
+
     /// Toggles the shaded view.
     pub fn toggle_shaded(&mut self) {
         self.camera.toggle_shaded();
-        self.camera.update(self.instance, self.width, self.height);
+        self.camera
+            .update(self.instance, self.width, self.height, self.far_clip);
     }
 
     /// Performs a reset operation.
@@ -379,7 +400,8 @@ impl PreviewRenderer {
                 100.0,
             );
 
-            self.camera.update(self.instance, self.width, self.height);
+            self.camera
+                .update(self.instance, self.width, self.height, self.far_clip);
         }
     }
 
@@ -392,7 +414,7 @@ impl PreviewRenderer {
                 self.scale = self.scale.wrapping_sub(3);
             }
 
-            self.scale = (self.scale as i32).min(200).max(0) as u32;
+            self.scale = (self.scale as i32).clamp(0, 200) as u32;
 
             self.camera
                 .set_orthographic_scale(self.scale as f32 / 100.0);
@@ -400,7 +422,8 @@ impl PreviewRenderer {
             self.camera.zoom(delta * 0.5);
         }
 
-        self.camera.update(self.instance, self.width, self.height);
+        self.camera
+            .update(self.instance, self.width, self.height, self.far_clip);
     }
 
     /// Performs a mouse move operation.
@@ -417,32 +440,38 @@ impl PreviewRenderer {
                 let theta = delta.x / 200.0;
 
                 self.camera.rotate(theta, phi);
-                self.camera.update(self.instance, self.width, self.height);
+                self.camera
+                    .update(self.instance, self.width, self.height, self.far_clip);
             } else if key_state.right {
                 self.camera.zoom(-(delta.x / 2.0));
-                self.camera.update(self.instance, self.width, self.height);
+                self.camera
+                    .update(self.instance, self.width, self.height, self.far_clip);
             } else if key_state.middle {
                 let x = delta.x * 0.1;
                 let y = delta.y * 0.1;
 
                 self.camera.pan(x, y);
-                self.camera.update(self.instance, self.width, self.height);
+                self.camera
+                    .update(self.instance, self.width, self.height, self.far_clip);
             }
         } else if key_state.middle && key_state.shift {
             let x = delta.x * 0.1;
             let y = delta.y * 0.1;
 
             self.camera.pan(x, y);
-            self.camera.update(self.instance, self.width, self.height);
+            self.camera
+                .update(self.instance, self.width, self.height, self.far_clip);
         } else if key_state.middle && key_state.alt {
             self.camera.zoom(-(delta.x / 2.0));
-            self.camera.update(self.instance, self.width, self.height);
+            self.camera
+                .update(self.instance, self.width, self.height, self.far_clip);
         } else if key_state.middle {
             let phi = delta.y / 200.0;
             let theta = delta.x / 200.0;
 
             self.camera.rotate(theta, phi);
-            self.camera.update(self.instance, self.width, self.height);
+            self.camera
+                .update(self.instance, self.width, self.height, self.far_clip);
         }
     }
 
@@ -538,11 +567,17 @@ impl PreviewRenderer {
 
         render_pass.set_bind_group(0, self.camera.uniform_bind_group(), &[]);
 
-        match &self.render {
-            Some(RenderType::Model(model)) => {
+        let mut draw_grid = || {
+            if self.show_grid {
                 render_pass.set_pipeline(&self.grid_render_pipeline);
                 render_pass.set_vertex_buffer(0, self.grid_render_buffer.slice(..));
                 render_pass.draw(0..self.grid_size, 0..1);
+            }
+        };
+
+        match &self.render {
+            Some(RenderType::Model(model)) => {
+                draw_grid();
 
                 model.draw(&mut render_pass, self.show_bones, self.wireframe);
             }
@@ -552,11 +587,7 @@ impl PreviewRenderer {
             Some(RenderType::Material(material)) => {
                 material.draw(&mut render_pass);
             }
-            _ => {
-                render_pass.set_pipeline(&self.grid_render_pipeline);
-                render_pass.set_vertex_buffer(0, self.grid_render_buffer.slice(..));
-                render_pass.draw(0..self.grid_size, 0..1);
-            }
+            _ => draw_grid(),
         }
 
         drop(render_pass);

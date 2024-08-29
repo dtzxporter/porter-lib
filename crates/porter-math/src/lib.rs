@@ -1,29 +1,37 @@
 #![deny(unsafe_code)]
 
 mod angles;
+mod axis;
+mod knot_vector;
 mod matrix3x3;
 mod matrix4x4;
 mod packed_10_2_vector4;
 mod packed_i8_vector4;
 mod packed_u8_vector4;
 mod quaternion;
+mod quaternion_spline;
 mod rect;
 mod rmatrix4x4;
 mod vector2;
 mod vector3;
+mod vector3_spline;
 mod vector4;
 
 pub use angles::*;
+pub use axis::*;
+pub use knot_vector::*;
 pub use matrix3x3::*;
 pub use matrix4x4::*;
 pub use packed_10_2_vector4::*;
 pub use packed_i8_vector4::*;
 pub use packed_u8_vector4::*;
 pub use quaternion::*;
+pub use quaternion_spline::*;
 pub use rect::*;
 pub use rmatrix4x4::*;
 pub use vector2::*;
 pub use vector3::*;
+pub use vector3_spline::*;
 pub use vector4::*;
 
 pub use half::f16;

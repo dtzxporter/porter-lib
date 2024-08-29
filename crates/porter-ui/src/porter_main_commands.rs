@@ -37,6 +37,7 @@ impl PorterMain {
         let settings = self.settings.clone();
 
         self.exporting = true;
+        self.export_cancel = false;
         self.export_progress = 0;
 
         porter_threads::spawn(move || {
@@ -59,6 +60,7 @@ impl PorterMain {
         let assets: Vec<usize> = self.item_selection.iter().copied().collect();
 
         self.exporting = true;
+        self.export_cancel = false;
         self.export_progress = 0;
 
         porter_threads::spawn(move || {
@@ -77,6 +79,7 @@ impl PorterMain {
         let assets: Vec<usize> = (0..self.asset_manager.len()).collect();
 
         self.exporting = true;
+        self.export_cancel = false;
         self.export_progress = 0;
 
         porter_threads::spawn(move || {
@@ -144,5 +147,26 @@ impl PorterMain {
                 }
             }
         }
+    }
+
+    pub fn get_copy_text(&mut self) -> Option<String> {
+        if self.loading || self.exporting {
+            return None;
+        }
+
+        if self.item_selection.is_empty() {
+            return None;
+        }
+
+        let buffer = self
+            .item_selection
+            .iter()
+            .copied()
+            .map(|index| self.asset_manager.asset_info(index, 1))
+            .map(|mut info| info.remove(0).0)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        Some(buffer)
     }
 }

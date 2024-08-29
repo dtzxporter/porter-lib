@@ -9,6 +9,8 @@ pub trait StructWriteExt: Write {
     fn write_struct<S: Copy + 'static>(&mut self, value: S) -> Result<(), io::Error>;
     /// Writes a byte length integer to the writer and advances the stream.
     fn write_sized_integer(&mut self, value: u64, size: usize) -> Result<(), io::Error>;
+    /// Writes a variable length integer to the writer and advances the stream.
+    fn write_var_integer(&mut self, value: u64) -> Result<(), io::Error>;
 }
 
 impl<T> StructWriteExt for T
@@ -25,6 +27,17 @@ where
         for i in 0..size {
             self.write_struct::<u8>(((value >> (i * std::mem::size_of::<u64>())) & 0xFF) as u8)?;
         }
+
+        Ok(())
+    }
+
+    fn write_var_integer(&mut self, mut value: u64) -> Result<(), io::Error> {
+        while value >= 0x80 {
+            self.write_struct((value | 0x80) as u8)?;
+            value >>= 7;
+        }
+
+        self.write_struct(value as u8)?;
 
         Ok(())
     }

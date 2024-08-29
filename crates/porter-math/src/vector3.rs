@@ -17,6 +17,7 @@ pub struct Vector3 {
 
 assert_eq_size!([u8; 0xC], Vector3);
 
+/// Utility to implement the regular op traits.
 macro_rules! impl_op_routine {
     ($structt:ty, $op:ty, $for:ty, $name:ident, $operand:tt) => {
         impl $op for $for {
@@ -48,6 +49,7 @@ macro_rules! impl_op_routine {
     };
 }
 
+/// Utility to implement the assignment op traits.
 macro_rules! impl_op_assign_routine {
     ($structt:ty, $op:ty, $for:ty, $name:ident, $operand:tt) => {
         impl $op for $for {
@@ -72,11 +74,13 @@ macro_rules! impl_op_assign_routine {
 }
 
 impl Vector3 {
+    /// Constructs a new vector with the given component values.
     #[inline]
     pub const fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
     }
 
+    /// Constructs a new vector where all components are `0.0`.
     #[inline]
     pub const fn zero() -> Self {
         Self {
@@ -86,6 +90,7 @@ impl Vector3 {
         }
     }
 
+    /// Constructs a new vector where all components are `1.0`.
     #[inline]
     pub const fn one() -> Self {
         Self {
@@ -95,6 +100,7 @@ impl Vector3 {
         }
     }
 
+    /// Swizzles the order of the vectors components.
     #[inline]
     pub fn swizzle<const X: usize, const Y: usize, const Z: usize>(&self) -> Self {
         Self {
@@ -104,16 +110,21 @@ impl Vector3 {
         }
     }
 
+    /// Calculates the length of this vector.
+    /// `sqrt(x * x + y * y + z * z)`
     #[inline]
     pub fn length(&self) -> f32 {
         self.length_squared().sqrt()
     }
 
+    /// Calculates the length squared of this vector.
+    /// `x * x + y * y + z * z`
     #[inline]
     pub fn length_squared(&self) -> f32 {
         self.x * self.x + self.y * self.y + self.z * self.z
     }
 
+    /// Normalizes the vector.
     #[inline]
     pub fn normalize(&mut self) {
         let length = self.length();
@@ -125,6 +136,7 @@ impl Vector3 {
         }
     }
 
+    /// Returns a vector that is normalized.
     #[inline]
     pub fn normalized(&self) -> Self {
         let mut normalize = *self;
@@ -132,6 +144,7 @@ impl Vector3 {
         normalize
     }
 
+    /// Calculates the cross product of the two vectors.
     #[inline]
     pub fn cross(&self, rhs: Self) -> Self {
         Self {
@@ -141,16 +154,20 @@ impl Vector3 {
         }
     }
 
+    /// Calculates the dot product of the two vectors.
+    /// `(x * rhs.x) + (y * rhs.y) + (z * rhs.z)`
     #[inline]
     pub fn dot(&self, rhs: Self) -> f32 {
         (self.x * rhs.x) + (self.y * rhs.y) + (self.z * rhs.z)
     }
 
+    /// Linearly interpolates between two vectors with the given time.
     #[inline]
     pub fn lerp(&self, rhs: Self, time: f32) -> Self {
         *self + (rhs - *self) * time
     }
 
+    /// Reverses the byte order of the vector.
     #[inline]
     pub fn swap_bytes(self) -> Self {
         Self {
@@ -160,6 +177,7 @@ impl Vector3 {
         }
     }
 
+    /// Transforms this vector with the given matrix.
     #[inline]
     pub fn transform(&self, value: &Matrix4x4) -> Self {
         Self {
@@ -175,6 +193,16 @@ impl Vector3 {
                 + (self.y * value.mat::<1, 2>())
                 + (self.z * value.mat::<2, 2>())
                 + value.mat::<3, 2>(),
+        }
+    }
+
+    /// Returns a vector with any components that are `NaN` set to `0.0`.
+    #[inline]
+    pub fn nan_to_zero(self) -> Self {
+        Self {
+            x: if self.x.is_nan() { 0.0 } else { self.x },
+            y: if self.y.is_nan() { 0.0 } else { self.y },
+            z: if self.z.is_nan() { 0.0 } else { self.z },
         }
     }
 }
@@ -211,6 +239,12 @@ impl ops::IndexMut<usize> for Vector3 {
             2 => &mut self.z,
             _ => panic!("Bad index into Vector3!"),
         }
+    }
+}
+
+impl From<[f32; 3]> for Vector3 {
+    fn from(value: [f32; 3]) -> Self {
+        Self::new(value[0], value[1], value[2])
     }
 }
 

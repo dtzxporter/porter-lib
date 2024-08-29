@@ -10,6 +10,7 @@ use iced::theme::Container;
 use iced::theme::PickList;
 use iced::theme::ProgressBar;
 use iced::theme::Scrollable;
+use iced::theme::Slider;
 use iced::theme::Text;
 use iced::theme::TextInput;
 
@@ -19,14 +20,16 @@ use iced::widget::container;
 use iced::widget::pick_list;
 use iced::widget::progress_bar;
 use iced::widget::scrollable;
+use iced::widget::slider;
 use iced::widget::text_input;
 
 use iced::overlay::menu;
 
 use iced::Background;
-use iced::BorderRadius;
+use iced::Border;
 use iced::Color;
 use iced::Font;
+use iced::Shadow;
 use iced::Theme;
 
 use crate::porter_spinner;
@@ -98,7 +101,7 @@ impl container::StyleSheet for PorterOverlayBackgroundStyle {
         container::Appearance {
             text_color: None,
             background: Some(Background::Color(Color::from_rgba8(0x11, 0x11, 0x11, 0.75))),
-            border_radius: BorderRadius::from(4.0),
+            border: Border::with_radius(4.0),
             ..Default::default()
         }
     }
@@ -106,6 +109,28 @@ impl container::StyleSheet for PorterOverlayBackgroundStyle {
 
 impl From<PorterOverlayBackgroundStyle> for Container {
     fn from(value: PorterOverlayBackgroundStyle) -> Self {
+        Self::Custom(Box::new(value))
+    }
+}
+
+/// The style for debugging.
+#[allow(unused)]
+pub struct PorterDebugBackgroundStyle;
+
+impl container::StyleSheet for PorterDebugBackgroundStyle {
+    type Style = Theme;
+
+    fn appearance(&self, _: &Self::Style) -> container::Appearance {
+        container::Appearance {
+            text_color: None,
+            background: Some(Background::Color(Color::from_rgba8(0xFF, 0x0, 0x0, 1.0))),
+            ..Default::default()
+        }
+    }
+}
+
+impl From<PorterDebugBackgroundStyle> for Container {
+    fn from(value: PorterDebugBackgroundStyle) -> Self {
         Self::Custom(Box::new(value))
     }
 }
@@ -141,9 +166,12 @@ impl button::StyleSheet for PorterButtonStyle {
         button::Appearance {
             shadow_offset: Default::default(),
             background: None,
-            border_radius: BorderRadius::from(4.0),
-            border_width: 1.5,
-            border_color: Color::from_rgba8(0x27, 0x9B, 0xD4, 0.75),
+            border: Border {
+                width: 1.0,
+                color: Color::from_rgba8(0x27, 0x9B, 0xD4, 0.75),
+                ..Border::with_radius(4.0)
+            },
+            shadow: Default::default(),
             text_color: Color::WHITE,
         }
     }
@@ -152,18 +180,16 @@ impl button::StyleSheet for PorterButtonStyle {
         let active = self.active(style);
 
         button::Appearance {
-            border_color: Color::from_rgba8(0x27, 0x9B, 0xD4, 1.0),
+            border: Border {
+                color: Color::from_rgba8(0x27, 0x9B, 0xD4, 1.0),
+                ..active.border
+            },
             ..active
         }
     }
 
     fn pressed(&self, style: &Self::Style) -> button::Appearance {
-        let hovered = self.hovered(style);
-
-        button::Appearance {
-            border_width: 1.0,
-            ..hovered
-        }
+        self.hovered(style)
     }
 
     fn disabled(&self, style: &Self::Style) -> button::Appearance {
@@ -171,7 +197,10 @@ impl button::StyleSheet for PorterButtonStyle {
 
         button::Appearance {
             text_color: Color::from_rgb8(0x2C, 0x2C, 0x2C),
-            border_color: Color::from_rgba8(0x27, 0x9B, 0xD4, 0.3),
+            border: Border {
+                color: Color::from_rgba8(0x27, 0x9B, 0xD4, 0.3),
+                ..active.border
+            },
             ..active
         }
     }
@@ -189,23 +218,50 @@ pub struct PorterScrollStyle;
 impl scrollable::StyleSheet for PorterScrollStyle {
     type Style = Theme;
 
-    fn active(&self, _: &Self::Style) -> scrollable::Scrollbar {
-        scrollable::Scrollbar {
-            background: Some(Background::Color(Color::from_rgb8(0x1C, 0x1C, 0x1C))),
-            border_radius: BorderRadius::from(0.0),
-            border_width: 1.0,
-            border_color: Color::from_rgb8(0x1C, 0x1C, 0x1C),
-            scroller: scrollable::Scroller {
-                color: Color::from_rgb8(0x2C, 0x2C, 0x2C),
-                border_radius: BorderRadius::from(2.0),
-                border_width: 1.0,
-                border_color: Color::from_rgb8(0x3C, 0x3C, 0x3C),
+    fn active(&self, _: &Self::Style) -> scrollable::Appearance {
+        scrollable::Appearance {
+            container: Default::default(),
+            scrollbar: scrollable::Scrollbar {
+                background: Some(Background::Color(Color::from_rgb8(0x1C, 0x1C, 0x1C))),
+                border: Border {
+                    width: 1.0,
+                    color: Color::from_rgb8(0x1C, 0x1C, 0x1C),
+                    ..Border::with_radius(0.0)
+                },
+                scroller: scrollable::Scroller {
+                    color: Color::from_rgb8(0x2C, 0x2C, 0x2C),
+                    border: Border {
+                        width: 1.0,
+                        color: Color::from_rgb8(0x3C, 0x3C, 0x3C),
+                        ..Border::with_radius(2.0)
+                    },
+                },
             },
+            gap: None,
         }
     }
 
-    fn hovered(&self, style: &Self::Style, _: bool) -> scrollable::Scrollbar {
+    fn hovered(&self, style: &Self::Style, _: bool) -> scrollable::Appearance {
         self.active(style)
+    }
+
+    fn disabled(&self, style: &Self::Style) -> scrollable::Appearance {
+        let active = self.active(style);
+
+        scrollable::Appearance {
+            scrollbar: scrollable::Scrollbar {
+                scroller: scrollable::Scroller {
+                    color: Color::from_rgb8(0x1C, 0x1C, 0x1C),
+                    border: Border {
+                        width: 1.0,
+                        color: Color::from_rgb8(0x2C, 0x2C, 0x2C),
+                        ..Border::with_radius(2.0)
+                    },
+                },
+                ..active.scrollbar
+            },
+            ..active
+        }
     }
 }
 
@@ -224,9 +280,11 @@ impl text_input::StyleSheet for PorterTextInputStyle {
     fn active(&self, _: &Self::Style) -> text_input::Appearance {
         text_input::Appearance {
             background: Background::Color(Color::from_rgb8(0x11, 0x11, 0x11)),
-            border_radius: BorderRadius::from(4.0),
-            border_width: 1.5,
-            border_color: Color::from_rgba8(0x27, 0x9B, 0xD4, 0.75),
+            border: Border {
+                width: 1.0,
+                color: Color::from_rgba8(0x27, 0x9B, 0xD4, 0.75),
+                ..Border::with_radius(4.0)
+            },
             icon_color: Color::TRANSPARENT,
         }
     }
@@ -235,7 +293,10 @@ impl text_input::StyleSheet for PorterTextInputStyle {
         let active = self.active(style);
 
         text_input::Appearance {
-            border_color: Color::from_rgba8(0x27, 0x9B, 0xD4, 1.0),
+            border: Border {
+                color: Color::from_rgba8(0x27, 0x9B, 0xD4, 1.0),
+                ..active.border
+            },
             ..active
         }
     }
@@ -260,7 +321,10 @@ impl text_input::StyleSheet for PorterTextInputStyle {
         let active = self.active(style);
 
         text_input::Appearance {
-            border_color: Color::from_rgba8(0x27, 0x9B, 0xD4, 0.3),
+            border: Border {
+                color: Color::from_rgba8(0x27, 0x9B, 0xD4, 0.3),
+                ..active.border
+            },
             ..active
         }
     }
@@ -278,6 +342,24 @@ pub struct PorterLabelStyle;
 impl From<PorterLabelStyle> for Text {
     fn from(_: PorterLabelStyle) -> Self {
         Self::Color(Color::from_rgb8(0xC1, 0xC1, 0xC1))
+    }
+}
+
+/// The style for warning.
+pub struct PorterLabelWarningStyle;
+
+impl From<PorterLabelWarningStyle> for Text {
+    fn from(_: PorterLabelWarningStyle) -> Self {
+        Self::Color(Color::from_rgb8(0xD4, 0xAF, 0x37))
+    }
+}
+
+/// The style for success.
+pub struct PorterLabelSuccessStyle;
+
+impl From<PorterLabelSuccessStyle> for Text {
+    fn from(_: PorterLabelSuccessStyle) -> Self {
+        Self::Color(Color::from_rgb8(35, 206, 107))
     }
 }
 
@@ -305,9 +387,12 @@ impl container::StyleSheet for PorterPreviewStyle {
         container::Appearance {
             text_color: None,
             background: Some(Background::Color(Color::from_rgb8(0x1F, 0x1F, 0x1F))),
-            border_radius: BorderRadius::from([4.0, 4.0, 0.0, 0.0]),
-            border_width: 1.0,
-            border_color: Color::from_rgb8(0x1F, 0x1F, 0x1F),
+            border: Border {
+                width: 1.0,
+                color: Color::from_rgb8(0x1F, 0x1F, 0x1F),
+                ..Border::with_radius([4.0, 4.0, 0.0, 0.0])
+            },
+            shadow: Default::default(),
         }
     }
 }
@@ -328,9 +413,12 @@ impl button::StyleSheet for PorterPreviewButtonStyle {
         button::Appearance {
             shadow_offset: Default::default(),
             background: None,
-            border_radius: BorderRadius::from(0.0),
-            border_width: 0.0,
-            border_color: Color::TRANSPARENT,
+            border: Border {
+                width: 0.0,
+                color: Color::TRANSPARENT,
+                ..Border::with_radius(0.0)
+            },
+            shadow: Default::default(),
             text_color: Color::from_rgb8(0xC1, 0xC1, 0xC1),
         }
     }
@@ -361,9 +449,12 @@ impl container::StyleSheet for PorterColumnHeader {
         container::Appearance {
             text_color: None,
             background: Some(Background::Color(Color::from_rgb8(0x1F, 0x1F, 0x1F))),
-            border_radius: BorderRadius::from([4.0, 4.0, 0.0, 0.0]),
-            border_width: 1.0,
-            border_color: Color::from_rgb8(0x1F, 0x1F, 0x1F),
+            border: Border {
+                width: 1.0,
+                color: Color::from_rgb8(0x1F, 0x1F, 0x1F),
+                ..Border::with_radius([4.0, 4.0, 0.0, 0.0])
+            },
+            shadow: Default::default(),
         }
     }
 }
@@ -384,7 +475,7 @@ impl progress_bar::StyleSheet for PorterProgressStyle {
         progress_bar::Appearance {
             background: Background::Color(Color::from_rgb8(0x1C, 0x1C, 0x1C)),
             bar: Background::Color(Color::from_rgb8(0x27, 0x9B, 0xD4)),
-            border_radius: BorderRadius::from(4.0),
+            border_radius: Border::with_radius(4.0).radius,
         }
     }
 }
@@ -405,9 +496,12 @@ impl container::StyleSheet for PorterSwitchButtonBackgroundStyle {
         container::Appearance {
             text_color: None,
             background: None,
-            border_radius: BorderRadius::from(4.0),
-            border_width: 1.5,
-            border_color: Color::from_rgba8(0x27, 0x9B, 0xD4, 0.75),
+            border: Border {
+                width: 1.0,
+                color: Color::from_rgba8(0x27, 0x9B, 0xD4, 0.75),
+                ..Border::with_radius(4.0)
+            },
+            shadow: Default::default(),
         }
     }
 }
@@ -432,9 +526,12 @@ impl button::StyleSheet for PorterSwitchButtonStyle {
             } else {
                 None
             },
-            border_radius: BorderRadius::from(2.0),
-            border_width: 0.0,
-            border_color: Color::TRANSPARENT,
+            border: Border {
+                width: 0.0,
+                color: Color::TRANSPARENT,
+                ..Border::with_radius(2.0)
+            },
+            shadow: Default::default(),
             text_color: Color::WHITE,
         }
     }
@@ -456,9 +553,11 @@ impl checkbox::StyleSheet for PorterCheckboxStyle {
         checkbox::Appearance {
             background: Background::Color(Color::from_rgba8(0x27, 0x9B, 0xD4, 0.75)),
             icon_color: Color::WHITE,
-            border_radius: BorderRadius::from(4.0),
-            border_width: 1.0,
-            border_color: Color::from_rgba8(0x27, 0x9B, 0xD4, 0.5),
+            border: Border {
+                width: 1.0,
+                color: Color::from_rgba8(0x27, 0x9B, 0xD4, 0.5),
+                ..Border::with_radius(4.0)
+            },
             text_color: Some(Color::WHITE),
         }
     }
@@ -468,6 +567,19 @@ impl checkbox::StyleSheet for PorterCheckboxStyle {
 
         checkbox::Appearance {
             background: Background::Color(Color::from_rgb8(0x27, 0x9B, 0xD4)),
+            ..active
+        }
+    }
+
+    fn disabled(&self, style: &Self::Style, is_checked: bool) -> checkbox::Appearance {
+        let active = self.active(style, is_checked);
+
+        checkbox::Appearance {
+            text_color: Some(Color::from_rgb8(0x2C, 0x2C, 0x2C)),
+            border: Border {
+                color: Color::from_rgba8(0x27, 0x9B, 0xD4, 0.3),
+                ..active.border
+            },
             ..active
         }
     }
@@ -491,9 +603,11 @@ impl pick_list::StyleSheet for PorterPickListStyle {
             placeholder_color: Color::WHITE,
             handle_color: Color::from_rgb8(0x27, 0x9B, 0xD4),
             background: Background::Color(Color::from_rgb8(0x11, 0x11, 0x11)),
-            border_radius: BorderRadius::from(4.0),
-            border_width: 1.0,
-            border_color: Color::from_rgba8(0x27, 0x9B, 0xD4, 0.75),
+            border: Border {
+                width: 1.0,
+                color: Color::from_rgba8(0x27, 0x9B, 0xD4, 0.75),
+                ..Border::with_radius(4.0)
+            },
         }
     }
 
@@ -501,7 +615,10 @@ impl pick_list::StyleSheet for PorterPickListStyle {
         let active = self.active(style);
 
         pick_list::Appearance {
-            border_color: Color::from_rgba8(0x27, 0x9B, 0xD4, 1.0),
+            border: Border {
+                color: Color::from_rgba8(0x27, 0x9B, 0xD4, 1.0),
+                ..active.border
+            },
             ..active
         }
     }
@@ -514,9 +631,11 @@ impl menu::StyleSheet for PorterPickListStyle {
         menu::Appearance {
             text_color: Color::from_rgb8(0xC1, 0xC1, 0xC1),
             background: Background::Color(Color::from_rgb8(0x1C, 0x1C, 0x1C)),
-            border_width: 1.0,
-            border_radius: BorderRadius::from(4.0),
-            border_color: Color::from_rgb8(0x27, 0x9B, 0xD4),
+            border: Border {
+                width: 1.0,
+                color: Color::from_rgb8(0x27, 0x9B, 0xD4),
+                ..Border::with_radius(4.0)
+            },
             selected_text_color: Color::WHITE,
             selected_background: Background::Color(Color::from_rgb8(0x27, 0x9B, 0xD4)),
         }
@@ -541,9 +660,12 @@ impl container::StyleSheet for PorterDividerStyle {
         container::Appearance {
             text_color: None,
             background: Some(Background::Color(Color::from_rgb8(0x11, 0x11, 0x11))),
-            border_radius: BorderRadius::from(4.0),
-            border_width: 1.0,
-            border_color: Color::TRANSPARENT,
+            border: Border {
+                width: 2.0,
+                color: Color::from_rgb8(0x11, 0x11, 0x11),
+                ..Border::with_radius(4.0)
+            },
+            shadow: Shadow::default(),
         }
     }
 }
@@ -554,6 +676,7 @@ impl From<PorterDividerStyle> for Container {
     }
 }
 
+/// The style for the loading spinner.
 pub struct PorterSpinnerStyle;
 
 impl porter_spinner::StyleSheet for PorterSpinnerStyle {
@@ -571,5 +694,136 @@ impl porter_spinner::StyleSheet for PorterSpinnerStyle {
 impl From<PorterSpinnerStyle> for porter_spinner::Appearance {
     fn from(value: PorterSpinnerStyle) -> Self {
         value.appearance(&())
+    }
+}
+
+/// The style for the left hand side of the splash screen.
+pub struct PorterSplashLeftStyle;
+
+impl container::StyleSheet for PorterSplashLeftStyle {
+    type Style = Theme;
+
+    fn appearance(&self, _: &Self::Style) -> container::Appearance {
+        container::Appearance {
+            text_color: Some(Color::WHITE),
+            background: Some(Background::Color(Color::from_rgb8(0x1C, 0x1C, 0x1C))),
+            ..Default::default()
+        }
+    }
+}
+
+impl From<PorterSplashLeftStyle> for Container {
+    fn from(value: PorterSplashLeftStyle) -> Self {
+        Self::Custom(Box::new(value))
+    }
+}
+
+/// The style for the background of the splash screen.
+pub struct PorterSplashBackgroundStyle;
+
+impl container::StyleSheet for PorterSplashBackgroundStyle {
+    type Style = Theme;
+
+    fn appearance(&self, _: &Self::Style) -> container::Appearance {
+        container::Appearance {
+            text_color: None,
+            border: Border {
+                color: Color::from_rgb8(0x27, 0x9B, 0xD4),
+                width: 1.0,
+                ..Default::default()
+            },
+            background: Some(Background::Color(Color::from_rgb8(0x11, 0x11, 0x11))),
+            ..Default::default()
+        }
+    }
+}
+
+impl From<PorterSplashBackgroundStyle> for Container {
+    fn from(value: PorterSplashBackgroundStyle) -> Self {
+        Self::Custom(Box::new(value))
+    }
+}
+
+/// The style for a link.
+pub struct PorterLinkStyle;
+
+impl button::StyleSheet for PorterLinkStyle {
+    type Style = Theme;
+
+    fn active(&self, _: &Self::Style) -> button::Appearance {
+        button::Appearance {
+            text_color: Color::from_rgb8(0x27, 0x9B, 0xD4),
+            background: None,
+            ..Default::default()
+        }
+    }
+
+    fn hovered(&self, _: &Self::Style) -> button::Appearance {
+        button::Appearance {
+            text_color: Color::from_rgb8(0x3A, 0xB4, 0xE8),
+            background: None,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<PorterLinkStyle> for Button {
+    fn from(value: PorterLinkStyle) -> Self {
+        Self::Custom(Box::new(value))
+    }
+}
+
+/// The style for a slider.
+pub struct PorterSliderStyle;
+
+impl slider::StyleSheet for PorterSliderStyle {
+    type Style = Theme;
+
+    fn active(&self, _: &Self::Style) -> slider::Appearance {
+        let handle = slider::Handle {
+            shape: slider::HandleShape::Rectangle {
+                width: 8,
+                border_radius: 4.0.into(),
+            },
+            color: Color::WHITE,
+            border_color: Color::WHITE,
+            border_width: 1.0,
+        };
+
+        slider::Appearance {
+            rail: slider::Rail {
+                colors: (Color::from_rgba8(0x27, 0x9B, 0xD4, 0.75), Color::WHITE),
+                width: 4.0,
+                border_radius: 2.0.into(),
+            },
+            handle: slider::Handle {
+                color: Color::from_rgb8(0x27, 0x9B, 0xD4),
+                border_color: Color::from_rgb8(0x27, 0x9B, 0xD4),
+                ..handle
+            },
+        }
+    }
+
+    fn hovered(&self, style: &Self::Style) -> slider::Appearance {
+        let active = self.active(style);
+
+        slider::Appearance {
+            handle: slider::Handle {
+                color: Color::from_rgb8(0x34, 0xA8, 0xE8),
+                border_color: Color::from_rgb8(0x34, 0xA8, 0xE8),
+                ..active.handle
+            },
+            ..active
+        }
+    }
+
+    fn dragging(&self, style: &Self::Style) -> slider::Appearance {
+        self.hovered(style)
+    }
+}
+
+impl From<PorterSliderStyle> for Slider {
+    fn from(value: PorterSliderStyle) -> Self {
+        Self::Custom(Box::new(value))
     }
 }

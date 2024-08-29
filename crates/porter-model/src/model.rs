@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use std::path::Path;
 
+use porter_math::Axis;
 use porter_math::Matrix4x4;
 use porter_math::Vector3;
 
@@ -10,7 +11,6 @@ use crate::model_file_type_cast;
 use crate::model_file_type_fbx;
 use crate::model_file_type_maya;
 use crate::model_file_type_obj;
-use crate::model_file_type_semodel;
 use crate::model_file_type_smd;
 use crate::model_file_type_xmodel_export;
 use crate::model_file_type_xna_lara;
@@ -27,18 +27,19 @@ use crate::ModelError;
 use crate::ModelFileType;
 use crate::Skeleton;
 use crate::VertexBuffer;
+use crate::WeightBoneId;
 
 /// A 3d model, with optional skeleton and materials.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Model {
     /// The 3d skeleton for this model which can be empty.
     pub skeleton: Skeleton,
     /// The 3d meshes for this model which can be empty.
     pub meshes: Vec<Mesh>,
-    /// A collection of blend shapes that go with this models meshes.
-    pub blend_shapes: Vec<BlendShape>,
     /// A collection of materials for this model.
     pub materials: Vec<Material>,
+    /// The up axis for this model.
+    pub up_axis: Axis,
 }
 
 impl Model {
@@ -47,8 +48,8 @@ impl Model {
         Self {
             skeleton: Skeleton::new(),
             meshes: Vec::new(),
-            blend_shapes: Vec::new(),
             materials: Vec::new(),
+            up_axis: Axis::Z,
         }
     }
 
@@ -57,8 +58,8 @@ impl Model {
         Self {
             skeleton: Skeleton::with_capacity(bones),
             meshes: Vec::with_capacity(meshes),
-            blend_shapes: Vec::new(),
             materials: Vec::new(),
+            up_axis: Axis::Z,
         }
     }
 
@@ -78,10 +79,6 @@ impl Model {
             mesh.scale(factor);
         }
 
-        for blend_shape in &mut self.blend_shapes {
-            blend_shape.scale(factor);
-        }
-
         self.skeleton.scale(factor);
     }
 
@@ -94,11 +91,20 @@ impl Model {
         self.skeleton.transform(matrix);
     }
 
-    /// Remaps the model's meshes by their materials and faces.
-    ///
-    /// Note: This will reset the models blend shapes to ensure that they do not cause problems with the new meshes.
+    /// Applies a different bind pose to the model meshes.
+    pub fn apply_bind_pose(&mut self, inv_bind_poses: &BTreeMap<WeightBoneId, Matrix4x4>) {
+        for mesh in &mut self.meshes {
+            mesh.apply_bind_pose(&self.skeleton, inv_bind_poses);
+        }
+    }
+
+    /// Remaps the model's meshes by their materials and vertices.
     pub fn remap_meshes_by_vertices<R: AsRef<[MaterialRemapVertices]>>(&mut self, remaps: R) {
         let remaps = remaps.as_ref();
+
+        if remaps.is_empty() {
+            return;
+        }
 
         #[allow(clippy::type_complexity)]
         let mut remaps_per_material: HashMap<String, BTreeMap<usize, Vec<(usize, usize)>>> =
@@ -115,58 +121,83 @@ impl Model {
 
         let old_meshes = std::mem::take(&mut self.meshes);
 
-        let mut new_meshes: HashMap<(String, bool, usize, usize), Mesh> =
-            HashMap::with_capacity(remaps_per_material.len());
+        #[allow(clippy::type_complexity)]
+        let mut new_meshes: HashMap<
+            (String, usize, usize, usize),
+            (Mesh, HashMap<String, BlendShape>),
+        > = HashMap::with_capacity(remaps_per_material.len());
 
         for (material, opcodes) in remaps_per_material {
-            let material_index = if let Some(index) = self
+            let material_index = self
                 .materials
                 .iter()
-                .position(|x| x.source_name == material)
-            {
-                index as isize
-            } else {
-                -1
-            };
+                .position(|x| x.source_name == material);
 
             for (mesh, verts) in opcodes {
                 let old_mesh = &old_meshes[mesh];
 
-                let new_mesh = new_meshes
+                let (new_mesh, new_shapes) = new_meshes
                     .entry((
                         material.clone(),
                         old_mesh.vertices.colors(),
                         old_mesh.vertices.uv_layers(),
                         old_mesh.vertices.maximum_influence(),
                     ))
-                    .or_insert(
-                        Mesh::new(
+                    .or_insert_with(|| {
+                        let mesh = Mesh::with_skinning_method(
                             FaceBuffer::new(),
                             VertexBuffer::builder()
                                 .colors(old_mesh.vertices.colors())
                                 .uv_layers(old_mesh.vertices.uv_layers())
                                 .maximum_influence(old_mesh.vertices.maximum_influence())
                                 .build(),
+                            old_mesh.skinning_method,
                         )
-                        .name(old_mesh.name.clone()),
-                    );
+                        .name(old_mesh.name.clone());
 
-                if new_mesh.materials.is_empty() {
-                    new_mesh.materials.push(material_index);
-                }
+                        let mut blend_shapes = HashMap::with_capacity(old_mesh.blend_shapes.len());
+
+                        for blend_shape in &old_mesh.blend_shapes {
+                            blend_shapes.insert(
+                                blend_shape.name.clone(),
+                                BlendShape::new(blend_shape.name.clone())
+                                    .target_scale(blend_shape.target_scale),
+                            );
+                        }
+
+                        (mesh, blend_shapes)
+                    });
+
+                new_mesh.material = material_index;
 
                 let mut vertex_remap: BTreeMap<u32, u32> = BTreeMap::new();
                 let mut vertices: u32 = new_mesh.vertices.len() as u32;
 
+                let mut remap_index = |index: u32, vertex_remap: &mut BTreeMap<u32, u32>| {
+                    vertex_remap.insert(index, vertices);
+
+                    new_mesh
+                        .vertices
+                        .create()
+                        .copy_from(&old_mesh.vertices.vertex(index as usize));
+
+                    for blend_shape in &old_mesh.blend_shapes {
+                        if let Some(delta) = blend_shape.vertex_deltas.get(&index) {
+                            new_shapes
+                                .get_mut(&blend_shape.name)
+                                .expect("Blend shape must exist!")
+                                .vertex_deltas
+                                .insert(vertices, *delta);
+                        }
+                    }
+
+                    vertices += 1;
+                    vertices - 1
+                };
+
                 for (vertex_start, vertex_len) in verts {
                     for v in vertex_start..vertex_start + vertex_len {
-                        let old_vertex = old_mesh.vertices.vertex(v);
-
-                        new_mesh.vertices.create().copy_from(&old_vertex);
-
-                        vertex_remap.insert(v as u32, vertices);
-
-                        vertices += 1;
+                        remap_index(v as u32, &mut vertex_remap);
                     }
                 }
 
@@ -181,47 +212,17 @@ impl Model {
 
                     let i1 = match i1 {
                         Some(i1) => i1,
-                        None => {
-                            let old_vertex = old_mesh.vertices.vertex(face.i1 as usize);
-
-                            new_mesh.vertices.create().copy_from(&old_vertex);
-
-                            vertex_remap.insert(face.i1, vertices);
-
-                            vertices += 1;
-
-                            vertices - 1
-                        }
+                        None => remap_index(face.i1, &mut vertex_remap),
                     };
 
                     let i2 = match i2 {
                         Some(i2) => i2,
-                        None => {
-                            let old_vertex = old_mesh.vertices.vertex(face.i2 as usize);
-
-                            new_mesh.vertices.create().copy_from(&old_vertex);
-
-                            vertex_remap.insert(face.i2, vertices);
-
-                            vertices += 1;
-
-                            vertices - 1
-                        }
+                        None => remap_index(face.i2, &mut vertex_remap),
                     };
 
                     let i3 = match i3 {
                         Some(i3) => i3,
-                        None => {
-                            let old_vertex = old_mesh.vertices.vertex(face.i3 as usize);
-
-                            new_mesh.vertices.create().copy_from(&old_vertex);
-
-                            vertex_remap.insert(face.i3, vertices);
-
-                            vertices += 1;
-
-                            vertices - 1
-                        }
+                        None => remap_index(face.i3, &mut vertex_remap),
                     };
 
                     new_mesh.faces.push(Face::new(i1, i2, i3));
@@ -229,18 +230,24 @@ impl Model {
             }
         }
 
-        for mesh in new_meshes.into_values() {
+        for (mut mesh, blend_shapes) in new_meshes.into_values() {
+            for blend_shape in blend_shapes.into_values() {
+                if !blend_shape.vertex_deltas.is_empty() {
+                    mesh.blend_shapes.push(blend_shape);
+                }
+            }
+
             self.meshes.push(mesh);
         }
-
-        self.blend_shapes.clear();
     }
 
     /// Remaps the model's meshes by their materials and faces.
-    ///
-    /// Note: This will reset the models blend shapes to ensure that they do not cause problems with the new meshes.
     pub fn remap_meshes_by_faces<R: AsRef<[MaterialRemapFaces]>>(&mut self, remaps: R) {
         let remaps = remaps.as_ref();
+
+        if remaps.is_empty() {
+            return;
+        }
 
         #[allow(clippy::type_complexity)]
         let mut remaps_per_material: HashMap<String, BTreeMap<usize, Vec<(usize, usize)>>> =
@@ -257,45 +264,54 @@ impl Model {
 
         let old_meshes = std::mem::take(&mut self.meshes);
 
-        let mut new_meshes: HashMap<(String, bool, usize, usize), Mesh> =
-            HashMap::with_capacity(remaps_per_material.len());
+        #[allow(clippy::type_complexity)]
+        let mut new_meshes: HashMap<
+            (String, usize, usize, usize),
+            (Mesh, HashMap<String, BlendShape>),
+        > = HashMap::with_capacity(remaps_per_material.len());
 
         for (material, opcodes) in remaps_per_material {
-            let material_index = if let Some(index) = self
+            let material_index = self
                 .materials
                 .iter()
-                .position(|x| x.source_name == material)
-            {
-                index as isize
-            } else {
-                -1
-            };
+                .position(|x| x.source_name == material);
 
             for (mesh, faces) in opcodes {
                 let old_mesh = &old_meshes[mesh];
 
-                let new_mesh = new_meshes
+                let (new_mesh, new_shapes) = new_meshes
                     .entry((
                         material.clone(),
                         old_mesh.vertices.colors(),
                         old_mesh.vertices.uv_layers(),
                         old_mesh.vertices.maximum_influence(),
                     ))
-                    .or_insert(
-                        Mesh::new(
+                    .or_insert_with(|| {
+                        let mesh = Mesh::with_skinning_method(
                             FaceBuffer::new(),
                             VertexBuffer::builder()
                                 .colors(old_mesh.vertices.colors())
                                 .uv_layers(old_mesh.vertices.uv_layers())
                                 .maximum_influence(old_mesh.vertices.maximum_influence())
                                 .build(),
+                            old_mesh.skinning_method,
                         )
-                        .name(old_mesh.name.clone()),
-                    );
+                        .name(old_mesh.name.clone());
 
-                if new_mesh.materials.is_empty() {
-                    new_mesh.materials.push(material_index);
-                }
+                        let mut blend_shapes = HashMap::with_capacity(old_mesh.blend_shapes.len());
+
+                        for blend_shape in &old_mesh.blend_shapes {
+                            blend_shapes.insert(
+                                blend_shape.name.clone(),
+                                BlendShape::new(blend_shape.name.clone())
+                                    .target_scale(blend_shape.target_scale),
+                            );
+                        }
+
+                        (mesh, blend_shapes)
+                    });
+
+                new_mesh.material = material_index;
 
                 let mut vertex_remap: BTreeMap<u32, u32> = BTreeMap::new();
                 let mut vertices: u32 = new_mesh.vertices.len() as u32;
@@ -310,9 +326,20 @@ impl Model {
                             } else {
                                 vertex_remap.insert(index, vertices);
 
-                                let old_vertex = old_mesh.vertices.vertex(index as usize);
+                                new_mesh
+                                    .vertices
+                                    .create()
+                                    .copy_from(&old_mesh.vertices.vertex(index as usize));
 
-                                new_mesh.vertices.create().copy_from(&old_vertex);
+                                for blend_shape in &old_mesh.blend_shapes {
+                                    if let Some(delta) = blend_shape.vertex_deltas.get(&index) {
+                                        new_shapes
+                                            .get_mut(&blend_shape.name)
+                                            .expect("Blend shape must exist!")
+                                            .vertex_deltas
+                                            .insert(vertices, *delta);
+                                    }
+                                }
 
                                 vertices += 1;
                                 vertices - 1
@@ -329,11 +356,15 @@ impl Model {
             }
         }
 
-        for mesh in new_meshes.into_values() {
+        for (mut mesh, blend_shapes) in new_meshes.into_values() {
+            for blend_shape in blend_shapes.into_values() {
+                if !blend_shape.vertex_deltas.is_empty() {
+                    mesh.blend_shapes.push(blend_shape);
+                }
+            }
+
             self.meshes.push(mesh);
         }
-
-        self.blend_shapes.clear();
     }
 
     /// Gets the base texture for each material in this model.
@@ -392,7 +423,6 @@ impl Model {
             ModelFileType::Cast => model_file_type_cast::to_cast(path, self),
             ModelFileType::Fbx => model_file_type_fbx::to_fbx(path, self),
             ModelFileType::Maya => model_file_type_maya::to_maya(path, self),
-            ModelFileType::SEModel => model_file_type_semodel::to_semodel(path, self),
         }
     }
 
@@ -404,5 +434,11 @@ impl Model {
         for mesh in &self.meshes {
             mesh.validate(self.skeleton.bones.len());
         }
+    }
+}
+
+impl Default for Model {
+    fn default() -> Self {
+        Self::new()
     }
 }

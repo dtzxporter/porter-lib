@@ -20,6 +20,7 @@ pub struct Matrix3x3 {
 assert_eq_size!([u8; 36], Matrix3x3);
 
 impl Matrix3x3 {
+    /// Constructs a new identity matrix.
     #[inline]
     pub const fn new() -> Self {
         let mut data: [f32; 9] = [0.0; 9];
@@ -39,11 +40,13 @@ impl Matrix3x3 {
         Self { data }
     }
 
+    /// Creates a new rotation matrix.
     #[inline]
     pub fn create_rotation(rotation: Quaternion) -> Matrix3x3 {
         rotation.to_3x3()
     }
 
+    /// Creates a new scale matrix.
     #[inline]
     pub fn create_scale(scale: Vector3) -> Matrix3x3 {
         let mut result = Matrix3x3::new();
@@ -55,16 +58,21 @@ impl Matrix3x3 {
         result
     }
 
+    /// Access a single matrix value.
+    /// `m[X][Y]`
     #[inline]
     pub fn mat<const X: usize, const Y: usize>(&self) -> f32 {
         self.data[X * 3 + Y]
     }
 
+    /// Mutably access a single matrix value.
+    /// `m[X][Y]`
     #[inline]
     pub fn mat_mut<const X: usize, const Y: usize>(&mut self) -> &mut f32 {
         &mut self.data[X * 3 + Y]
     }
 
+    /// Returns the rotation of this matrix.
     #[inline]
     pub fn rotation(&self) -> Quaternion {
         let trace = self.mat::<0, 0>() + self.mat::<1, 1>() + self.mat::<2, 2>();
@@ -114,6 +122,7 @@ impl Matrix3x3 {
         }
     }
 
+    /// Returns the scale of this matrix.
     #[inline]
     pub fn scale(&self) -> Vector3 {
         let x = Vector3::new(self.mat::<0, 0>(), self.mat::<0, 1>(), self.mat::<0, 2>());
@@ -123,6 +132,7 @@ impl Matrix3x3 {
         Vector3::new(x.length(), y.length(), z.length())
     }
 
+    /// Returns the rotation of this matrix as euler angles.
     #[inline]
     pub fn euler_angles(&self, measurment: Angles) -> Vector3 {
         let square_sum = (self.mat::<0, 0>() * self.mat::<0, 0>()
@@ -154,9 +164,10 @@ impl Matrix3x3 {
         }
     }
 
+    /// Reverses the byte order of the matrix.
     #[inline]
     #[unroll::unroll_for_loops]
-    pub fn swap_bytes(&self) -> Matrix3x3 {
+    pub fn swap_bytes(self) -> Matrix3x3 {
         let mut result = Matrix3x3::new();
 
         for i in 0..9 {
@@ -166,6 +177,17 @@ impl Matrix3x3 {
         result
     }
 
+    /// Swaps the handedness of this matrix.
+    #[inline]
+    pub fn swap_handedness(self) -> Self {
+        let rot = self.rotation();
+        let sca = self.scale();
+
+        Self::create_rotation(Quaternion::new(-rot.z, rot.x, -rot.y, rot.w))
+            * Self::create_scale(Vector3::new(sca.z, sca.x, sca.y))
+    }
+
+    /// Returns the transpose of this matrix.
     #[inline]
     #[unroll::unroll_for_loops]
     pub fn transpose(&self) -> Matrix3x3 {
@@ -180,6 +202,7 @@ impl Matrix3x3 {
         result
     }
 
+    /// Converts this rotation matrix to a matrix.
     #[inline]
     pub fn to_4x4(self) -> Matrix4x4 {
         let mut result = Matrix4x4::new();
@@ -218,6 +241,12 @@ impl Default for Matrix3x3 {
     #[inline]
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl From<[f32; 9]> for Matrix3x3 {
+    fn from(value: [f32; 9]) -> Self {
+        Self { data: value }
     }
 }
 

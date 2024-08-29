@@ -54,17 +54,18 @@ impl Skeleton {
                 );
 
                 self.bones[i].local_rotation = Some(
-                    self.bones[!self.bones[i].parent as usize]
+                    !self.bones[self.bones[i].parent as usize]
                         .world_rotation
                         .unwrap_or_default()
                         * self.bones[i].world_rotation.unwrap_or_default(),
                 );
 
                 self.bones[i].local_scale = Some(
-                    self.bones[!self.bones[i].parent as usize]
-                        .world_scale
-                        .unwrap_or(Vector3::one())
-                        * self.bones[i].local_scale.unwrap_or(Vector3::one()),
+                    (self.bones[i].world_scale.unwrap_or(Vector3::one())
+                        / self.bones[self.bones[i].parent as usize]
+                            .world_scale
+                            .unwrap_or(Vector3::one()))
+                    .nan_to_zero(),
                 );
             } else {
                 self.bones[i].local_position = self.bones[i].world_position;

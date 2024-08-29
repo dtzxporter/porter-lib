@@ -31,11 +31,13 @@ impl RenderMesh {
         material_textures: &[Arc<RenderMaterialTexture>],
     ) -> Self {
         let stride = (std::mem::size_of::<Vector3>() * 2) + std::mem::size_of::<Vector2>();
+        let mesh_stride = mesh.vertices.stride();
+        let min_stride = stride.min(mesh_stride);
+
         let slice = mesh.vertices.as_slice();
 
-        let material_texture = match mesh.materials.first() {
-            Some(-1) => material_textures[material_textures.len() - 1].clone(),
-            Some(index) => material_textures[*index as usize].clone(),
+        let material_texture = match mesh.material {
+            Some(index) => material_textures[index].clone(),
             None => material_textures[material_textures.len() - 1].clone(),
         };
 
@@ -43,8 +45,8 @@ impl RenderMesh {
         let mut offset = 0;
 
         for chunk in vertex_buffer.chunks_exact_mut(stride) {
-            chunk.copy_from_slice(&slice[offset..offset + stride]);
-            offset += mesh.vertices.stride();
+            chunk[..min_stride].copy_from_slice(&slice[offset..offset + min_stride]);
+            offset += mesh_stride;
         }
 
         let vertex_buffer = instance

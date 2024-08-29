@@ -43,7 +43,7 @@ bitflags! {
         const EXPORT_SMD = 1 << 1;
         const EXPORT_XNA_LARA = 1 << 2;
         const EXPORT_XMODEL_EXPORT = 1 << 3;
-        const EXPORT_SEMODEL = 1 << 4;
+        const EXPORT_SEMODEL_REMOVED = 1 << 4;
         const EXPORT_CAST = 1 << 5;
         const EXPORT_MAYA = 1 << 6;
         const EXPORT_FBX = 1 << 7;
@@ -52,15 +52,14 @@ bitflags! {
 
 bitflags! {
     impl PorterAnimSettings: u32 {
-        const EXPORT_SEANIM = 1 << 0;
+        const EXPORT_SEANIM_REMOVED = 1 << 0;
         const EXPORT_CAST = 1 << 1;
     }
 }
 
 bitflags! {
     impl PorterAudioSettings: u32 {
-        const EXPORT_WAV_16PCM = 1 << 0;
-        const EXPORT_WAV_FLOAT = 1 << 1;
+        const EXPORT_WAV = 1 << 0;
         const EXPORT_FLAC = 1 << 2;
     }
 }
@@ -92,6 +91,7 @@ pub struct PorterSettings {
     preview_controls: PreviewControlScheme,
     preview_overlay: bool,
     auto_scale: bool,
+    far_clip: u32,
 }
 
 impl PorterSettings {
@@ -274,13 +274,6 @@ impl PorterSettings {
 
         if self
             .model_settings
-            .contains(PorterModelSettings::EXPORT_SEMODEL)
-        {
-            result.push(ModelFileType::SEModel);
-        }
-
-        if self
-            .model_settings
             .contains(PorterModelSettings::EXPORT_CAST)
         {
             result.push(ModelFileType::Cast);
@@ -310,7 +303,6 @@ impl PorterSettings {
             ModelFileType::Smd => PorterModelSettings::EXPORT_SMD,
             ModelFileType::XnaLara => PorterModelSettings::EXPORT_XNA_LARA,
             ModelFileType::XModelExport => PorterModelSettings::EXPORT_XMODEL_EXPORT,
-            ModelFileType::SEModel => PorterModelSettings::EXPORT_SEMODEL,
             ModelFileType::Cast => PorterModelSettings::EXPORT_CAST,
             ModelFileType::Maya => PorterModelSettings::EXPORT_MAYA,
             ModelFileType::Fbx => PorterModelSettings::EXPORT_FBX,
@@ -321,14 +313,7 @@ impl PorterSettings {
 
     /// The animation file types to export to.
     pub fn anim_file_types(&self) -> Vec<AnimationFileType> {
-        let mut result = Vec::with_capacity(2);
-
-        if self
-            .anim_settings
-            .contains(PorterAnimSettings::EXPORT_SEANIM)
-        {
-            result.push(AnimationFileType::SEAnim);
-        }
+        let mut result = Vec::with_capacity(1);
 
         if self.anim_settings.contains(PorterAnimSettings::EXPORT_CAST) {
             result.push(AnimationFileType::Cast);
@@ -340,7 +325,7 @@ impl PorterSettings {
     /// Sets whether or not an anim file type is in use.
     pub fn set_anim_file_type(&mut self, file_type: AnimationFileType, value: bool) {
         let flag = match file_type {
-            AnimationFileType::SEAnim => PorterAnimSettings::EXPORT_SEANIM,
+            AnimationFileType::SEAnim    => PorterAnimSettings::EXPORT_SEANIM_REMOVED,
             AnimationFileType::Cast => PorterAnimSettings::EXPORT_CAST,
         };
 
@@ -353,16 +338,9 @@ impl PorterSettings {
 
         if self
             .audio_settings
-            .contains(PorterAudioSettings::EXPORT_WAV_16PCM)
+            .contains(PorterAudioSettings::EXPORT_WAV)
         {
-            result.push(AudioFileType::Wav16Pcm);
-        }
-
-        if self
-            .audio_settings
-            .contains(PorterAudioSettings::EXPORT_WAV_FLOAT)
-        {
-            result.push(AudioFileType::WavFloat);
+            result.push(AudioFileType::Wav);
         }
 
         if self
@@ -378,8 +356,7 @@ impl PorterSettings {
     /// Sets whether or not an audio file type is in use.
     pub fn set_audio_file_type(&mut self, file_type: AudioFileType, value: bool) {
         let flag = match file_type {
-            AudioFileType::Wav16Pcm => PorterAudioSettings::EXPORT_WAV_16PCM,
-            AudioFileType::WavFloat => PorterAudioSettings::EXPORT_WAV_FLOAT,
+            AudioFileType::Wav => PorterAudioSettings::EXPORT_WAV,
             AudioFileType::Flac => PorterAudioSettings::EXPORT_FLAC,
         };
 
@@ -459,6 +436,16 @@ impl PorterSettings {
         self.auto_scale = value;
     }
 
+    /// Gets the far clip distance for preview.
+    pub fn far_clip(&self) -> u32 {
+        self.far_clip.clamp(10000, 1000000)
+    }
+
+    /// Sets the far clip distance for preview.
+    pub fn set_far_clip(&mut self, far_clip: u32) {
+        self.far_clip = far_clip;
+    }
+
     /// Update settings and returns a copy.
     pub fn update<F: FnOnce(&mut Self)>(&self, callback: F) -> Self {
         let mut settings = self.clone();
@@ -478,13 +465,14 @@ impl Default for PorterSettings {
                 & !PorterLoadSettings::LOAD_FORCE_RAW_FILES,
             model_settings: PorterModelSettings::EXPORT_CAST,
             anim_settings: PorterAnimSettings::EXPORT_CAST,
-            audio_settings: PorterAudioSettings::EXPORT_WAV_16PCM,
+            audio_settings: PorterAudioSettings::EXPORT_WAV,
             image_file_type: ImageFileType::Dds,
             image_normal_map_processing: ImageNormalMapProcessing::None,
             output_directory: None,
             preview_controls: PreviewControlScheme::Maya,
             preview_overlay: true,
             auto_scale: true,
+            far_clip: 10000,
         }
     }
 }
