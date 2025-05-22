@@ -5,8 +5,8 @@ use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Write;
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 
 use porter_utils::StructReadExt;
 use porter_utils::StructWriteExt;

@@ -8,6 +8,7 @@ use crate::Angles;
 use crate::Matrix3x3;
 use crate::Matrix4x4;
 use crate::Vector3;
+use crate::Vector4;
 
 /// A 3d XYZW rotation.
 #[repr(C, align(16))]
@@ -274,6 +275,12 @@ impl From<[f32; 4]> for Quaternion {
             z: value[2],
             w: value[3],
         }
+    }
+}
+
+impl From<Vector4> for Quaternion {
+    fn from(value: Vector4) -> Self {
+        Self::new(value.x, value.y, value.z, value.w)
     }
 }
 

@@ -1,3 +1,5 @@
+use std::collections::TryReserveError;
+
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Read;
@@ -6,6 +8,7 @@ use std::io::Write;
 use porter_math::Quaternion;
 use porter_math::Vector2;
 use porter_math::Vector3;
+use porter_math::Vector4;
 
 use porter_utils::StringReadExt;
 use porter_utils::StringWriteExt;
@@ -35,7 +38,7 @@ pub enum CastPropertyValue {
     String(String),
     Vector2(Vector2),
     Vector3(Vector3),
-    Vector4(Quaternion),
+    Vector4(Vector4),
 }
 
 /// A cast property of a node.
@@ -181,7 +184,7 @@ impl CastProperty {
                     return Err(Error::new(
                         ErrorKind::InvalidData,
                         "Unknown cast property identifier!",
-                    ))
+                    ));
                 }
             }
         }
@@ -195,26 +198,26 @@ impl CastProperty {
 
     /// Gets the length of the cast property in bytes.
     pub(crate) fn length(&self) -> u32 {
-        let mut result = std::mem::size_of::<CastPropertyHeader>() as u32;
+        let mut result = size_of::<CastPropertyHeader>() as u32;
 
         result += self.property_name.len() as u32;
 
         match self.property_type {
             CastPropertyId::Byte => result += self.property_values.len() as u32,
             CastPropertyId::Short => {
-                result += (std::mem::size_of::<u16>() * self.property_values.len()) as u32
+                result += (size_of::<u16>() * self.property_values.len()) as u32
             }
             CastPropertyId::Integer32 => {
-                result += (std::mem::size_of::<u32>() * self.property_values.len()) as u32
+                result += (size_of::<u32>() * self.property_values.len()) as u32
             }
             CastPropertyId::Integer64 => {
-                result += (std::mem::size_of::<u64>() * self.property_values.len()) as u32
+                result += (size_of::<u64>() * self.property_values.len()) as u32
             }
             CastPropertyId::Float => {
-                result += (std::mem::size_of::<f32>() * self.property_values.len()) as u32
+                result += (size_of::<f32>() * self.property_values.len()) as u32
             }
             CastPropertyId::Double => {
-                result += (std::mem::size_of::<f64>() * self.property_values.len()) as u32
+                result += (size_of::<f64>() * self.property_values.len()) as u32
             }
             CastPropertyId::String => {
                 result += self
@@ -228,13 +231,13 @@ impl CastProperty {
                     .sum::<usize>() as u32;
             }
             CastPropertyId::Vector2 => {
-                result += (std::mem::size_of::<Vector2>() * self.property_values.len()) as u32
+                result += (size_of::<Vector2>() * self.property_values.len()) as u32
             }
             CastPropertyId::Vector3 => {
-                result += (std::mem::size_of::<Vector3>() * self.property_values.len()) as u32
+                result += (size_of::<Vector3>() * self.property_values.len()) as u32
             }
             CastPropertyId::Vector4 => {
-                result += (std::mem::size_of::<Quaternion>() * self.property_values.len()) as u32
+                result += (size_of::<Quaternion>() * self.property_values.len()) as u32
             }
             CastPropertyId::Unknown => {
                 // Not in use.
@@ -242,6 +245,31 @@ impl CastProperty {
         }
 
         result
+    }
+
+    /// Tries to reserve capacity for at least `additional` more values to be inserted into the given `Property`.
+    /// The property may reserve more space to speculatively avoid frequent reallocations.
+    /// After calling `try_reserve`, capacity will be greater than or equal to `self.len() + additional` if it returns `Ok(())`.
+    /// Does nothing if capacity is already sufficient. This method preserves the contents even if an error occurs.
+    ///
+    /// # Errors
+    /// If the capacity overflows, or the allocator reports a failure, then an error is returned.
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
+        self.property_values.try_reserve(additional)
+    }
+
+    /// Tries to reserve the minimum capacity for at least `additional` values to be inserted in the given `Property`.
+    /// Unlike `try_reserve`, this will not deliberately over-allocate to speculatively avoid frequent allocations.
+    /// After calling `try_reserve_exact`, capacity will be greater than or equal to `self.len() + additional` if it returns `Ok(())`.
+    /// Does nothing if the capacity is already sufficient.
+    ///
+    /// Note that the allocator may give the collection more space than it requests.
+    /// Therefore, capacity can not be relied upon to be precisely minimal. Prefer `try_reserve` if future insertions are expected.
+    ///
+    /// # Errors
+    /// If the capacity overflows, or the allocator reports a failure, then an error is returned.
+    pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), TryReserveError> {
+        self.property_values.try_reserve_exact(additional)
     }
 }
 
@@ -264,11 +292,7 @@ impl PartialEq<CastPropertyValue> for CastPropertyId {
 
 impl From<bool> for CastPropertyValue {
     fn from(value: bool) -> Self {
-        if value {
-            Self::Byte(1)
-        } else {
-            Self::Byte(0)
-        }
+        if value { Self::Byte(1) } else { Self::Byte(0) }
     }
 }
 
@@ -289,7 +313,7 @@ impl TryFrom<CastPropertyValue> for u8 {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
                     "Invalid cast property value for u8!",
-                ))
+                ));
             }
         })
     }
@@ -313,7 +337,7 @@ impl TryFrom<CastPropertyValue> for u16 {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
                     "Invalid cast property value for u16!",
-                ))
+                ));
             }
         })
     }
@@ -338,7 +362,7 @@ impl TryFrom<CastPropertyValue> for u32 {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
                     "Invalid cast property value for u32!",
-                ))
+                ));
             }
         })
     }
@@ -364,7 +388,7 @@ impl TryFrom<CastPropertyValue> for u64 {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
                     "Invalid cast property value for u64!",
-                ))
+                ));
             }
         })
     }
@@ -388,7 +412,7 @@ impl TryFrom<CastPropertyValue> for f32 {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
                     "Invalid cast property value for f32!",
-                ))
+                ));
             }
         })
     }
@@ -412,7 +436,7 @@ impl TryFrom<CastPropertyValue> for f64 {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
                     "Invalid cast property value for f64!",
-                ))
+                ));
             }
         })
     }
@@ -435,7 +459,7 @@ impl TryFrom<CastPropertyValue> for String {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
                     "Invalid cast property value for String!",
-                ))
+                ));
             }
         })
     }
@@ -464,7 +488,7 @@ impl TryFrom<CastPropertyValue> for Vector2 {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
                     "Invalid cast property value for Vector2!",
-                ))
+                ));
             }
         })
     }
@@ -487,7 +511,7 @@ impl TryFrom<CastPropertyValue> for Vector3 {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
                     "Invalid cast property value for Vector3!",
-                ))
+                ));
             }
         })
     }
@@ -495,7 +519,7 @@ impl TryFrom<CastPropertyValue> for Vector3 {
 
 impl From<Quaternion> for CastPropertyValue {
     fn from(value: Quaternion) -> Self {
-        Self::Vector4(value)
+        Self::Vector4(Vector4::from(value))
     }
 }
 
@@ -505,12 +529,35 @@ impl TryFrom<CastPropertyValue> for Quaternion {
     #[inline]
     fn try_from(value: CastPropertyValue) -> Result<Self, Self::Error> {
         Ok(match value {
-            CastPropertyValue::Vector4(value) => value,
+            CastPropertyValue::Vector4(value) => Quaternion::from(value),
             _ => {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
                     "Invalid cast property value for Quaternion!",
-                ))
+                ));
+            }
+        })
+    }
+}
+
+impl From<Vector4> for CastPropertyValue {
+    fn from(value: Vector4) -> Self {
+        Self::Vector4(value)
+    }
+}
+
+impl TryFrom<CastPropertyValue> for Vector4 {
+    type Error = Error;
+
+    #[inline]
+    fn try_from(value: CastPropertyValue) -> Result<Self, Self::Error> {
+        Ok(match value {
+            CastPropertyValue::Vector4(value) => value,
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "Invalid cast property value for Vector4!",
+                ));
             }
         })
     }

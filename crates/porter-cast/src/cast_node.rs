@@ -5,9 +5,9 @@ use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Write;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use porter_utils::StructReadExt;
 use porter_utils::StructWriteExt;
@@ -192,7 +192,7 @@ impl CastNode {
 
     /// Gets the length in bytes of this cast node.
     fn length(&self) -> u32 {
-        let mut result = std::mem::size_of::<CastNodeHeader>() as u32;
+        let mut result = size_of::<CastNodeHeader>() as u32;
 
         for child in &self.children {
             result += child.length();

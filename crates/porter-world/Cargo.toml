@@ -1,0 +1,8 @@
+[package]
+name = "porter-world"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+porter-cast = { path = "../porter-cast" }
+porter-math = { path = "../porter-math" }

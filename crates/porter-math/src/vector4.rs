@@ -4,6 +4,7 @@ use std::ops;
 use static_assertions::assert_eq_size;
 
 use crate::Matrix4x4;
+use crate::Quaternion;
 
 /// A 3d XYZW vector.
 #[repr(C, align(16))]
@@ -258,6 +259,25 @@ impl From<[f32; 4]> for Vector4 {
 impl From<(f32, f32, f32, f32)> for Vector4 {
     fn from(value: (f32, f32, f32, f32)) -> Self {
         Self::new(value.0, value.1, value.2, value.3)
+    }
+}
+
+impl From<Quaternion> for Vector4 {
+    fn from(value: Quaternion) -> Self {
+        Self::new(value.x, value.y, value.z, value.w)
+    }
+}
+
+impl ops::Neg for Vector4 {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self {
+            x: -self.x,
+            y: -self.y,
+            z: -self.z,
+            w: -self.w,
+        }
     }
 }
 
