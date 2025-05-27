@@ -137,7 +137,7 @@ impl Vector4 {
     pub fn normalize(&mut self) {
         let length = self.length();
 
-        if length > 0.0 {
+        if length > f32::EPSILON {
             self.x /= length;
             self.y /= length;
             self.z /= length;

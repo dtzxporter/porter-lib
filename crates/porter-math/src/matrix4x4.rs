@@ -4,12 +4,12 @@ use std::ops;
 
 use static_assertions::assert_eq_size;
 
-use crate::radians_to_degrees;
 use crate::Angles;
 use crate::Matrix3x3;
 use crate::Quaternion;
 use crate::RMatrix4x4;
 use crate::Vector3;
+use crate::radians_to_degrees;
 
 /// Represents a 4x4 matrix in column major order.
 #[repr(C, align(16))]
@@ -190,73 +190,105 @@ impl Matrix4x4 {
         &mut self.data[X * 4 + Y]
     }
 
-    /// Returns the position of this matrix.
+    /// Returns the position component of this matrix.
     #[inline]
     pub fn position(&self) -> Vector3 {
-        Vector3::new(self.mat::<3, 0>(), self.mat::<3, 1>(), self.mat::<3, 2>())
+        let (position, _, _) = self.decompose();
+
+        position
     }
 
-    /// Returns the rotation of this matrix.
+    /// Returns the rotation component of this matrix.
     #[inline]
     pub fn rotation(&self) -> Quaternion {
-        let trace = self.mat::<0, 0>() + self.mat::<1, 1>() + self.mat::<2, 2>();
+        let (_, rotation, _) = self.decompose();
+
+        rotation
+    }
+
+    /// Returns the scale component of this matrix.
+    #[inline]
+    pub fn scale(&self) -> Vector3 {
+        let (_, _, scale) = self.decompose();
+
+        scale
+    }
+
+    /// Decomposes the matrix into position, rotation, and scale components.
+    #[inline]
+    pub fn decompose(&self) -> (Vector3, Quaternion, Vector3) {
+        let mut x_axis = Vector3::new(self.mat::<0, 0>(), self.mat::<0, 1>(), self.mat::<0, 2>());
+        let mut y_axis = Vector3::new(self.mat::<1, 0>(), self.mat::<1, 1>(), self.mat::<1, 2>());
+        let mut z_axis = Vector3::new(self.mat::<2, 0>(), self.mat::<2, 1>(), self.mat::<2, 2>());
+
+        let mut scale = Vector3::new(x_axis.length(), y_axis.length(), z_axis.length());
+
+        if scale.x > f32::EPSILON {
+            x_axis /= scale.x;
+        }
+
+        if scale.y > f32::EPSILON {
+            y_axis /= scale.y;
+        }
+
+        if scale.z > f32::EPSILON {
+            z_axis /= scale.z;
+        }
+
+        if x_axis.cross(y_axis).dot(z_axis) < 0.0 {
+            scale.x = -scale.x;
+            x_axis = -x_axis;
+        }
+
+        let trace = x_axis.x + y_axis.y + z_axis.z;
         let half: f32 = 0.5f32;
 
-        if trace >= 0.0f32 {
+        let rotation = if trace >= 0.0f32 {
             let s = (1.0f32 + trace).sqrt();
             let w = half * s;
             let s = half / s;
-            let x = (self.mat::<1, 2>() - self.mat::<2, 1>()) * s;
-            let y = (self.mat::<2, 0>() - self.mat::<0, 2>()) * s;
-            let z = (self.mat::<0, 1>() - self.mat::<1, 0>()) * s;
+            let x = (y_axis.z - z_axis.y) * s;
+            let y = (z_axis.x - x_axis.z) * s;
+            let z = (x_axis.y - y_axis.x) * s;
 
             Quaternion::new(x, y, z, w)
-        } else if (self.mat::<0, 0>() > self.mat::<1, 1>())
-            && (self.mat::<0, 0>() > self.mat::<2, 2>())
-        {
-            let s =
-                ((self.mat::<0, 0>() - self.mat::<1, 1>() - self.mat::<2, 2>()) + 1.0f32).sqrt();
+        } else if (x_axis.x > y_axis.y) && (x_axis.x > z_axis.z) {
+            let s = ((x_axis.x - y_axis.y - z_axis.z) + 1.0f32).sqrt();
             let x = half * s;
             let s = half / s;
-            let y = (self.mat::<1, 0>() + self.mat::<0, 1>()) * s;
-            let z = (self.mat::<0, 2>() + self.mat::<2, 0>()) * s;
-            let w = (self.mat::<1, 2>() - self.mat::<2, 1>()) * s;
+            let y = (y_axis.x + x_axis.y) * s;
+            let z = (x_axis.z + z_axis.x) * s;
+            let w = (y_axis.z - z_axis.y) * s;
 
             Quaternion::new(x, y, z, w)
-        } else if self.mat::<1, 1>() > self.mat::<2, 2>() {
-            let s =
-                ((self.mat::<1, 1>() - self.mat::<0, 0>() - self.mat::<2, 2>()) + 1.0f32).sqrt();
+        } else if y_axis.y > z_axis.z {
+            let s = ((y_axis.y - x_axis.x - z_axis.z) + 1.0f32).sqrt();
             let y = half * s;
             let s = half / s;
-            let z = (self.mat::<2, 1>() + self.mat::<1, 2>()) * s;
-            let x = (self.mat::<1, 0>() + self.mat::<0, 1>()) * s;
-            let w = (self.mat::<2, 0>() - self.mat::<0, 2>()) * s;
+            let z = (z_axis.y + y_axis.z) * s;
+            let x = (y_axis.x + x_axis.y) * s;
+            let w = (z_axis.x - x_axis.z) * s;
 
             Quaternion::new(x, y, z, w)
         } else {
-            let s =
-                ((self.mat::<2, 2>() - self.mat::<0, 0>() - self.mat::<1, 1>()) + 1.0f32).sqrt();
+            let s = ((z_axis.z - x_axis.x - y_axis.y) + 1.0f32).sqrt();
             let z = half * s;
             let s = half / s;
-            let x = (self.mat::<0, 2>() + self.mat::<2, 0>()) * s;
-            let y = (self.mat::<2, 1>() + self.mat::<1, 2>()) * s;
-            let w = (self.mat::<0, 1>() - self.mat::<1, 0>()) * s;
+            let x = (x_axis.z + z_axis.x) * s;
+            let y = (z_axis.y + y_axis.z) * s;
+            let w = (x_axis.y - y_axis.x) * s;
 
             Quaternion::new(x, y, z, w)
-        }
-    }
+        };
 
-    /// Returns the scale of this matrix.
-    #[inline]
-    pub fn scale(&self) -> Vector3 {
-        let x = Vector3::new(self.mat::<0, 0>(), self.mat::<0, 1>(), self.mat::<0, 2>());
-        let y = Vector3::new(self.mat::<1, 0>(), self.mat::<1, 1>(), self.mat::<1, 2>());
-        let z = Vector3::new(self.mat::<2, 0>(), self.mat::<2, 1>(), self.mat::<2, 2>());
+        let position = Vector3::new(self.mat::<3, 0>(), self.mat::<3, 1>(), self.mat::<3, 2>());
 
-        Vector3::new(x.length(), y.length(), z.length())
+        (position, rotation, scale)
     }
 
     /// Returns the rotation of this matrix as euler angles.
+    /// ### Note:
+    /// This method assumes the matrix has no scale or skew.
     #[inline]
     pub fn to_euler(&self, angles: Angles) -> Vector3 {
         let square_sum = (self.mat::<0, 0>() * self.mat::<0, 0>()
@@ -304,9 +336,7 @@ impl Matrix4x4 {
     /// Swaps the handedness of this matrix.
     #[inline]
     pub fn swap_handedness(self) -> Self {
-        let pos = self.position();
-        let rot = self.rotation();
-        let sca = self.scale();
+        let (pos, rot, sca) = self.decompose();
 
         Self::create_position(Vector3::new(pos.z, -pos.x, pos.y))
             * Self::create_rotation(Quaternion::new(-rot.z, rot.x, -rot.y, rot.w))

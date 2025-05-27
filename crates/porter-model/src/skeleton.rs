@@ -134,18 +134,20 @@ impl Skeleton {
 
             if has_locals {
                 let result = bone.local_matrix() * *matrix;
+                let (position, rotation, scale) = result.decompose();
 
-                bone.local_position = Some(result.position());
-                bone.local_rotation = Some(result.rotation());
-                bone.local_scale = Some(result.scale());
+                bone.local_position = Some(position);
+                bone.local_rotation = Some(rotation);
+                bone.local_scale = Some(scale);
             }
 
             if has_worlds {
                 let result = bone.world_matrix() * *matrix;
+                  let (position, rotation, scale) = result.decompose();
 
-                bone.world_position = Some(result.position());
-                bone.world_rotation = Some(result.rotation());
-                bone.world_scale = Some(result.scale());
+                bone.world_position = Some(position);
+                bone.world_rotation = Some(rotation);
+                bone.world_scale = Some(scale);
             }
         }
     }

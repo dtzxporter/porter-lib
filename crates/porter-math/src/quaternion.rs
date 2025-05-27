@@ -3,12 +3,13 @@ use std::ops;
 
 use static_assertions::assert_eq_size;
 
-use crate::degrees_to_radians;
 use crate::Angles;
 use crate::Matrix3x3;
 use crate::Matrix4x4;
+use crate::Quaternion2;
 use crate::Vector3;
 use crate::Vector4;
+use crate::degrees_to_radians;
 
 /// A 3d XYZW rotation.
 #[repr(C, align(16))]
@@ -59,7 +60,7 @@ impl Quaternion {
     pub fn normalize(&mut self) {
         let length = self.length();
 
-        if length > 0.0 {
+        if length > f32::EPSILON {
             self.x /= length;
             self.y /= length;
             self.z /= length;
@@ -75,6 +76,51 @@ impl Quaternion {
         normalize
     }
 
+    /// Calculates the dot product of the two quaternions.
+    /// `(x * rhs.x) + (y * rhs.y) + (z * rhs.z) + (w * rhs.w)`
+    #[inline]
+    pub fn dot(&self, rhs: Self) -> f32 {
+        (self.x * rhs.x) + (self.y * rhs.y) + (self.z * rhs.z) + (self.w * rhs.w)
+    }
+
+    /// Spherical linear interpolation between two quaternions.
+    #[inline]
+    pub fn slerp(&self, rhs: Self, time: f32) -> Self {
+        let s1: f32;
+        let s0: f32;
+
+        let mut dot = self.dot(rhs);
+        let mut negate_rhs = false;
+
+        if dot < 0.0 {
+            negate_rhs = true;
+            dot = -dot;
+        }
+
+        if dot > 0.9995 {
+            s0 = 1.0 - time;
+            s1 = if negate_rhs { -time } else { time };
+        } else {
+            let theta = dot.acos();
+            let inv_sin_theta = 1.0 / theta.sin();
+
+            s0 = ((1.0 - time) * theta).sin() * inv_sin_theta;
+            s1 = if negate_rhs {
+                -((time * theta).sin() * inv_sin_theta)
+            } else {
+                (time * theta).sin() * inv_sin_theta
+            };
+        }
+
+        Self {
+            x: (s0 * self.x) + (s1 * rhs.x),
+            y: (s0 * self.y) + (s1 * rhs.y),
+            z: (s0 * self.z) + (s1 * rhs.z),
+            w: (s0 * self.w) + (s1 * rhs.w),
+        }
+        .normalized()
+    }
+
     /// Calculates the inverse of this quaternion.
     #[inline]
     pub fn inverse(&self) -> Self {
@@ -87,6 +133,12 @@ impl Quaternion {
             z: -self.z * half_length,
             w: self.w * half_length,
         }
+    }
+
+    /// Calculates the conjugate of this quaternion.
+    #[inline]
+    pub fn conjugate(&self) -> Self {
+        !*self
     }
 
     /// Reverses the byte order of the quaternion.
@@ -206,6 +258,12 @@ impl Quaternion {
         matrix
     }
 
+    /// Converts this XYZW quaternion to a ZW quaternion by dropping XY components.
+    #[inline]
+    pub fn to_quat2(self) -> Quaternion2 {
+        Quaternion2::from(self)
+    }
+
     /// Constructs a new quaternion from the given euler angles.
     #[inline]
     pub fn from_euler(euler: Vector3, angles: Angles) -> Self {
@@ -281,6 +339,17 @@ impl From<[f32; 4]> for Quaternion {
 impl From<Vector4> for Quaternion {
     fn from(value: Vector4) -> Self {
         Self::new(value.x, value.y, value.z, value.w)
+    }
+}
+
+impl From<Quaternion2> for Quaternion {
+    fn from(value: Quaternion2) -> Self {
+        Self {
+            x: 0.0,
+            y: 0.0,
+            z: value.z,
+            w: value.w,
+        }
     }
 }
 

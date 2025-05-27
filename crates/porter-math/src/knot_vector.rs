@@ -38,11 +38,7 @@ impl KnotVector {
         let mut high = ext - 1;
 
         if time < self.knots[low] {
-            if time < self.knots[0] {
-                None
-            } else {
-                Some(0)
-            }
+            if time < self.knots[0] { None } else { Some(0) }
         } else if time >= self.knots[high] {
             if time > self.knots[ext] {
                 None

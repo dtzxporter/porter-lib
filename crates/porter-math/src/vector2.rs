@@ -115,7 +115,7 @@ impl Vector2 {
     pub fn normalize(&mut self) {
         let length = self.length();
 
-        if length > 0.0 {
+        if length > f32::EPSILON {
             self.x /= length;
             self.y /= length;
         }
@@ -227,6 +227,17 @@ impl From<Vector3> for Vector2 {
 impl From<Vector4> for Vector2 {
     fn from(value: Vector4) -> Self {
         Self::new(value.x, value.y)
+    }
+}
+
+impl ops::Neg for Vector2 {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self {
+            x: -self.x,
+            y: -self.y,
+        }
     }
 }
 
