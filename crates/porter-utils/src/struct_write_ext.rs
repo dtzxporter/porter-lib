@@ -22,10 +22,10 @@ where
     }
 
     fn write_sized_integer(&mut self, value: u64, size: usize) -> Result<(), io::Error> {
-        debug_assert!(size <= std::mem::size_of::<u64>());
+        debug_assert!(size <= size_of::<u64>());
 
         for i in 0..size {
-            self.write_struct::<u8>(((value >> (i * std::mem::size_of::<u64>())) & 0xFF) as u8)?;
+            self.write_struct::<u8>(((value >> (i * size_of::<u64>())) & 0xFF) as u8)?;
         }
 
         Ok(())

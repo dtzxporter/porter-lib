@@ -33,7 +33,7 @@ where
         let slice = unsafe {
             std::slice::from_raw_parts_mut(
                 slice.as_mut_ptr() as *mut u8,
-                slice.len() * std::mem::size_of::<R>(),
+                slice.len() * size_of::<R>(),
             )
         };
 

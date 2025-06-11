@@ -5,8 +5,10 @@ use std::fmt::Debug;
 
 use memchr::memchr_iter;
 
+use crate::VecExt;
+
 /// Maximum pattern length in bytes.
-const MAXIMUM_LENGTH: usize = 32;
+const MAXIMUM_LENGTH: usize = 64;
 /// Size in bytes to scan buffers.
 const SCAN_BUFFER_SIZE: usize = 0x100000;
 
@@ -127,7 +129,7 @@ impl Pattern {
 
     /// Scans the given reader for this pattern and returns the byte offset from the current position if found.
     pub fn scan_from<R: Read>(&self, mut read: R) -> Result<Option<usize>, io::Error> {
-        let mut scratch = vec![0; SCAN_BUFFER_SIZE];
+        let mut scratch = Vec::try_new_with_value(0, SCAN_BUFFER_SIZE)?;
         let mut offset = 0;
         let mut overlap = 0;
 

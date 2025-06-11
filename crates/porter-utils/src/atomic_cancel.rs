@@ -1,6 +1,6 @@
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 /// Used to atomically cancel a multi-threaded operation.
 #[repr(transparent)]

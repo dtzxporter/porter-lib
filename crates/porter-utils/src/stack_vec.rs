@@ -8,9 +8,9 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Index;
 use std::ops::IndexMut;
+use std::slice::SliceIndex;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
-use std::slice::SliceIndex;
 
 /// A simple stack allocated vector for `Copy` types.
 #[repr(transparent)]

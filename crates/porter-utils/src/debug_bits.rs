@@ -9,7 +9,7 @@ macro_rules! impl_debug_bits {
     ($typ:ty) => {
         impl DebugBits for $typ {
             fn debug_bits(&self) {
-                let size = std::mem::size_of::<$typ>() * 8;
+                let size = <$typ>::BITS as usize * 8;
 
                 print!("0b");
 

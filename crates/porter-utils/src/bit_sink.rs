@@ -22,7 +22,7 @@ impl BitSink<()> {
     /// Constructs a new bit sink using a growable memory buffer with an initial capacity in bits, in lsb order.
     #[inline]
     pub fn with_capacity_lsb(capacity: usize) -> BitSink<Cursor<Vec<u8>>> {
-        BitSink::with_output_lsb(Cursor::new(Vec::with_capacity((capacity + 7) / 8)))
+        BitSink::with_output_lsb(Cursor::new(Vec::with_capacity(capacity.div_ceil(8))))
     }
 
     /// Constructs a new bit sink using a growable memory buffer in msb order.
@@ -34,7 +34,7 @@ impl BitSink<()> {
     /// Constructs a new bit sink using a growable memory buffer with an initial capacity in bits, in msb order.
     #[inline]
     pub fn with_capacity_msb(capacity: usize) -> BitSink<Cursor<Vec<u8>>> {
-        BitSink::with_output_msb(Cursor::new(Vec::with_capacity((capacity + 7) / 8)))
+        BitSink::with_output_msb(Cursor::new(Vec::with_capacity(capacity.div_ceil(8))))
     }
 }
 

@@ -1,6 +1,6 @@
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 struct AtomicProgressInner {
     total: AtomicUsize,
@@ -29,6 +29,11 @@ impl AtomicProgress {
     pub fn reset(&self, total: usize) {
         self.inner.total.store(total, Ordering::Relaxed);
         self.inner.complete.store(0, Ordering::Relaxed);
+    }
+
+    /// Adds `additional` items to the total progress.
+    pub fn add(&self, additional: usize) {
+        self.inner.total.fetch_add(additional, Ordering::Relaxed);
     }
 
     /// Increments the completed count.

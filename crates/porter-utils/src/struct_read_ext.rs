@@ -20,7 +20,7 @@ where
 
         // SAFETY: This slice has the same length as T, and T is always Copy.
         let slice = unsafe {
-            std::slice::from_raw_parts_mut(result.as_mut_ptr() as *mut u8, std::mem::size_of::<S>())
+            std::slice::from_raw_parts_mut(result.as_mut_ptr() as *mut u8, size_of::<S>())
         };
 
         self.read_exact(slice)?;
@@ -32,10 +32,10 @@ where
     fn read_sized_integer(&mut self, size: usize) -> Result<u64, io::Error> {
         let mut result: u64 = 0;
 
-        debug_assert!(size <= std::mem::size_of::<u64>());
+        debug_assert!(size <= size_of::<u64>());
 
         for i in 0..size {
-            result |= (self.read_struct::<u8>()? as u64) << (i * std::mem::size_of::<u64>());
+            result |= (self.read_struct::<u8>()? as u64) << (i * size_of::<u64>());
         }
 
         Ok(result)

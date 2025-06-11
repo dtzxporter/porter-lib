@@ -1,5 +1,6 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 struct AtomicSemaphoreInner {
     count: AtomicUsize,
@@ -55,7 +56,7 @@ impl AtomicSemaphore {
                     Ok(_) => {
                         return AtomicSemaphoreGuard {
                             inner: self.inner.clone(),
-                        }
+                        };
                     }
                     Err(count) => count,
                 }

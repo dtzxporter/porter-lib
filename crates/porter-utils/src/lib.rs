@@ -12,6 +12,7 @@ mod bit_stream;
 mod debug_bits;
 mod debug_hex;
 mod extract_digits;
+mod hash_const;
 mod hash_murmur64a;
 mod hash_xxh64;
 mod name_database;
@@ -26,6 +27,7 @@ mod string_read_ext;
 mod string_write_ext;
 mod struct_read_ext;
 mod struct_write_ext;
+mod vec_ext;
 
 pub use crate::sanitize_filename::*;
 
@@ -43,6 +45,7 @@ pub use bit_stream::*;
 pub use debug_bits::*;
 pub use debug_hex::*;
 pub use extract_digits::*;
+pub use hash_const::*;
 pub use hash_murmur64a::*;
 pub use hash_xxh64::*;
 pub use name_database::*;
@@ -56,3 +59,4 @@ pub use string_read_ext::*;
 pub use string_write_ext::*;
 pub use struct_read_ext::*;
 pub use struct_write_ext::*;
+pub use vec_ext::*;

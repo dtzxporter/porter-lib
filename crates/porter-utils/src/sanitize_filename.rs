@@ -1,5 +1,5 @@
-use sanitize_filename::sanitize_with_options;
 use sanitize_filename::Options;
+use sanitize_filename::sanitize_with_options;
 
 /// A trait used to clean a file name.
 pub trait SanitizeFilename {

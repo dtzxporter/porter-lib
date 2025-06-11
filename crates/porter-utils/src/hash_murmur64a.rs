@@ -4,7 +4,7 @@ const MIX: u64 = 0xc6a4a7935bd1e995;
 /// Used to shift the hash.
 #[inline(always)]
 fn slack(lhs: u64, rhs: u64) -> u64 {
-    lhs ^ lhs >> rhs
+    lhs ^ (lhs >> rhs)
 }
 
 /// Computes the murmur64a hash (murmur2) for the given buffer with the given seed.

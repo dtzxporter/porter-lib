@@ -220,6 +220,10 @@ where
     /// `f32 = result as f32 / (1 << bits) - 1 as f32`
     #[inline]
     pub fn read_f32_unorm(&mut self, bits: u64) -> Result<f32> {
+        if bits == 0 {
+            return Ok(0.0);
+        }
+
         let result = self.read_u64(bits)?;
 
         Ok(result as f32 / ((1 << bits) - 1) as f32)
@@ -229,6 +233,10 @@ where
     /// `f64 = result as f64 / (1 << bits) - 1 as f64`
     #[inline]
     pub fn read_f64_unorm(&mut self, bits: u64) -> Result<f64> {
+        if bits == 0 {
+            return Ok(0.0);
+        }
+
         let result = self.read_u64(bits)?;
 
         Ok(result as f64 / ((1 << bits) - 1) as f64)

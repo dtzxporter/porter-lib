@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fs::File;
+use std::io;
 use std::io::Cursor;
 use std::io::Read;
 use std::io::Write;
@@ -11,6 +12,7 @@ use lz4_flex::decompress_into;
 use crate::StringReadExt;
 use crate::StructReadExt;
 use crate::StructWriteExt;
+use crate::VecExt;
 
 /// A database of asset hash:name pairs used to link a packed asset to it's source name.
 #[repr(transparent)]
@@ -36,18 +38,18 @@ impl NameDatabase {
         }
     }
 
-    /// Reads a name database from the given file path.
-    pub fn load<P: AsRef<Path>>(file: P) -> Result<Self, std::io::Error> {
+    /// Loads a name databases entries from the given file path.
+    pub fn load<P: AsRef<Path>>(&mut self, file: P) -> Result<(), io::Error> {
         let mut file = File::open(file.as_ref())?;
 
         let header: NameDatabaseHeader = file.read_struct()?;
 
         if header.magic != 0x42444E50 {
-            return Err(std::io::Error::from(std::io::ErrorKind::InvalidData));
+            return Err(io::Error::from(io::ErrorKind::InvalidData));
         }
 
         if header.entries == 0 {
-            return Ok(Self::new());
+            return Ok(());
         }
 
         let mut compressed = vec![0; header.compressed_size as usize];
@@ -57,10 +59,10 @@ impl NameDatabase {
         let mut decompressed = vec![0; header.decompressed_size as usize];
 
         decompress_into(&compressed, &mut decompressed)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
 
-        let mut keys: Vec<u64> = Vec::with_capacity(header.entries as usize);
-        let mut values: Vec<String> = Vec::with_capacity(header.entries as usize);
+        let mut keys: Vec<u64> = Vec::try_with_exact_capacity(header.entries as usize)?;
+        let mut values: Vec<String> = Vec::try_with_exact_capacity(header.entries as usize)?;
 
         let mut file = Cursor::new(decompressed);
 
@@ -73,19 +75,19 @@ impl NameDatabase {
         }
 
         if keys.len() != values.len() {
-            return Err(std::io::Error::from(std::io::ErrorKind::InvalidData));
+            return Err(io::Error::from(io::ErrorKind::InvalidData));
         }
 
-        Ok(Self {
-            inner: keys.into_iter().zip(values).collect(),
-        })
+        self.inner.extend(keys.into_iter().zip(values));
+
+        Ok(())
     }
 
-    /// Saves a name database to the given file path.
-    pub fn save<P: AsRef<Path>>(&self, file: P) -> Result<(), std::io::Error> {
+    /// Saves a name database with the current entries to the given file path.
+    pub fn save<P: AsRef<Path>>(&self, file: P) -> Result<(), io::Error> {
         let mut file = File::create(file.as_ref())?;
 
-        let mut keys: Vec<u64> = Vec::with_capacity(self.inner.len());
+        let mut keys: Vec<u64> = Vec::try_with_exact_capacity(self.inner.len())?;
 
         let mut decompressed: Vec<u8> = Vec::new();
 

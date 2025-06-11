@@ -54,7 +54,7 @@ where
         let mut buffer: Vec<u8> = Vec::new();
 
         buffer
-            .try_reserve(size)
+            .try_reserve_exact(size)
             .map_err(|e| io::Error::new(io::ErrorKind::OutOfMemory, e))?;
         buffer.resize(size, 0);
 

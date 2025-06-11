@@ -15,8 +15,8 @@ where
 
     fn as_this_slice(&self) -> &[Self::Output] {
         let pointer = self.as_ptr();
-        let size_in_bytes = std::mem::size_of_val(*self);
-        let output_size = std::mem::size_of::<Self::Output>();
+        let size_in_bytes = size_of_val(*self);
+        let output_size = size_of::<Self::Output>();
 
         let size_in_elements = if output_size > size_in_bytes {
             0
