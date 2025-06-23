@@ -2,11 +2,12 @@ use porter_math::Quaternion;
 use porter_math::Vector3;
 
 /// A keyframe value of a curve.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum KeyframeValue {
     Vector3(Vector3),
     Quaternion(Quaternion),
     Bool(bool),
+    Float(f32),
     None,
 }
 
@@ -34,6 +35,12 @@ impl From<Quaternion> for KeyframeValue {
 impl From<bool> for KeyframeValue {
     fn from(value: bool) -> Self {
         Self::Bool(value)
+    }
+}
+
+impl From<f32> for KeyframeValue {
+    fn from(value: f32) -> Self {
+        Self::Float(value)
     }
 }
 

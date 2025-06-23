@@ -1,3 +1,4 @@
+use crate::AnimationError;
 use crate::Keyframe;
 use crate::KeyframeValue;
 
@@ -14,6 +15,8 @@ pub enum CurveAttribute {
     Visibility,
     /// Animates the node as if it were a notification track.
     Notetrack,
+    /// Animates the weight of this node as blend shape key.
+    BlendShape,
 }
 
 /// Curve data type represents how the data is stored relative to the node's attribute value.
@@ -66,6 +69,11 @@ impl Curve {
         self.data_type
     }
 
+    /// Sets the data type of the keyframes.
+    pub fn set_data_type(&mut self, data_type: CurveDataType) {
+        self.data_type = data_type;
+    }
+
     /// Returns the keyframes of this curve.
     pub fn keyframes(&self) -> &[Keyframe] {
         &self.keyframes
@@ -97,6 +105,7 @@ impl Curve {
             CurveAttribute::Scale => matches!(value, KeyframeValue::Vector3(_)),
             CurveAttribute::Visibility => matches!(value, KeyframeValue::Bool(_)),
             CurveAttribute::Notetrack => matches!(value, KeyframeValue::None),
+            CurveAttribute::BlendShape => matches!(value, KeyframeValue::Float(_)),
         });
 
         self.keyframes.push(Keyframe { time, value });
@@ -110,5 +119,34 @@ impl Curve {
     /// Returns whether or not this curve has any keyframes.
     pub fn is_empty(&self) -> bool {
         self.keyframes.is_empty()
+    }
+
+    /// Tries to reserve capacity for at least `additional` more keyframes to be inserted into the given `Curve`.
+    /// The property may reserve more space to speculatively avoid frequent reallocations.
+    /// After calling `try_reserve`, capacity will be greater than or equal to `self.len() + additional` if it returns `Ok(())`.
+    /// Does nothing if capacity is already sufficient. This method preserves the contents even if an error occurs.
+    ///
+    /// # Errors
+    /// If the capacity overflows, or the allocator reports a failure, then an error is returned.
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), AnimationError> {
+        self.keyframes
+            .try_reserve(additional)
+            .map_err(|_| AnimationError::CurveAllocationFailed)
+    }
+
+    /// Tries to reserve the minimum capacity for at least `additional` keyframes to be inserted in the given `Curve`.
+    /// Unlike `try_reserve`, this will not deliberately over-allocate to speculatively avoid frequent allocations.
+    /// After calling `try_reserve_exact`, capacity will be greater than or equal to `self.len() + additional` if it returns `Ok(())`.
+    /// Does nothing if the capacity is already sufficient.
+    ///
+    /// Note that the allocator may give the collection more space than it requests.
+    /// Therefore, capacity can not be relied upon to be precisely minimal. Prefer `try_reserve` if future insertions are expected.
+    ///
+    /// # Errors
+    /// If the capacity overflows, or the allocator reports a failure, then an error is returned.
+    pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), AnimationError> {
+        self.keyframes
+            .try_reserve_exact(additional)
+            .map_err(|_| AnimationError::CurveAllocationFailed)
     }
 }

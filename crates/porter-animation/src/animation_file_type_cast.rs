@@ -7,6 +7,8 @@ use porter_cast::CastId;
 use porter_cast::CastNode;
 use porter_cast::CastPropertyId;
 
+use porter_math::Axis;
+
 use crate::Animation;
 use crate::AnimationError;
 use crate::CurveAttribute;
@@ -17,6 +19,26 @@ use crate::KeyframeValue;
 pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), AnimationError> {
     let mut root = CastNode::root();
 
+    let meta_node = root.create(CastId::Metadata);
+
+    meta_node
+        .create_property(CastPropertyId::String, "a")
+        .push("DTZxPorter");
+
+    meta_node
+        .create_property(CastPropertyId::String, "s")
+        .push("Exported by PorterLib");
+
+    let up_axis = match animation.up_axis {
+        Axis::X => "x",
+        Axis::Y => "y",
+        Axis::Z => "z",
+    };
+
+    meta_node
+        .create_property(CastPropertyId::String, "up")
+        .push(up_axis);
+
     let animation_node = root.create(CastId::Animation);
 
     animation_node
@@ -24,7 +46,7 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
         .push(animation.framerate);
     animation_node
         .create_property(CastPropertyId::Byte, "lo")
-        .push(animation.looping as u8);
+        .push(animation.looping);
 
     for curve in &animation.curves {
         if matches!(curve.attribute(), CurveAttribute::Notetrack) {
@@ -36,7 +58,8 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
             CurveAttribute::Scale => (3, ["sx", "sy", "sz"]),
             CurveAttribute::Translate => (3, ["tx", "ty", "tz"]),
             CurveAttribute::Visibility => (1, ["vb", "", ""]),
-            _ => (0, ["", "", ""]),
+            CurveAttribute::Notetrack => unreachable!(),
+            CurveAttribute::BlendShape => (1, ["bs", "", ""]),
         };
 
         for i in 0..num_curves {
@@ -78,7 +101,13 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
                 curve_node.create_property(CastPropertyId::Integer32, "kb")
             };
 
-            for keyframe in curve.keyframes() {
+            let keyframes = curve.keyframes();
+
+            keyframe_buffer
+                .try_reserve_exact(keyframes.len())
+                .map_err(|_| AnimationError::CurveAllocationFailed)?;
+
+            for keyframe in keyframes {
                 if largest_frame_time <= 0xFF {
                     keyframe_buffer.push(keyframe.time as u8);
                 } else if largest_frame_time <= 0xFFFF {
@@ -93,21 +122,29 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
                 CurveAttribute::Translate => CastPropertyId::Float,
                 CurveAttribute::Scale => CastPropertyId::Float,
                 CurveAttribute::Visibility => CastPropertyId::Byte,
-                _ => CastPropertyId::Byte,
+                CurveAttribute::Notetrack => unreachable!(),
+                CurveAttribute::BlendShape => CastPropertyId::Float,
             };
 
             let keyvalue_buffer = curve_node.create_property(property_type, "kv");
 
-            for keyframe in curve.keyframes() {
+            keyvalue_buffer
+                .try_reserve_exact(keyframes.len())
+                .map_err(|_| AnimationError::CurveAllocationFailed)?;
+
+            for keyframe in keyframes {
                 match keyframe.value {
                     KeyframeValue::Bool(bool) => {
-                        keyvalue_buffer.push(bool as u8);
+                        keyvalue_buffer.push(bool);
                     }
                     KeyframeValue::Quaternion(rotation) => {
                         keyvalue_buffer.push(rotation);
                     }
                     KeyframeValue::Vector3(vector) => {
                         keyvalue_buffer.push(vector[i]);
+                    }
+                    KeyframeValue::Float(float) => {
+                        keyvalue_buffer.push(float);
                     }
                     KeyframeValue::None => {
                         // No value.
@@ -128,11 +165,55 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
             .create_property(CastPropertyId::String, "n")
             .push(curve.name());
 
+        let keyframes = curve.keyframes();
+
         let key_buffer = track_node.create_property(CastPropertyId::Integer32, "kb");
 
-        for key in curve.keyframes() {
+        key_buffer
+            .try_reserve_exact(keyframes.len())
+            .map_err(|_| AnimationError::CurveAllocationFailed)?;
+
+        for key in keyframes {
             key_buffer.push(key.time);
         }
+    }
+
+    for curve_override in &animation.curve_mode_overrides {
+        let override_node = animation_node.create(CastId::CurveModeOverride);
+
+        override_node
+            .create_property(CastPropertyId::String, "nn")
+            .push(curve_override.name.as_str());
+
+        match curve_override.data_type {
+            CurveDataType::Absolute => {
+                override_node
+                    .create_property(CastPropertyId::String, "m")
+                    .push("absolute");
+            }
+            CurveDataType::Additive => {
+                override_node
+                    .create_property(CastPropertyId::String, "m")
+                    .push("additive");
+            }
+            CurveDataType::Relative => {
+                override_node
+                    .create_property(CastPropertyId::String, "m")
+                    .push("relative");
+            }
+        }
+
+        override_node
+            .create_property(CastPropertyId::Byte, "ot")
+            .push(curve_override.override_translate);
+
+        override_node
+            .create_property(CastPropertyId::Byte, "or")
+            .push(curve_override.override_rotation);
+
+        override_node
+            .create_property(CastPropertyId::Byte, "os")
+            .push(curve_override.override_scale);
     }
 
     let writer = BufWriter::new(File::create(path.as_ref().with_extension("cast"))?);

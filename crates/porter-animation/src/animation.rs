@@ -1,20 +1,30 @@
 use std::path::Path;
 
-use crate::animation_file_type_cast;
-use crate::animation_file_type_seanim;
+use porter_math::Axis;
+
 use crate::AnimationError;
 use crate::AnimationFileType;
 use crate::Curve;
 use crate::CurveAttribute;
 use crate::CurveDataType;
+use crate::CurveModeOverride;
 use crate::KeyframeValue;
+use crate::animation_file_type_cast;
+use crate::animation_file_type_seanim;
 
 // A 3d animation.
 #[derive(Debug, Clone)]
 pub struct Animation {
+    /// The framerate this animation should play at.
     pub framerate: f32,
+    /// Whether or not this animation should loop.
     pub looping: bool,
+    /// A collection of curves for this animation.
     pub curves: Vec<Curve>,
+    /// A collection of curve datatype overrides for this animation.
+    pub curve_mode_overrides: Vec<CurveModeOverride>,
+    /// The up axis for this animation.
+    pub up_axis: Axis,
 }
 
 impl Animation {
@@ -24,6 +34,8 @@ impl Animation {
             framerate,
             looping,
             curves: Vec::new(),
+            curve_mode_overrides: Vec::new(),
+            up_axis: Axis::Z,
         }
     }
 
