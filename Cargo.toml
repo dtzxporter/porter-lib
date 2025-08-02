@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/porter-texture", "crates/porter-console", "crates/porter-process", "crates/porter-audio", "crates/porter-math", "crates/porter-utils", "crates/porter-threads", "crates/porter-model", "crates/porter-ui", "crates/porter-animation", "crates/porter-cast", "crates/porter-fbx", "crates/porter-gpu", "crates/porter-preview", "crates/porter-world"]
+members = ["crates/porter-texture", "crates/porter-console", "crates/porter-http", "crates/porter-process", "crates/porter-audio", "crates/porter-math", "crates/porter-utils", "crates/porter-threads", "crates/porter-model", "crates/porter-ui", "crates/porter-animation", "crates/porter-cast", "crates/porter-fbx", "crates/porter-gpu", "crates/porter-preview", "crates/porter-world"]
 resolver = "2"
 
 [profile.dev]
