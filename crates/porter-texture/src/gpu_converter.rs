@@ -204,6 +204,9 @@ impl GPUConverter {
                     "fs_main"
                 }
             }
+            ImageConvertOptions::UniformScaleBias(_, _) => {
+                unimplemented!()
+            }
         };
 
         self.instance

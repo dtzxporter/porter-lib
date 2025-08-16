@@ -135,434 +135,448 @@ pub enum ImageFormat {
     A8R8G8B8Unorm,
 }
 
-/// Gets whether or not an image format is palettized.
-pub const fn is_format_palettized(format: ImageFormat) -> bool {
-    matches!(
-        format,
-        ImageFormat::Ai44 | ImageFormat::Ia44 | ImageFormat::P8 | ImageFormat::A8P8
-    )
-}
+impl ImageFormat {
+    /// Calculates the size in bytes of a buffer that will fit the image format of the given width and height.
+    pub const fn buffer_size(&self, width: u32, height: u32) -> u32 {
+        if self.is_compressed() {
+            let block_size = self.block_size();
+            let (block_x, block_y) = self.block_dimensions();
 
-/// Gets whether or not an image format is compressed.
-pub const fn is_format_compressed(format: ImageFormat) -> bool {
-    matches!(
-        format,
-        ImageFormat::Bc1Typeless
-            | ImageFormat::Bc1Unorm
-            | ImageFormat::Bc1UnormSrgb
-            | ImageFormat::Bc2Typeless
-            | ImageFormat::Bc2Unorm
-            | ImageFormat::Bc2UnormSrgb
-            | ImageFormat::Bc3Typeless
-            | ImageFormat::Bc3Unorm
-            | ImageFormat::Bc3UnormSrgb
-            | ImageFormat::Bc4Typeless
-            | ImageFormat::Bc4Unorm
-            | ImageFormat::Bc4Snorm
-            | ImageFormat::Bc5Typeless
-            | ImageFormat::Bc5Unorm
-            | ImageFormat::Bc5Snorm
-            | ImageFormat::Bc6HTypeless
-            | ImageFormat::Bc6HUf16
-            | ImageFormat::Bc6HSf16
-            | ImageFormat::Bc7Typeless
-            | ImageFormat::Bc7Unorm
-            | ImageFormat::Bc7UnormSrgb
-    )
-}
+            (block_size * width.div_ceil(block_x)) * height.div_ceil(block_y)
+        } else {
+            let width = width as usize;
+            let height = height as usize;
+            let bits_per_pixel = self.bits_per_pixel() as usize;
 
-/// Gets whether or not an image format is srgb.
-pub const fn is_format_srgb(format: ImageFormat) -> bool {
-    matches!(
-        format,
-        ImageFormat::Bc1UnormSrgb
-            | ImageFormat::Bc2UnormSrgb
-            | ImageFormat::Bc3UnormSrgb
-            | ImageFormat::Bc7UnormSrgb
-            | ImageFormat::R8G8B8A8UnormSrgb
-            | ImageFormat::B8G8R8A8UnormSrgb
-            | ImageFormat::B8G8R8X8UnormSrgb
-    )
-}
+            let bits_size = width * height * bits_per_pixel;
+            let byte_size = bits_size.div_ceil(8);
 
-/// Gets whether or not an image format is software convertable.
-pub const fn is_format_requires_unpack(format: ImageFormat) -> bool {
-    matches!(
-        format,
-        ImageFormat::R1Unorm
-            | ImageFormat::R8G8B8Unorm
-            | ImageFormat::B8G8R8Unorm
-            | ImageFormat::R32G32B32Typeless
-            | ImageFormat::R32G32B32Float
-            | ImageFormat::R32G32B32Uint
-            | ImageFormat::R32G32B32Sint
-    )
-}
+            debug_assert!(byte_size <= u32::MAX as usize);
 
-/// Gets whether or not an image format and the target format are just swizzled.
-pub const fn is_format_swizzled(format: ImageFormat, target: ImageFormat) -> bool {
-    #[allow(clippy::match_like_matches_macro)]
-    match (format, target) {
-        (ImageFormat::R8G8B8Unorm, ImageFormat::B8G8R8Unorm) => true,
-        (ImageFormat::B8G8R8Unorm, ImageFormat::R8G8B8Unorm) => true,
-        (ImageFormat::R8G8B8A8Unorm, ImageFormat::B8G8R8A8Unorm) => true,
-        (ImageFormat::R8G8B8A8Unorm, ImageFormat::A8R8G8B8Unorm) => true,
-        (ImageFormat::B8G8R8A8Unorm, ImageFormat::R8G8B8A8Unorm) => true,
-        (ImageFormat::B8G8R8A8Unorm, ImageFormat::A8R8G8B8Unorm) => true,
-        (ImageFormat::A8R8G8B8Unorm, ImageFormat::R8G8B8A8Unorm) => true,
-        (ImageFormat::A8R8G8B8Unorm, ImageFormat::B8G8R8A8Unorm) => true,
-        (ImageFormat::R8G8B8A8UnormSrgb, ImageFormat::B8G8R8A8UnormSrgb) => true,
-        (ImageFormat::B8G8R8A8UnormSrgb, ImageFormat::R8G8B8A8UnormSrgb) => true,
-        (ImageFormat::R8G8B8A8Typeless, ImageFormat::B8G8R8A8Typeless) => true,
-        (ImageFormat::B8G8R8A8Typeless, ImageFormat::R8G8B8A8Typeless) => true,
-        _ => false,
-    }
-}
-
-/// Gets the block dimensions for an image format.
-pub const fn format_to_block_dimensions(format: ImageFormat) -> (u32, u32) {
-    match format {
-        // 4x4 compressed texture format.
-        ImageFormat::Bc1Typeless
-        | ImageFormat::Bc1Unorm
-        | ImageFormat::Bc1UnormSrgb
-        | ImageFormat::Bc2Typeless
-        | ImageFormat::Bc2Unorm
-        | ImageFormat::Bc2UnormSrgb
-        | ImageFormat::Bc3Typeless
-        | ImageFormat::Bc3Unorm
-        | ImageFormat::Bc3UnormSrgb
-        | ImageFormat::Bc4Typeless
-        | ImageFormat::Bc4Unorm
-        | ImageFormat::Bc4Snorm
-        | ImageFormat::Bc5Typeless
-        | ImageFormat::Bc5Unorm
-        | ImageFormat::Bc5Snorm
-        | ImageFormat::Bc6HTypeless
-        | ImageFormat::Bc6HUf16
-        | ImageFormat::Bc6HSf16
-        | ImageFormat::Bc7Typeless
-        | ImageFormat::Bc7Unorm
-        | ImageFormat::Bc7UnormSrgb => (4, 4),
-
-        // Non-compressed texture format.
-        _ => (1, 1),
-    }
-}
-
-/// Calculates the block size for a compressed texture only.
-pub const fn format_to_block_size(format: ImageFormat) -> u32 {
-    match format {
-        ImageFormat::Bc1Typeless
-        | ImageFormat::Bc1Unorm
-        | ImageFormat::Bc1UnormSrgb
-        | ImageFormat::Bc4Typeless
-        | ImageFormat::Bc4Unorm
-        | ImageFormat::Bc4Snorm => 8,
-        ImageFormat::Bc2Typeless
-        | ImageFormat::Bc2Unorm
-        | ImageFormat::Bc2UnormSrgb
-        | ImageFormat::Bc3Typeless
-        | ImageFormat::Bc3Unorm
-        | ImageFormat::Bc3UnormSrgb
-        | ImageFormat::Bc5Typeless
-        | ImageFormat::Bc5Unorm
-        | ImageFormat::Bc5Snorm
-        | ImageFormat::Bc6HTypeless
-        | ImageFormat::Bc6HUf16
-        | ImageFormat::Bc6HSf16
-        | ImageFormat::Bc7Typeless
-        | ImageFormat::Bc7Unorm
-        | ImageFormat::Bc7UnormSrgb => 16,
-        _ => 0,
-    }
-}
-
-/// Calculates the buffer size for an image in the format, with the given width and height.
-pub const fn format_to_buffer_size(format: ImageFormat, width: u32, height: u32) -> u32 {
-    if is_format_compressed(format) {
-        let block_size = format_to_block_size(format);
-        let block_dimensions = format_to_block_dimensions(format);
-
-        let bytes_per_row = block_size * ((width + (block_dimensions.0 - 1)) / block_dimensions.0);
-
-        bytes_per_row * ((height + (block_dimensions.1 - 1)) / block_dimensions.1)
-    } else {
-        (width * height * format_to_bpp(format) + 7) / 8
-    }
-}
-
-/// Converts the image format to a `wgpu` supported one if available.
-pub const fn format_to_wgpu(format: ImageFormat) -> Result<TextureFormat, TextureError> {
-    Ok(match format {
-        // R8
-        ImageFormat::R8Typeless | ImageFormat::R8Unorm => TextureFormat::R8Unorm,
-        ImageFormat::R8Snorm => TextureFormat::R8Snorm,
-        ImageFormat::R8Uint => TextureFormat::R8Uint,
-        ImageFormat::R8Sint => TextureFormat::R8Sint,
-
-        // R16
-        ImageFormat::R16Typeless | ImageFormat::R16Unorm => TextureFormat::R16Unorm,
-        ImageFormat::R16Uint => TextureFormat::R16Uint,
-        ImageFormat::R16Sint => TextureFormat::R16Sint,
-        ImageFormat::R16Snorm => TextureFormat::R16Snorm,
-        ImageFormat::R16Float => TextureFormat::R16Float,
-
-        // R8G8
-        ImageFormat::R8G8Typeless | ImageFormat::R8G8Unorm => TextureFormat::Rg8Unorm,
-        ImageFormat::R8G8Snorm => TextureFormat::Rg8Snorm,
-        ImageFormat::R8G8Uint => TextureFormat::Rg8Uint,
-        ImageFormat::R8G8Sint => TextureFormat::Rg8Sint,
-
-        // R32
-        ImageFormat::R32Typeless | ImageFormat::R32Uint => TextureFormat::R32Uint,
-        ImageFormat::R32Sint => TextureFormat::R32Sint,
-        ImageFormat::R32Float => TextureFormat::R32Float,
-
-        // R16G16
-        ImageFormat::R16G16Typeless | ImageFormat::R16G16Unorm => TextureFormat::Rg16Unorm,
-        ImageFormat::R16G16Uint => TextureFormat::Rg16Uint,
-        ImageFormat::R16G16Sint => TextureFormat::Rg16Sint,
-        ImageFormat::R16G16Snorm => TextureFormat::Rg16Snorm,
-        ImageFormat::R16G16Float => TextureFormat::Rg16Float,
-
-        // RGBA8
-        ImageFormat::R8G8B8A8Typeless | ImageFormat::R8G8B8A8Unorm => TextureFormat::Rgba8Unorm,
-        ImageFormat::R8G8B8A8UnormSrgb => TextureFormat::Rgba8UnormSrgb,
-        ImageFormat::R8G8B8A8Snorm => TextureFormat::Rgba8Snorm,
-        ImageFormat::R8G8B8A8Uint => TextureFormat::Rgba8Uint,
-        ImageFormat::R8G8B8A8Sint => TextureFormat::Rgba8Sint,
-
-        // BGRA8
-        ImageFormat::B8G8R8A8Typeless | ImageFormat::B8G8R8A8Unorm => TextureFormat::Bgra8Unorm,
-        ImageFormat::B8G8R8A8UnormSrgb => TextureFormat::Bgra8UnormSrgb,
-
-        // Packed formats
-        ImageFormat::R9G9B9E5Sharedexp => TextureFormat::Rgb9e5Ufloat,
-        ImageFormat::R10G10B10A2Typeless | ImageFormat::R10G10B10A2Unorm => {
-            TextureFormat::Rgb10a2Unorm
+            byte_size as u32
         }
-        ImageFormat::R11G11B10Float => TextureFormat::Rg11b10Float,
-
-        // R32G32
-        ImageFormat::R32G32Typeless | ImageFormat::R32G32Uint => TextureFormat::Rg32Uint,
-        ImageFormat::R32G32Sint => TextureFormat::Rg32Sint,
-        ImageFormat::R32G32Float => TextureFormat::Rg32Float,
-
-        // R16G16B16A16
-        ImageFormat::R16G16B16A16Typeless | ImageFormat::R16G16B16A16Unorm => {
-            TextureFormat::Rgba16Unorm
-        }
-        ImageFormat::R16G16B16A16Uint => TextureFormat::Rgba16Uint,
-        ImageFormat::R16G16B16A16Sint => TextureFormat::Rgba16Sint,
-        ImageFormat::R16G16B16A16Snorm => TextureFormat::Rgba16Snorm,
-        ImageFormat::R16G16B16A16Float => TextureFormat::Rgba16Float,
-
-        // R32G32B32A32
-        ImageFormat::R32G32B32A32Typeless | ImageFormat::R32G32B32A32Uint => {
-            TextureFormat::Rgba32Uint
-        }
-        ImageFormat::R32G32B32A32Sint => TextureFormat::Rgba32Sint,
-        ImageFormat::R32G32B32A32Float => TextureFormat::Rgba32Float,
-
-        // Depth formats.
-        ImageFormat::D16Unorm => TextureFormat::Depth16Unorm,
-        ImageFormat::D24UnormS8Uint => TextureFormat::Depth24PlusStencil8,
-        ImageFormat::D32Float => TextureFormat::Depth32Float,
-
-        // BC compressed formats.
-        ImageFormat::Bc1Typeless | ImageFormat::Bc1Unorm => TextureFormat::Bc1RgbaUnorm,
-        ImageFormat::Bc1UnormSrgb => TextureFormat::Bc1RgbaUnormSrgb,
-        ImageFormat::Bc2Typeless | ImageFormat::Bc2Unorm => TextureFormat::Bc2RgbaUnorm,
-        ImageFormat::Bc2UnormSrgb => TextureFormat::Bc2RgbaUnormSrgb,
-        ImageFormat::Bc3Typeless | ImageFormat::Bc3Unorm => TextureFormat::Bc3RgbaUnorm,
-        ImageFormat::Bc3UnormSrgb => TextureFormat::Bc3RgbaUnormSrgb,
-        ImageFormat::Bc4Typeless | ImageFormat::Bc4Unorm => TextureFormat::Bc4RUnorm,
-        ImageFormat::Bc4Snorm => TextureFormat::Bc4RSnorm,
-        ImageFormat::Bc5Typeless | ImageFormat::Bc5Unorm => TextureFormat::Bc5RgUnorm,
-        ImageFormat::Bc5Snorm => TextureFormat::Bc5RgSnorm,
-        ImageFormat::Bc6HTypeless | ImageFormat::Bc6HUf16 => TextureFormat::Bc6hRgbUfloat,
-        ImageFormat::Bc6HSf16 => TextureFormat::Bc6hRgbFloat,
-        ImageFormat::Bc7Typeless | ImageFormat::Bc7Unorm => TextureFormat::Bc7RgbaUnorm,
-        ImageFormat::Bc7UnormSrgb => TextureFormat::Bc7RgbaUnormSrgb,
-
-        // WGPU unsupported mapping.
-        _ => return Err(TextureError::UnsupportedImageFormat(format)),
-    })
-}
-
-/// Converts an unsigned to a signed image format.
-pub const fn format_to_srgb(format: ImageFormat) -> ImageFormat {
-    match format {
-        ImageFormat::R8G8B8A8Unorm => ImageFormat::R8G8B8A8UnormSrgb,
-        ImageFormat::Bc1Unorm => ImageFormat::Bc1UnormSrgb,
-        ImageFormat::Bc2Unorm => ImageFormat::Bc2UnormSrgb,
-        ImageFormat::Bc3Unorm => ImageFormat::Bc3UnormSrgb,
-        ImageFormat::B8G8R8A8Unorm => ImageFormat::B8G8R8A8UnormSrgb,
-        ImageFormat::B8G8R8X8Unorm => ImageFormat::B8G8R8X8UnormSrgb,
-        ImageFormat::Bc7Unorm => ImageFormat::Bc7UnormSrgb,
-        _ => format,
     }
-}
 
-/// Gets an image formats `bits` per pixel.
-pub const fn format_to_bpp(format: ImageFormat) -> u32 {
-    match format {
-        // Unknown or unsupported format
-        ImageFormat::Unknown | ImageFormat::Count => 0,
+    /// Gets the bits per pixel for the image format.
+    pub const fn bits_per_pixel(&self) -> u32 {
+        match self {
+            // Unknown or unsupported format
+            Self::Unknown | Self::Count => 0,
 
-        // 1 bit per pixel
-        ImageFormat::R1Unorm => 1,
+            // 1 bit per pixel
+            Self::R1Unorm => 1,
 
-        // 4 bits per pixel
-        ImageFormat::Bc1Typeless
-        | ImageFormat::Bc1Unorm
-        | ImageFormat::Bc1UnormSrgb
-        | ImageFormat::Bc4Typeless
-        | ImageFormat::Bc4Unorm
-        | ImageFormat::Bc4Snorm => 4,
+            // 4 bits per pixel
+            Self::Bc1Typeless
+            | Self::Bc1Unorm
+            | Self::Bc1UnormSrgb
+            | Self::Bc4Typeless
+            | Self::Bc4Unorm
+            | Self::Bc4Snorm => 4,
 
-        // 8 bits per pixel
-        ImageFormat::R8Typeless
-        | ImageFormat::R8Unorm
-        | ImageFormat::R8Uint
-        | ImageFormat::R8Snorm
-        | ImageFormat::R8Sint
-        | ImageFormat::A8Unorm
-        | ImageFormat::Bc2Typeless
-        | ImageFormat::Bc2Unorm
-        | ImageFormat::Bc2UnormSrgb
-        | ImageFormat::Bc3Typeless
-        | ImageFormat::Bc3Unorm
-        | ImageFormat::Bc3UnormSrgb
-        | ImageFormat::Bc5Typeless
-        | ImageFormat::Bc5Unorm
-        | ImageFormat::Bc5Snorm
-        | ImageFormat::Bc6HTypeless
-        | ImageFormat::Bc6HUf16
-        | ImageFormat::Bc6HSf16
-        | ImageFormat::Bc7Typeless
-        | ImageFormat::Bc7Unorm
-        | ImageFormat::Bc7UnormSrgb
-        | ImageFormat::Ai44
-        | ImageFormat::Ia44
-        | ImageFormat::P8 => 8,
+            // 8 bits per pixel
+            Self::R8Typeless
+            | Self::R8Unorm
+            | Self::R8Uint
+            | Self::R8Snorm
+            | Self::R8Sint
+            | Self::A8Unorm
+            | Self::Bc2Typeless
+            | Self::Bc2Unorm
+            | Self::Bc2UnormSrgb
+            | Self::Bc3Typeless
+            | Self::Bc3Unorm
+            | Self::Bc3UnormSrgb
+            | Self::Bc5Typeless
+            | Self::Bc5Unorm
+            | Self::Bc5Snorm
+            | Self::Bc6HTypeless
+            | Self::Bc6HUf16
+            | Self::Bc6HSf16
+            | Self::Bc7Typeless
+            | Self::Bc7Unorm
+            | Self::Bc7UnormSrgb
+            | Self::Ai44
+            | Self::Ia44
+            | Self::P8 => 8,
 
-        // 12 bits per pixel
-        ImageFormat::Nv11 | ImageFormat::Nv12 | ImageFormat::I420Opaque => 12,
+            // 12 bits per pixel
+            Self::Nv11 | Self::Nv12 | Self::I420Opaque => 12,
 
-        // 16 bits per pixel
-        ImageFormat::R8G8Typeless
-        | ImageFormat::R8G8Unorm
-        | ImageFormat::R8G8Uint
-        | ImageFormat::R8G8Snorm
-        | ImageFormat::R8G8Sint
-        | ImageFormat::R16Typeless
-        | ImageFormat::R16Float
-        | ImageFormat::D16Unorm
-        | ImageFormat::R16Unorm
-        | ImageFormat::R16Uint
-        | ImageFormat::R16Snorm
-        | ImageFormat::R16Sint
-        | ImageFormat::B5G6R5Unorm
-        | ImageFormat::B5G5R5A1Unorm
-        | ImageFormat::A8P8
-        | ImageFormat::B4G4R4A4Unorm
-        | ImageFormat::P208
-        | ImageFormat::V208 => 16,
+            // 16 bits per pixel
+            Self::R8G8Typeless
+            | Self::R8G8Unorm
+            | Self::R8G8Uint
+            | Self::R8G8Snorm
+            | Self::R8G8Sint
+            | Self::R16Typeless
+            | Self::R16Float
+            | Self::D16Unorm
+            | Self::R16Unorm
+            | Self::R16Uint
+            | Self::R16Snorm
+            | Self::R16Sint
+            | Self::B5G6R5Unorm
+            | Self::B5G5R5A1Unorm
+            | Self::A8P8
+            | Self::B4G4R4A4Unorm
+            | Self::P208
+            | Self::V208 => 16,
 
-        // 24 bits per pixel
-        ImageFormat::P010
-        | ImageFormat::P016
-        | ImageFormat::V408
-        | ImageFormat::R8G8B8Unorm
-        | ImageFormat::B8G8R8Unorm => 24,
+            // 24 bits per pixel
+            Self::P010 | Self::P016 | Self::V408 | Self::R8G8B8Unorm | Self::B8G8R8Unorm => 24,
 
-        // 32 bits per pixel
-        ImageFormat::R10G10B10A2Typeless
-        | ImageFormat::R10G10B10A2Unorm
-        | ImageFormat::R10G10B10A2Uint
-        | ImageFormat::R11G11B10Float
-        | ImageFormat::R8G8B8A8Typeless
-        | ImageFormat::R8G8B8A8Unorm
-        | ImageFormat::R8G8B8A8UnormSrgb
-        | ImageFormat::R8G8B8A8Uint
-        | ImageFormat::R8G8B8A8Snorm
-        | ImageFormat::R8G8B8A8Sint
-        | ImageFormat::R16G16Typeless
-        | ImageFormat::R16G16Float
-        | ImageFormat::R16G16Unorm
-        | ImageFormat::R16G16Uint
-        | ImageFormat::R16G16Snorm
-        | ImageFormat::R16G16Sint
-        | ImageFormat::R32Typeless
-        | ImageFormat::D32Float
-        | ImageFormat::R32Float
-        | ImageFormat::R32Uint
-        | ImageFormat::R32Sint
-        | ImageFormat::R24G8Typeless
-        | ImageFormat::D24UnormS8Uint
-        | ImageFormat::R24UnormX8Typeless
-        | ImageFormat::X24TypelessG8Uint
-        | ImageFormat::R9G9B9E5Sharedexp
-        | ImageFormat::R8G8B8G8Unorm
-        | ImageFormat::G8R8G8B8Unorm
-        | ImageFormat::B8G8R8A8Unorm
-        | ImageFormat::B8G8R8X8Unorm
-        | ImageFormat::R10G10B10XrBiasA2Unorm
-        | ImageFormat::B8G8R8A8Typeless
-        | ImageFormat::B8G8R8A8UnormSrgb
-        | ImageFormat::B8G8R8X8Typeless
-        | ImageFormat::B8G8R8X8UnormSrgb
-        | ImageFormat::Ayuv
-        | ImageFormat::Y410
-        | ImageFormat::Yuy2
-        | ImageFormat::A8R8G8B8Unorm => 32,
+            // 32 bits per pixel
+            Self::R10G10B10A2Typeless
+            | Self::R10G10B10A2Unorm
+            | Self::R10G10B10A2Uint
+            | Self::R11G11B10Float
+            | Self::R8G8B8A8Typeless
+            | Self::R8G8B8A8Unorm
+            | Self::R8G8B8A8UnormSrgb
+            | Self::R8G8B8A8Uint
+            | Self::R8G8B8A8Snorm
+            | Self::R8G8B8A8Sint
+            | Self::R16G16Typeless
+            | Self::R16G16Float
+            | Self::R16G16Unorm
+            | Self::R16G16Uint
+            | Self::R16G16Snorm
+            | Self::R16G16Sint
+            | Self::R32Typeless
+            | Self::D32Float
+            | Self::R32Float
+            | Self::R32Uint
+            | Self::R32Sint
+            | Self::R24G8Typeless
+            | Self::D24UnormS8Uint
+            | Self::R24UnormX8Typeless
+            | Self::X24TypelessG8Uint
+            | Self::R9G9B9E5Sharedexp
+            | Self::R8G8B8G8Unorm
+            | Self::G8R8G8B8Unorm
+            | Self::B8G8R8A8Unorm
+            | Self::B8G8R8X8Unorm
+            | Self::R10G10B10XrBiasA2Unorm
+            | Self::B8G8R8A8Typeless
+            | Self::B8G8R8A8UnormSrgb
+            | Self::B8G8R8X8Typeless
+            | Self::B8G8R8X8UnormSrgb
+            | Self::Ayuv
+            | Self::Y410
+            | Self::Yuy2
+            | Self::A8R8G8B8Unorm => 32,
 
-        // 64 bits per pixel
-        ImageFormat::R16G16B16A16Typeless
-        | ImageFormat::R16G16B16A16Float
-        | ImageFormat::R16G16B16A16Unorm
-        | ImageFormat::R16G16B16A16Uint
-        | ImageFormat::R16G16B16A16Snorm
-        | ImageFormat::R16G16B16A16Sint
-        | ImageFormat::R32G32Typeless
-        | ImageFormat::R32G32Float
-        | ImageFormat::R32G32Uint
-        | ImageFormat::R32G32Sint
-        | ImageFormat::R32G8X24Typeless
-        | ImageFormat::D32FloatS8X24Uint
-        | ImageFormat::R32FloatX8X24Typeless
-        | ImageFormat::X32TypelessG8X24Uint
-        | ImageFormat::Y416
-        | ImageFormat::Y210
-        | ImageFormat::Y216 => 64,
+            // 64 bits per pixel
+            Self::R16G16B16A16Typeless
+            | Self::R16G16B16A16Float
+            | Self::R16G16B16A16Unorm
+            | Self::R16G16B16A16Uint
+            | Self::R16G16B16A16Snorm
+            | Self::R16G16B16A16Sint
+            | Self::R32G32Typeless
+            | Self::R32G32Float
+            | Self::R32G32Uint
+            | Self::R32G32Sint
+            | Self::R32G8X24Typeless
+            | Self::D32FloatS8X24Uint
+            | Self::R32FloatX8X24Typeless
+            | Self::X32TypelessG8X24Uint
+            | Self::Y416
+            | Self::Y210
+            | Self::Y216 => 64,
 
-        // 96 bits per pixel
-        ImageFormat::R32G32B32Typeless
-        | ImageFormat::R32G32B32Float
-        | ImageFormat::R32G32B32Uint
-        | ImageFormat::R32G32B32Sint => 96,
+            // 96 bits per pixel
+            Self::R32G32B32Typeless
+            | Self::R32G32B32Float
+            | Self::R32G32B32Uint
+            | Self::R32G32B32Sint => 96,
 
-        // 128 bits per pixel
-        ImageFormat::R32G32B32A32Typeless
-        | ImageFormat::R32G32B32A32Float
-        | ImageFormat::R32G32B32A32Uint
-        | ImageFormat::R32G32B32A32Sint => 128,
+            // 128 bits per pixel
+            Self::R32G32B32A32Typeless
+            | Self::R32G32B32A32Float
+            | Self::R32G32B32A32Uint
+            | Self::R32G32B32A32Sint => 128,
+        }
     }
-}
 
-impl TryFrom<u32> for ImageFormat {
-    type Error = TextureError;
+    /// Calculates the block dimensions for a compressed image format.
+    pub const fn block_dimensions(&self) -> (u32, u32) {
+        match self {
+            // 4x4 compressed texture format.
+            Self::Bc1Typeless
+            | Self::Bc1Unorm
+            | Self::Bc1UnormSrgb
+            | Self::Bc2Typeless
+            | Self::Bc2Unorm
+            | Self::Bc2UnormSrgb
+            | Self::Bc3Typeless
+            | Self::Bc3Unorm
+            | Self::Bc3UnormSrgb
+            | Self::Bc4Typeless
+            | Self::Bc4Unorm
+            | Self::Bc4Snorm
+            | Self::Bc5Typeless
+            | Self::Bc5Unorm
+            | Self::Bc5Snorm
+            | Self::Bc6HTypeless
+            | Self::Bc6HUf16
+            | Self::Bc6HSf16
+            | Self::Bc7Typeless
+            | Self::Bc7Unorm
+            | Self::Bc7UnormSrgb => (4, 4),
 
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
-        if value >= ImageFormat::Unknown as u32 && value < ImageFormat::Count as u32 {
+            // Non-compressed texture format.
+            _ => (1, 1),
+        }
+    }
+
+    /// Calculates the block size for a compressed image format.
+    pub const fn block_size(&self) -> u32 {
+        match self {
+            // 8 bytes per block.
+            Self::Bc1Typeless
+            | Self::Bc1Unorm
+            | Self::Bc1UnormSrgb
+            | Self::Bc4Typeless
+            | Self::Bc4Unorm
+            | Self::Bc4Snorm => 8,
+
+            // 16 bytes per block.
+            Self::Bc2Typeless
+            | Self::Bc2Unorm
+            | Self::Bc2UnormSrgb
+            | Self::Bc3Typeless
+            | Self::Bc3Unorm
+            | Self::Bc3UnormSrgb
+            | Self::Bc5Typeless
+            | Self::Bc5Unorm
+            | Self::Bc5Snorm
+            | Self::Bc6HTypeless
+            | Self::Bc6HUf16
+            | Self::Bc6HSf16
+            | Self::Bc7Typeless
+            | Self::Bc7Unorm
+            | Self::Bc7UnormSrgb => 16,
+
+            // Non-compressed pixel format.
+            _ => 0,
+        }
+    }
+
+    /// Whether or not the image format is palettized.
+    pub const fn is_palettized(&self) -> bool {
+        matches!(self, Self::Ai44 | Self::Ia44 | Self::P8 | Self::A8P8)
+    }
+
+    // Whether or not the image format is compressed.
+    pub const fn is_compressed(&self) -> bool {
+        matches!(
+            self,
+            Self::Bc1Typeless
+                | Self::Bc1Unorm
+                | Self::Bc1UnormSrgb
+                | Self::Bc2Typeless
+                | Self::Bc2Unorm
+                | Self::Bc2UnormSrgb
+                | Self::Bc3Typeless
+                | Self::Bc3Unorm
+                | Self::Bc3UnormSrgb
+                | Self::Bc4Typeless
+                | Self::Bc4Unorm
+                | Self::Bc4Snorm
+                | Self::Bc5Typeless
+                | Self::Bc5Unorm
+                | Self::Bc5Snorm
+                | Self::Bc6HTypeless
+                | Self::Bc6HUf16
+                | Self::Bc6HSf16
+                | Self::Bc7Typeless
+                | Self::Bc7Unorm
+                | Self::Bc7UnormSrgb
+        )
+    }
+
+    /// Whether or not the image format is in sRGB colorspace.
+    pub const fn is_srgb(&self) -> bool {
+        matches!(
+            self,
+            Self::Bc1UnormSrgb
+                | Self::Bc2UnormSrgb
+                | Self::Bc3UnormSrgb
+                | Self::Bc7UnormSrgb
+                | Self::R8G8B8A8UnormSrgb
+                | Self::B8G8R8A8UnormSrgb
+                | Self::B8G8R8X8UnormSrgb
+        )
+    }
+
+    /// Whether or not the image format is software convertible.
+    pub const fn is_unpack_required(&self) -> bool {
+        matches!(
+            self,
+            Self::R1Unorm
+                | Self::R8G8B8Unorm
+                | Self::B8G8R8Unorm
+                | Self::R32G32B32Typeless
+                | Self::R32G32B32Float
+                | Self::R32G32B32Uint
+                | Self::R32G32B32Sint
+        )
+    }
+
+    /// Whether or not the image format is a swizzled version of the given format.
+    pub const fn is_swizzled(&self, format: Self) -> bool {
+        matches!(
+            (self, format),
+            (Self::R8G8B8Unorm, Self::B8G8R8Unorm)
+                | (Self::B8G8R8Unorm, Self::R8G8B8Unorm)
+                | (Self::R8G8B8A8Unorm, Self::B8G8R8A8Unorm)
+                | (Self::R8G8B8A8Unorm, Self::A8R8G8B8Unorm)
+                | (Self::B8G8R8A8Unorm, Self::R8G8B8A8Unorm)
+                | (Self::B8G8R8A8Unorm, Self::A8R8G8B8Unorm)
+                | (Self::A8R8G8B8Unorm, Self::R8G8B8A8Unorm)
+                | (Self::A8R8G8B8Unorm, Self::B8G8R8A8Unorm)
+                | (Self::R8G8B8A8UnormSrgb, Self::B8G8R8A8UnormSrgb)
+                | (Self::B8G8R8A8UnormSrgb, Self::R8G8B8A8UnormSrgb)
+                | (Self::R8G8B8A8Typeless, Self::B8G8R8A8Typeless)
+                | (Self::B8G8R8A8Typeless, Self::R8G8B8A8Typeless)
+        )
+    }
+
+    /// Whether or not the image format can be resized.
+    pub const fn is_resizable(&self) -> bool {
+        matches!(
+            self,
+            Self::R8G8B8A8Typeless
+                | Self::R8G8B8A8Unorm
+                | Self::R8G8B8A8UnormSrgb
+                | Self::R8G8B8A8Uint
+                | Self::R8G8B8A8Snorm
+                | Self::R8G8B8A8Sint
+                | Self::B8G8R8A8Unorm
+                | Self::B8G8R8A8UnormSrgb
+                | Self::B8G8R8A8Typeless
+                | Self::A8R8G8B8Unorm
+        )
+    }
+
+    /// Returns the sRGB colorspace version of this image format if one exists, otherwise returns itself.
+    pub const fn to_srgb(&self) -> Self {
+        match self {
+            Self::R8G8B8A8Unorm => Self::R8G8B8A8UnormSrgb,
+            Self::Bc1Unorm => Self::Bc1UnormSrgb,
+            Self::Bc2Unorm => Self::Bc2UnormSrgb,
+            Self::Bc3Unorm => Self::Bc3UnormSrgb,
+            Self::B8G8R8A8Unorm => Self::B8G8R8A8UnormSrgb,
+            Self::B8G8R8X8Unorm => Self::B8G8R8X8UnormSrgb,
+            Self::Bc7Unorm => Self::Bc7UnormSrgb,
+            _ => *self,
+        }
+    }
+
+    /// Returns the wgpu version of this image format if one exists, otherwise returns an error.
+    pub const fn to_wgpu(&self) -> Result<TextureFormat, TextureError> {
+        Ok(match self {
+            // R8
+            Self::R8Typeless | Self::R8Unorm => TextureFormat::R8Unorm,
+            Self::R8Snorm => TextureFormat::R8Snorm,
+            Self::R8Uint => TextureFormat::R8Uint,
+            Self::R8Sint => TextureFormat::R8Sint,
+
+            // R16
+            Self::R16Typeless | Self::R16Unorm => TextureFormat::R16Unorm,
+            Self::R16Uint => TextureFormat::R16Uint,
+            Self::R16Sint => TextureFormat::R16Sint,
+            Self::R16Snorm => TextureFormat::R16Snorm,
+            Self::R16Float => TextureFormat::R16Float,
+
+            // R8G8
+            Self::R8G8Typeless | Self::R8G8Unorm => TextureFormat::Rg8Unorm,
+            Self::R8G8Snorm => TextureFormat::Rg8Snorm,
+            Self::R8G8Uint => TextureFormat::Rg8Uint,
+            Self::R8G8Sint => TextureFormat::Rg8Sint,
+
+            // R32
+            Self::R32Typeless | Self::R32Uint => TextureFormat::R32Uint,
+            Self::R32Sint => TextureFormat::R32Sint,
+            Self::R32Float => TextureFormat::R32Float,
+
+            // R16G16
+            Self::R16G16Typeless | Self::R16G16Unorm => TextureFormat::Rg16Unorm,
+            Self::R16G16Uint => TextureFormat::Rg16Uint,
+            Self::R16G16Sint => TextureFormat::Rg16Sint,
+            Self::R16G16Snorm => TextureFormat::Rg16Snorm,
+            Self::R16G16Float => TextureFormat::Rg16Float,
+
+            // RGBA8
+            Self::R8G8B8A8Typeless | Self::R8G8B8A8Unorm => TextureFormat::Rgba8Unorm,
+            Self::R8G8B8A8UnormSrgb => TextureFormat::Rgba8UnormSrgb,
+            Self::R8G8B8A8Snorm => TextureFormat::Rgba8Snorm,
+            Self::R8G8B8A8Uint => TextureFormat::Rgba8Uint,
+            Self::R8G8B8A8Sint => TextureFormat::Rgba8Sint,
+
+            // BGRA8
+            Self::B8G8R8A8Typeless | Self::B8G8R8A8Unorm => TextureFormat::Bgra8Unorm,
+            Self::B8G8R8A8UnormSrgb => TextureFormat::Bgra8UnormSrgb,
+
+            // Packed formats
+            Self::R9G9B9E5Sharedexp => TextureFormat::Rgb9e5Ufloat,
+            Self::R10G10B10A2Typeless | Self::R10G10B10A2Unorm => TextureFormat::Rgb10a2Unorm,
+            Self::R11G11B10Float => TextureFormat::Rg11b10Float,
+
+            // R32G32
+            Self::R32G32Typeless | Self::R32G32Uint => TextureFormat::Rg32Uint,
+            Self::R32G32Sint => TextureFormat::Rg32Sint,
+            Self::R32G32Float => TextureFormat::Rg32Float,
+
+            // R16G16B16A16
+            Self::R16G16B16A16Typeless | Self::R16G16B16A16Unorm => TextureFormat::Rgba16Unorm,
+            Self::R16G16B16A16Uint => TextureFormat::Rgba16Uint,
+            Self::R16G16B16A16Sint => TextureFormat::Rgba16Sint,
+            Self::R16G16B16A16Snorm => TextureFormat::Rgba16Snorm,
+            Self::R16G16B16A16Float => TextureFormat::Rgba16Float,
+
+            // R32G32B32A32
+            Self::R32G32B32A32Typeless | Self::R32G32B32A32Uint => TextureFormat::Rgba32Uint,
+            Self::R32G32B32A32Sint => TextureFormat::Rgba32Sint,
+            Self::R32G32B32A32Float => TextureFormat::Rgba32Float,
+
+            // Depth formats.
+            Self::D16Unorm => TextureFormat::Depth16Unorm,
+            Self::D24UnormS8Uint => TextureFormat::Depth24PlusStencil8,
+            Self::D32Float => TextureFormat::Depth32Float,
+
+            // BC compressed formats.
+            Self::Bc1Typeless | Self::Bc1Unorm => TextureFormat::Bc1RgbaUnorm,
+            Self::Bc1UnormSrgb => TextureFormat::Bc1RgbaUnormSrgb,
+            Self::Bc2Typeless | Self::Bc2Unorm => TextureFormat::Bc2RgbaUnorm,
+            Self::Bc2UnormSrgb => TextureFormat::Bc2RgbaUnormSrgb,
+            Self::Bc3Typeless | Self::Bc3Unorm => TextureFormat::Bc3RgbaUnorm,
+            Self::Bc3UnormSrgb => TextureFormat::Bc3RgbaUnormSrgb,
+            Self::Bc4Typeless | Self::Bc4Unorm => TextureFormat::Bc4RUnorm,
+            Self::Bc4Snorm => TextureFormat::Bc4RSnorm,
+            Self::Bc5Typeless | Self::Bc5Unorm => TextureFormat::Bc5RgUnorm,
+            Self::Bc5Snorm => TextureFormat::Bc5RgSnorm,
+            Self::Bc6HTypeless | Self::Bc6HUf16 => TextureFormat::Bc6hRgbUfloat,
+            Self::Bc6HSf16 => TextureFormat::Bc6hRgbFloat,
+            Self::Bc7Typeless | Self::Bc7Unorm => TextureFormat::Bc7RgbaUnorm,
+            Self::Bc7UnormSrgb => TextureFormat::Bc7RgbaUnormSrgb,
+
+            // WGPU unsupported mapping.
+            _ => return Err(TextureError::UnsupportedImageFormat(*self)),
+        })
+    }
+
+    /// Returns the corresponding image format from the provided DXGI_FORMAT format, or returns an error.
+    pub const fn from_dxgi_format(dxgi_format: u32) -> Result<Self, TextureError> {
+        if dxgi_format >= Self::Unknown as u32 && dxgi_format < Self::Count as u32 {
             // SAFETY: We check that the value is within the bounds of the enum, and that
             // the enum has no gaps or holes.
             #[allow(unsafe_code)]
-            Ok(unsafe { std::mem::transmute::<u32, ImageFormat>(value) })
+            Ok(unsafe { std::mem::transmute::<u32, Self>(dxgi_format) })
         } else {
-            Err(TextureError::InvalidImageFormat(ImageFormat::Unknown))
+            Err(TextureError::InvalidDxgiFormat(dxgi_format))
         }
     }
 }

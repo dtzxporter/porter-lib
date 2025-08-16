@@ -8,7 +8,6 @@ use porter_utils::StackVec;
 use porter_utils::StructReadExt;
 use porter_utils::StructWriteExt;
 
-use crate::is_format_srgb;
 use crate::Image;
 use crate::ImageFileType;
 use crate::ImageFormat;
@@ -34,7 +33,7 @@ enum ImageType {
 
 #[derive(Debug, Clone, Copy)]
 enum ColorType {
-    Grayscale,
+    Gray,
     Rgba,
 }
 
@@ -58,14 +57,14 @@ struct TgaHeader {
 /// Converts an image format to a tga specification.
 const fn format_to_tga(format: ImageFormat) -> Result<(ColorType, ImageType, u8), TextureError> {
     Ok(match format {
-        ImageFormat::R8Unorm => (ColorType::Grayscale, ImageType::CompressedGrayscale, 8),
+        ImageFormat::R8Unorm => (ColorType::Gray, ImageType::CompressedGrayscale, 8),
         ImageFormat::B8G8R8A8Unorm => (ColorType::Rgba, ImageType::CompressedRgb, 32),
         ImageFormat::B8G8R8A8UnormSrgb => (ColorType::Rgba, ImageType::CompressedRgb, 32),
         _ => {
             return Err(TextureError::ContainerFormatInvalid(
                 format,
                 ImageFileType::Tga,
-            ))
+            ));
         }
     })
 }
@@ -97,7 +96,7 @@ pub const fn pick_format(format: ImageFormat) -> ImageFormat {
 
         // Various compressed formats.
         _ => {
-            if is_format_srgb(format) {
+            if format.is_srgb() {
                 ImageFormat::B8G8R8A8UnormSrgb
             } else {
                 ImageFormat::B8G8R8A8Unorm
@@ -110,9 +109,9 @@ pub const fn pick_format(format: ImageFormat) -> ImageFormat {
 pub fn to_tga<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), TextureError> {
     let (color_type, image_type, bit_depth) = format_to_tga(image.format())?;
 
-    let frames = image.frames().len();
+    let frames = image.frames();
     let width = image.width();
-    let height = image.height() * frames.min(MAXIMUM_TGA_FRAMES) as u32;
+    let height = image.height() * frames.len().min(MAXIMUM_TGA_FRAMES) as u32;
 
     if width > u16::MAX as u32 || height > u16::MAX as u32 {
         return Err(TextureError::InvalidImageSize(width, height));
@@ -135,10 +134,20 @@ pub fn to_tga<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), Text
 
     output.write_struct(header)?;
 
-    for frame in image.frames().take(MAXIMUM_TGA_FRAMES) {
+    let size = image.frame_size_with_mipmaps(image.width(), image.height(), 1);
+    let stride = match color_type {
+        ColorType::Gray => image.width() as usize,
+        ColorType::Rgba => image.width() as usize * 4,
+    };
+
+    for frame in frames.iter().take(MAXIMUM_TGA_FRAMES) {
         match color_type {
-            ColorType::Grayscale => write_rle_encode::<1, _>(frame.buffer(), output)?,
-            ColorType::Rgba => write_rle_encode::<4, _>(frame.buffer(), output)?,
+            ColorType::Gray => {
+                write_rle_encode::<1, _>(&frame.buffer()[..size as usize], stride, output)?
+            }
+            ColorType::Rgba => {
+                write_rle_encode::<4, _>(&frame.buffer()[..size as usize], stride, output)?
+            }
         };
     }
 
@@ -219,58 +228,67 @@ fn read_rle_decode<const BYTES_PER_PIXEL: usize, I: Read + Seek>(
 /// Utility method to write a frame run-length encoded.
 fn write_rle_encode<const BYTES_PER_PIXEL: usize, O: Write + Seek>(
     buffer: &[u8],
+    stride: usize,
     output: &mut O,
 ) -> Result<(), TextureError> {
-    let mut counter = 0;
-    let mut prev_pixel: Option<&[u8]> = None;
-    let mut packet_type_rle = true;
-
     let mut scratch = StackVec::new([0; MAXIMUM_RLE_BUFFER]);
 
-    for pixel in buffer.chunks_exact(BYTES_PER_PIXEL) {
-        if let Some(prev_pixel) = prev_pixel {
-            if pixel == prev_pixel {
-                if !packet_type_rle && counter > 0 {
-                    write_raw(&scratch, counter as u8, output)?;
+    for row in buffer.chunks_exact(stride) {
+        let mut counter = 0;
+        let mut prev_pixel: Option<&[u8]> = None;
+        let mut packet_type_rle = true;
+
+        for pixel in row.chunks_exact(BYTES_PER_PIXEL) {
+            if let Some(prev_pixel) = prev_pixel {
+                if pixel == prev_pixel {
+                    if !packet_type_rle && counter > 2 {
+                        write_raw(
+                            &scratch[0..scratch.len() - BYTES_PER_PIXEL],
+                            counter as u8 - 1,
+                            output,
+                        )?;
+
+                        counter = 1;
+                        scratch.clear();
+                    }
+
+                    packet_type_rle = true;
+                } else if packet_type_rle && counter > 0 {
+                    write_rle(prev_pixel, counter as u8, output)?;
 
                     counter = 0;
+                    packet_type_rle = false;
                     scratch.clear();
                 }
+            }
 
-                packet_type_rle = true;
-            } else if packet_type_rle && counter > 0 {
-                write_rle(prev_pixel, counter as u8, output)?;
+            counter += 1;
+            scratch.write_all(pixel)?;
+
+            if counter == MAXIMUM_RLE_LENGTH {
+                if packet_type_rle {
+                    write_rle(prev_pixel.unwrap_or_default(), counter as u8, output)?;
+                } else {
+                    write_raw(&scratch, counter as u8, output)?;
+                }
 
                 counter = 0;
-                packet_type_rle = false;
+                packet_type_rle = true;
                 scratch.clear();
             }
+
+            prev_pixel = Some(pixel);
         }
 
-        counter += 1;
-        scratch.write_all(pixel)?;
-
-        if counter == MAXIMUM_RLE_LENGTH {
+        if counter > 0 {
             if packet_type_rle {
                 write_rle(prev_pixel.unwrap_or_default(), counter as u8, output)?;
             } else {
                 write_raw(&scratch, counter as u8, output)?;
             }
-
-            counter = 0;
-            packet_type_rle = true;
-            scratch.clear();
         }
 
-        prev_pixel = Some(pixel);
-    }
-
-    if counter > 0 {
-        if packet_type_rle {
-            write_rle(prev_pixel.unwrap_or_default(), counter as u8, output)?;
-        } else {
-            write_raw(&scratch, counter as u8, output)?;
-        }
+        scratch.clear();
     }
 
     Ok(())

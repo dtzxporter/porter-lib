@@ -4,7 +4,6 @@ use wgpu::*;
 use porter_gpu::GPUInstance;
 use porter_math::Vector2;
 use porter_math::Vector3;
-use porter_texture::format_to_wgpu;
 use porter_texture::Image;
 use porter_utils::AsByteSlice;
 use porter_utils::AsThisSlice;
@@ -25,7 +24,7 @@ impl RenderImage {
         bind_group_layouts: &[&BindGroupLayout],
         image: &Image,
     ) -> Self {
-        let format_convert = format_to_wgpu(image.format());
+        let format_convert = image.format().to_wgpu();
         let format = *format_convert
             .as_ref()
             .unwrap_or(&TextureFormat::Rgba8Unorm);
@@ -45,7 +44,7 @@ impl RenderImage {
             view_formats: &[],
         };
 
-        let texture = if let (Some(frame), Ok(_)) = (image.frames().next(), format_convert) {
+        let texture = if let (Some(frame), Ok(_)) = (image.frames().first(), format_convert) {
             instance.device().create_texture_with_data(
                 instance.queue(),
                 &texture_desc,

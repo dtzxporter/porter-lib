@@ -2,7 +2,6 @@ use wgpu::util::*;
 use wgpu::*;
 
 use porter_gpu::GPUInstance;
-use porter_texture::format_to_wgpu;
 use porter_texture::Image;
 use porter_texture::ImageFormat;
 use porter_utils::AsThisSlice;
@@ -37,7 +36,7 @@ impl RenderMaterialTexture {
 
         let image = image.as_ref().or(default.as_ref()).unwrap();
 
-        let format_convert = format_to_wgpu(image.format());
+        let format_convert = image.format().to_wgpu();
         let format = *format_convert
             .as_ref()
             .unwrap_or(&TextureFormat::Rgba8Unorm);
@@ -57,7 +56,7 @@ impl RenderMaterialTexture {
             view_formats: &[],
         };
 
-        let texture = if let (Some(frame), Ok(_)) = (image.frames().next(), format_convert) {
+        let texture = if let (Some(frame), Ok(_)) = (image.frames().first(), format_convert) {
             instance.device().create_texture_with_data(
                 instance.queue(),
                 &texture_desc,

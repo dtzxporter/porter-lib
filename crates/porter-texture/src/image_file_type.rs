@@ -15,10 +15,10 @@ pub enum ImageFileType {
 impl AsRef<OsStr> for ImageFileType {
     fn as_ref(&self) -> &OsStr {
         match self {
-            ImageFileType::Dds => OsStr::new("dds"),
-            ImageFileType::Png => OsStr::new("png"),
-            ImageFileType::Tiff => OsStr::new("tiff"),
-            ImageFileType::Tga => OsStr::new("tga"),
+            Self::Dds => OsStr::new("dds"),
+            Self::Png => OsStr::new("png"),
+            Self::Tiff => OsStr::new("tiff"),
+            Self::Tga => OsStr::new("tga"),
         }
     }
 }

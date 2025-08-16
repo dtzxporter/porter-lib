@@ -1,6 +1,6 @@
 use wgpu::AstcChannel;
-use wgpu::TextureFormat;
 use wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+use wgpu::TextureFormat;
 
 use porter_utils::AsAligned;
 
@@ -12,8 +12,10 @@ pub trait TextureExtensions {
     fn buffer_size_aligned(&self, width: u32, height: u32) -> u64;
     /// Size of one row for the given width.
     fn bytes_per_row(&self, width: u32) -> u32;
-    /// Returns true if the texture format is unorm, else it's snorm.
+    /// Returns true if the texture format is unorm.
     fn is_unorm(&self) -> bool;
+    /// Returns true if the texture format is snorm.
+    fn is_snorm(&self) -> bool;
 }
 
 impl TextureExtensions for TextureFormat {
@@ -43,7 +45,7 @@ impl TextureExtensions for TextureFormat {
         let block_size = self.block_copy_size(None).unwrap_or_default();
         let block_dims = self.block_dimensions();
 
-        let nbw = (width + (block_dims.0 - 1)) / block_dims.0;
+        let nbw = width.div_ceil(block_dims.0);
 
         block_size * nbw
     }
@@ -89,6 +91,22 @@ impl TextureExtensions for TextureFormat {
                     channel: AstcChannel::UnormSrgb,
                     ..
                 }
+        )
+    }
+
+    fn is_snorm(&self) -> bool {
+        matches!(
+            self,
+            TextureFormat::R8Snorm
+                | TextureFormat::R16Snorm
+                | TextureFormat::Rg8Snorm
+                | TextureFormat::Rg16Snorm
+                | TextureFormat::Rgba8Snorm
+                | TextureFormat::Rgba16Snorm
+                | TextureFormat::Bc4RSnorm
+                | TextureFormat::Bc5RgSnorm
+                | TextureFormat::EacR11Snorm
+                | TextureFormat::EacRg11Snorm
         )
     }
 }

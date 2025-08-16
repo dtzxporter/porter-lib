@@ -12,7 +12,7 @@ impl Frame {
         let mut buffer: Vec<u8> = Vec::new();
 
         buffer
-            .try_reserve(size as usize)
+            .try_reserve_exact(size as usize)
             .map_err(|_| TextureError::FrameAllocationFailed)?;
 
         buffer.resize(size as usize, 0);

@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 wgpu = { version = "0.19.4", default-features = false, features = ["wgsl"] }
 png = "0.17"
-tiff = "0.9"
+tiff = "0.10"
 porter-utils = { path = "../porter-utils" }
 porter-math = { path = "../porter-math" }
 porter-gpu = { path = "../porter-gpu" }

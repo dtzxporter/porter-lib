@@ -5,6 +5,7 @@ use crate::ImageFormat;
 #[derive(Debug)]
 pub enum TextureError {
     InvalidImageFormat(ImageFormat),
+    InvalidDxgiFormat(u32),
     UnsupportedImageFormat(ImageFormat),
     InvalidImageSize(u32, u32),
     InvalidFrameSize(u32, u32),

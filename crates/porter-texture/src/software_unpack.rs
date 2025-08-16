@@ -46,7 +46,7 @@ pub fn software_unpack_image(image: &mut Image) -> Result<(), TextureError> {
                 let mut writer = Cursor::new(new_frame.buffer_mut());
 
                 for _ in 0..image.height() {
-                    let nbw = (image.width() + 7) / 8;
+                    let nbw = image.width().div_ceil(8);
                     let mut unpacked = 0;
 
                     for _ in 0..nbw {

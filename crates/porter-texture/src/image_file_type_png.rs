@@ -10,8 +10,6 @@ use png::Encoder;
 use png::SrgbRenderingIntent;
 use png::Transformations;
 
-use crate::format_to_srgb;
-use crate::is_format_srgb;
 use crate::Image;
 use crate::ImageFileType;
 use crate::ImageFormat;
@@ -37,7 +35,7 @@ const fn format_to_png(format: ImageFormat) -> Result<(ColorType, BitDepth, bool
             return Err(TextureError::ContainerFormatInvalid(
                 format,
                 ImageFileType::Png,
-            ))
+            ));
         }
     })
 }
@@ -104,7 +102,7 @@ pub const fn pick_format(format: ImageFormat) -> ImageFormat {
 
         // Various compressed formats.
         _ => {
-            if is_format_srgb(format) {
+            if format.is_srgb() {
                 ImageFormat::R8G8B8A8UnormSrgb
             } else {
                 ImageFormat::R8G8B8A8Unorm
@@ -117,8 +115,8 @@ pub const fn pick_format(format: ImageFormat) -> ImageFormat {
 pub fn to_png<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), TextureError> {
     let (color_type, bit_depth, is_srgb) = format_to_png(image.format())?;
 
-    let frames = image.frames().len();
-    let height = image.height() * frames.min(MAXIMUM_PNG_FRAMES) as u32;
+    let frames = image.frames();
+    let height = image.height() * frames.len().min(MAXIMUM_PNG_FRAMES) as u32;
     let width = image.width();
 
     let mut encoder = Encoder::new(output, width, height);
@@ -128,7 +126,7 @@ pub fn to_png<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), Text
     encoder.set_depth(bit_depth);
 
     if is_srgb {
-        encoder.set_srgb(SrgbRenderingIntent::Perceptual);
+        encoder.set_source_srgb(SrgbRenderingIntent::Perceptual);
     }
 
     encoder.add_text_chunk("Author".into(), "DTZxPorter".into())?;
@@ -136,19 +134,14 @@ pub fn to_png<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), Text
     let mut encoder = encoder.write_header()?;
     let mut writer = encoder.stream_writer_with_size(MAXIMUM_PNG_BUFFER)?;
 
-    for frame in image.frames().take(MAXIMUM_PNG_FRAMES) {
-        let size = image.frame_size_with_mipmaps(image.width(), image.height(), 1);
+    let size = image.frame_size_with_mipmaps(image.width(), image.height(), 1);
 
+    for frame in frames.iter().take(MAXIMUM_PNG_FRAMES) {
+        // Png requires big-endian format for 16bit formats.
         if matches!(bit_depth, BitDepth::Sixteen) {
-            let mut temp: Vec<u8> = Vec::with_capacity(size as usize);
-
-            // Png requires big-endian format for 16bit formats.
             for pixel in frame.buffer()[..size as usize].chunks_exact(2) {
-                temp.push(pixel[1]);
-                temp.push(pixel[0]);
+                writer.write_all(&[pixel[1], pixel[0]])?;
             }
-
-            writer.write_all(&temp)?;
         } else {
             writer.write_all(&frame.buffer()[..size as usize])?;
         }
@@ -170,7 +163,7 @@ pub fn from_png<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
     let mut format = png_to_format((color_type, bit_depth))?;
 
     if decoder.info().srgb.is_some() {
-        format = format_to_srgb(format);
+        format = format.to_srgb();
     }
 
     let mut image = Image::new(decoder.info().width, decoder.info().height, format)?;

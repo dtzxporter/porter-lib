@@ -11,4 +11,6 @@ pub enum ImageConvertOptions {
     AutoReconstructZ,
     /// Only reconstruct the Z channel and invert the Y channel of the image when the format is Bc5Unorm.
     AutoReconstructZInvertY,
+    /// Transform the image by scale and bias.
+    UniformScaleBias(f32, f32),
 }

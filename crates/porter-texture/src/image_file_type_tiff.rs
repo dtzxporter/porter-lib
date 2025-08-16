@@ -1,26 +1,29 @@
 use std::borrow::Cow;
+use std::io::Cursor;
 use std::io::Read;
 use std::io::Seek;
 use std::io::Write;
 
+use tiff::ColorType;
 use tiff::decoder::Decoder;
 use tiff::decoder::DecodingResult;
-use tiff::encoder::colortype;
-use tiff::encoder::compression::Deflate;
-use tiff::encoder::compression::DeflateLevel;
+use tiff::encoder::Compression;
 use tiff::encoder::TiffEncoder;
 use tiff::encoder::TiffValue;
+use tiff::encoder::colortype;
+use tiff::encoder::compression::DeflateLevel;
 use tiff::tags::Tag;
 use tiff::tags::Type;
-use tiff::ColorType;
 
 use porter_utils::AsThisSlice;
 
-use crate::is_format_srgb;
 use crate::Image;
 use crate::ImageFileType;
 use crate::ImageFormat;
 use crate::TextureError;
+
+/// Maximum number of tiff frames to expand.
+const MAXIMUM_TIFF_FRAMES: usize = 6;
 
 /// The official sRGB profile used in Adobe/other libraries.
 const ICC_SRGB_PROFILE: [u8; 3144] = [
@@ -241,11 +244,9 @@ impl TiffValue for IccProfileValue {
 /// Utility macro that writes the proper image format.
 macro_rules! write_image_data {
     ($encoder:expr, $frame:expr, $image:expr, $size:expr, $color:ty, $srgb:expr) => {{
-        let mut frame_encoder = $encoder.new_image_with_compression::<$color, Deflate>(
-            $image.width(),
-            $image.height(),
-            Deflate::with_level(DeflateLevel::Fast),
-        )?;
+        let mut frame_encoder = $encoder.with_compression(Compression::Deflate(DeflateLevel::Fast));
+        let mut frame_encoder =
+            frame_encoder.new_image::<$color>($image.width(), $image.height())?;
 
         let directory = frame_encoder.encoder();
 
@@ -260,14 +261,17 @@ macro_rules! write_image_data {
 }
 
 /// Creates a proper image format from the tiff specification.
-const fn tiff_to_format(format: ColorType) -> Result<ImageFormat, TextureError> {
-    Ok(match format {
+const fn tiff_to_format(color_type: ColorType) -> Result<ImageFormat, TextureError> {
+    Ok(match color_type {
         ColorType::Gray(8) => ImageFormat::R8Unorm,
         ColorType::Gray(16) => ImageFormat::R16Unorm,
+        ColorType::Gray(32) => ImageFormat::R32Float,
         ColorType::GrayA(8) => ImageFormat::R8G8Unorm,
         ColorType::GrayA(16) => ImageFormat::R16G16Unorm,
+        ColorType::GrayA(32) => ImageFormat::R32G32Float,
         ColorType::RGBA(8) => ImageFormat::R8G8B8A8Unorm,
         ColorType::RGBA(16) => ImageFormat::R16G16B16A16Unorm,
+        ColorType::RGBA(32) => ImageFormat::R32G32B32A32Float,
         _ => return Err(TextureError::UnsupportedImageFormat(ImageFormat::Unknown)),
     })
 }
@@ -283,7 +287,6 @@ pub const fn pick_format(format: ImageFormat) -> ImageFormat {
 
         // Grayscale 16bit.
         ImageFormat::R16Typeless
-        | ImageFormat::R16Float
         | ImageFormat::R16Unorm
         | ImageFormat::R16Snorm
         | ImageFormat::R16Sint
@@ -294,12 +297,10 @@ pub const fn pick_format(format: ImageFormat) -> ImageFormat {
         | ImageFormat::R16G16Unorm
         | ImageFormat::R16G16Uint
         | ImageFormat::R16G16Snorm
-        | ImageFormat::R16G16Sint
-        | ImageFormat::R16G16Float => ImageFormat::R16G16B16A16Unorm,
+        | ImageFormat::R16G16Sint => ImageFormat::R16G16B16A16Unorm,
 
         // Red + green + blue + alpha 16bit.
         ImageFormat::R16G16B16A16Typeless
-        | ImageFormat::R16G16B16A16Float
         | ImageFormat::R16G16B16A16Unorm
         | ImageFormat::R16G16B16A16Uint
         | ImageFormat::R16G16B16A16Snorm
@@ -312,12 +313,26 @@ pub const fn pick_format(format: ImageFormat) -> ImageFormat {
 
         // High dynamic range Bc6.
         ImageFormat::Bc6HTypeless | ImageFormat::Bc6HUf16 | ImageFormat::Bc6HSf16 => {
-            ImageFormat::R16G16B16A16Unorm
+            ImageFormat::R32G32B32A32Float
+        }
+
+        // Red 16/32bit float.
+        ImageFormat::R16Float | ImageFormat::R32Float => ImageFormat::R32Float,
+
+        // Red + green 16/32bit float (converted to RGBA 32bit float).
+        ImageFormat::R16G16Float | ImageFormat::R32G32Float => ImageFormat::R32G32B32A32Float,
+
+        // Red + green + blue 32bit float (converted to RGBA 32bit float).
+        ImageFormat::R32G32B32Float => ImageFormat::R32G32B32A32Float,
+
+        // Red + green + blue + alpha 16/32bit float.
+        ImageFormat::R16G16B16A16Float | ImageFormat::R32G32B32A32Float => {
+            ImageFormat::R32G32B32A32Float
         }
 
         // Various compressed formats.
         _ => {
-            if is_format_srgb(format) {
+            if format.is_srgb() {
                 ImageFormat::R8G8B8A8UnormSrgb
             } else {
                 ImageFormat::R8G8B8A8Unorm
@@ -326,35 +341,69 @@ pub const fn pick_format(format: ImageFormat) -> ImageFormat {
     }
 }
 
+/// Writes an image with multiple frames to a tiff file to the output stream.
+fn to_tiff_frames<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), TextureError> {
+    let frames = image.frames();
+    let height = image.height() * frames.len().min(MAXIMUM_TIFF_FRAMES) as u32;
+    let width = image.width();
+
+    let mut image_frames = Image::new(width, height, image.format())?;
+
+    let new_frame = image_frames.create_frame()?;
+    let mut new_frame = Cursor::new(new_frame.buffer_mut());
+
+    let size = image.frame_size_with_mipmaps(image.width(), image.height(), 1);
+
+    for frame in frames.iter().take(MAXIMUM_TIFF_FRAMES) {
+        new_frame.write_all(&frame.buffer()[..size as usize])?;
+    }
+
+    to_tiff(&image_frames, output)
+}
+
 /// Writes an image to a tiff file to the output stream.
 pub fn to_tiff<O: Write + Seek>(image: &Image, mut output: &mut O) -> Result<(), TextureError> {
-    let mut encoder = TiffEncoder::new(&mut output)?;
+    let frames = image.frames();
 
-    for frame in image.frames() {
-        let size = image.frame_size_with_mipmaps(image.width(), image.height(), 1);
+    if frames.len() > 1 {
+        return to_tiff_frames(image, output);
+    }
 
-        match image.format() {
-            ImageFormat::R8Unorm => {
-                write_image_data!(encoder, frame, image, size, colortype::Gray8, false)
-            }
-            ImageFormat::R16Unorm => {
-                write_image_data!(encoder, frame, image, size, colortype::Gray16, false)
-            }
-            ImageFormat::R8G8B8A8Unorm => {
-                write_image_data!(encoder, frame, image, size, colortype::RGBA8, false)
-            }
-            ImageFormat::R8G8B8A8UnormSrgb => {
-                write_image_data!(encoder, frame, image, size, colortype::RGBA8, true)
-            }
-            ImageFormat::R16G16B16A16Unorm => {
-                write_image_data!(encoder, frame, image, size, colortype::RGBA16, false)
-            }
-            _ => {
-                return Err(TextureError::ContainerFormatInvalid(
-                    image.format(),
-                    ImageFileType::Tiff,
-                ))
-            }
+    let encoder = TiffEncoder::new(&mut output)?;
+
+    let size = image.frame_size_with_mipmaps(image.width(), image.height(), 1);
+
+    let Some(frame) = frames.first() else {
+        return Ok(());
+    };
+
+    match image.format() {
+        ImageFormat::R8Unorm => {
+            write_image_data!(encoder, frame, image, size, colortype::Gray8, false)
+        }
+        ImageFormat::R16Unorm => {
+            write_image_data!(encoder, frame, image, size, colortype::Gray16, false)
+        }
+        ImageFormat::R8G8B8A8Unorm => {
+            write_image_data!(encoder, frame, image, size, colortype::RGBA8, false)
+        }
+        ImageFormat::R8G8B8A8UnormSrgb => {
+            write_image_data!(encoder, frame, image, size, colortype::RGBA8, true)
+        }
+        ImageFormat::R16G16B16A16Unorm => {
+            write_image_data!(encoder, frame, image, size, colortype::RGBA16, false)
+        }
+        ImageFormat::R32Float => {
+            write_image_data!(encoder, frame, image, size, colortype::Gray32Float, false)
+        }
+        ImageFormat::R32G32B32A32Float => {
+            write_image_data!(encoder, frame, image, size, colortype::RGBA32Float, false)
+        }
+        _ => {
+            return Err(TextureError::ContainerFormatInvalid(
+                image.format(),
+                ImageFileType::Tiff,
+            ));
         }
     }
 
@@ -365,12 +414,13 @@ pub fn to_tiff<O: Write + Seek>(image: &Image, mut output: &mut O) -> Result<(),
 pub fn from_tiff<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
     let mut decoder = Decoder::new(input)?;
 
-    let dimensions = decoder.dimensions()?;
-    let format = tiff_to_format(decoder.colortype()?)?;
-
+    let (width, height) = decoder.dimensions()?;
+    let color_type = decoder.colortype()?;
     let buffer = decoder.read_image()?;
 
-    let mut image = Image::new(dimensions.0, dimensions.1, format)?;
+    let format = tiff_to_format(color_type)?;
+
+    let mut image = Image::new(width, height, format)?;
     let frame = image.create_frame()?;
 
     match buffer {
@@ -382,6 +432,16 @@ pub fn from_tiff<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
             frame.buffer_mut().copy_from_slice(&buffer);
         }
         DecodingResult::U16(buffer) => {
+            let buffer = &buffer[0..];
+            let buffer: &[u8] = buffer.as_this_slice();
+
+            if frame.buffer().len() != buffer.len() {
+                return Err(TextureError::ConversionError);
+            }
+
+            frame.buffer_mut().copy_from_slice(buffer);
+        }
+        DecodingResult::F32(buffer) => {
             let buffer = &buffer[0..];
             let buffer: &[u8] = buffer.as_this_slice();
 
