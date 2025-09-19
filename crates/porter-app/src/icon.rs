@@ -158,6 +158,7 @@ impl Icon {
         // Conversion from B8G8R8A8 -> R8G8B8A8.
         for pixel in buffer.chunks_exact_mut(4) {
             pixel.swap(0, 2);
+            pixel[3] = 255;
         }
 
         Some(Self {
