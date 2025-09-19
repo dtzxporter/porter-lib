@@ -557,6 +557,10 @@ impl App {
 
     /// Occurs when assets should be sorted, or a column has changed.
     fn on_sort(&mut self, index: Option<usize>) -> Task<Message> {
+        if self.state.is_busy() {
+            return Task::none();
+        }
+
         let statuses: Vec<_> = self
             .state
             .asset_columns
