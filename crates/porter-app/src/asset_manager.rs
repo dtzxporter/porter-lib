@@ -37,8 +37,8 @@ pub trait AssetManager: Send + Sync + 'static {
     /// Search for assets, or reset the search term.
     fn search(&self, term: Option<SearchTerm>);
 
-    /// A column was triggered for sorting assets, returns the new column sort statuses.
-    fn sort(&self, column: usize, statuses: Vec<ColumnStatus>) -> Vec<ColumnStatus> {
+    /// Sort assets based on column status, returns the new column sort statuses.
+    fn sort(&self, column: Option<usize>, statuses: Vec<ColumnStatus>) -> Vec<ColumnStatus> {
         let _ = column;
         let _ = statuses;
 

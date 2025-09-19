@@ -40,6 +40,7 @@ pub enum Message {
     LoadFiles(Vec<PathBuf>),
     LoadFilesDropped,
     LoadGame,
+    Sort(Option<usize>),
     CheckReload,
 }
 

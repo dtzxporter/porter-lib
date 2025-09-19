@@ -12,6 +12,7 @@ use iced::Theme;
 
 use crate::AppState;
 use crate::AssetPreview;
+use crate::ColumnStatus;
 use crate::Controller;
 use crate::MainMessage;
 use crate::MainWindow;
@@ -103,6 +104,7 @@ impl App {
             LoadFiles(files) => self.on_load_files(files),
             LoadFilesDropped => self.on_load_files_dropped(),
             LoadGame => self.on_load_game(),
+            Sort(index) => self.on_sort(index),
             CheckReload => self.on_check_reload(),
         }
     }
@@ -321,6 +323,7 @@ impl App {
             Task::batch([
                 Task::done(Message::from(SearchBarMessage::Submit)),
                 Task::done(Message::from(HeaderMessage::UpdateIcon(icon))),
+                Task::done(Message::Sort(None)),
                 self.on_check_reload(),
             ])
         }
@@ -548,6 +551,27 @@ impl App {
         porter_threads::spawn(move || {
             controller.load_update(manager.load_game(settings));
         });
+
+        Task::none()
+    }
+
+    /// Occurs when assets should be sorted, or a column has changed.
+    fn on_sort(&mut self, index: Option<usize>) -> Task<Message> {
+        let statuses: Vec<_> = self
+            .state
+            .asset_columns
+            .iter()
+            .enumerate()
+            .map(|(index, column)| ColumnStatus::new(index, column.sort.unwrap_or_default()))
+            .collect();
+
+        for status in self.state.asset_manager.sort(index, statuses) {
+            if let Some(column) = self.state.asset_columns.get_mut(status.index)
+                && column.sort.is_some()
+            {
+                column.sort = Some(status.sort);
+            }
+        }
 
         Task::none()
     }

@@ -8,8 +8,7 @@ pub struct AssetColumn {
     pub header: &'static str,
     pub width: f32,
     pub color: Option<Color>,
-    pub sortable: bool,
-    pub sort: Sort,
+    pub sort: Option<Sort>,
 }
 
 impl AssetColumn {
@@ -18,14 +17,13 @@ impl AssetColumn {
         header: &'static str,
         width: usize,
         color: Option<Color>,
-        sortable: bool,
+        sort: Option<Sort>,
     ) -> Self {
         Self {
             header,
             width: width as f32,
             color,
-            sortable,
-            sort: Sort::None,
+            sort,
         }
     }
 }

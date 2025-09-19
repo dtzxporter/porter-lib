@@ -25,6 +25,7 @@ use crate::AssetManager;
 use crate::Controller;
 use crate::Executor;
 use crate::Settings;
+use crate::Sort;
 use crate::palette;
 use crate::panic_hook;
 use crate::strings;
@@ -112,19 +113,19 @@ impl AppState {
         header: &'static str,
         width: usize,
         color: Option<Color>,
-        sortable: bool,
+        sort: Option<Sort>,
     ) -> Self {
         self.asset_columns
-            .push(AssetColumn::new(header, width, color, sortable));
+            .push(AssetColumn::new(header, width, color, sort));
         self
     }
 
     /// Adds the default columns to the asset virtual list.
     pub fn default_columns(self) -> Self {
-        self.column("Name", 350, None, true)
-            .column("Type", 115, None, false)
-            .column("Status", 150, None, false)
-            .column("Info", 250, Some(palette::TEXT_COLOR_SECONDARY), false)
+        self.column("Name", 350, None, None)
+            .column("Type", 115, None, None)
+            .column("Status", 150, None, None)
+            .column("Info", 250, Some(palette::TEXT_COLOR_SECONDARY), None)
     }
 
     /// Adds a file filter to the load files dialog.

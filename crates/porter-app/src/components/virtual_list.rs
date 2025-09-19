@@ -23,7 +23,6 @@ use iced::Task;
 use iced::Theme;
 
 use crate::AppState;
-use crate::ColumnStatus;
 use crate::Message;
 use crate::Sort;
 use crate::fonts;
@@ -232,9 +231,9 @@ impl VirtualList {
                     .align_y(Alignment::Center),
             );
 
-            if matches!(column.sort, Sort::Ascending | Sort::Descending) {
+            if matches!(column.sort, Some(Sort::Ascending) | Some(Sort::Descending)) {
                 heading = heading.extend([
-                    text(if matches!(column.sort, Sort::Ascending) {
+                    text(if matches!(column.sort, Some(Sort::Ascending)) {
                         "\u{F1CB}"
                     } else {
                         "\u{F1CC}"
@@ -425,24 +424,11 @@ impl VirtualList {
             return Task::none();
         };
 
-        if !column.sortable {
+        if column.sort.is_none() {
             return Task::none();
         }
 
-        let statuses: Vec<_> = state
-            .asset_columns
-            .iter()
-            .enumerate()
-            .map(|(index, column)| ColumnStatus::new(index, column.sort))
-            .collect();
-
-        for status in state.asset_manager.sort(index, statuses) {
-            if let Some(column) = state.asset_columns.get_mut(status.index) {
-                column.sort = status.sort;
-            }
-        }
-
-        Task::none()
+        Task::done(Message::Sort(Some(index)))
     }
 
     /// Occurs when the up arrow is pressed.
