@@ -8,6 +8,9 @@ use rayon::Scope;
 pub use rayon::iter::IndexedParallelIterator;
 pub use rayon::iter::IntoParallelIterator;
 pub use rayon::iter::ParallelIterator;
+pub use rayon::slice::ParallelSlice;
+pub use rayon::slice::ParallelSliceMut;
+pub use rayon::str::ParallelString;
 
 /// Used to run an error callback when a thread panics.
 struct OnError<E>
@@ -109,7 +112,12 @@ pub fn initialize_thread_pool() {
 
     INITIALIZE.call_once(|| {
         let result = rayon::ThreadPoolBuilder::new()
-            .num_threads(num_cpus::get_physical().max(4))
+            .num_threads(
+                std::thread::available_parallelism()
+                    .map(|threads| threads.get())
+                    .unwrap_or_default()
+                    .max(4),
+            )
             .thread_name(|index| format!("porter-thread[{}]", index))
             .build_global();
 

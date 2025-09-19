@@ -117,15 +117,15 @@ impl Matrix3x3 {
 
         let mut scale = Vector3::new(x_axis.length(), y_axis.length(), z_axis.length());
 
-        if scale.x > 0.0 {
+        if scale.x > f32::EPSILON {
             x_axis /= scale.x;
         }
 
-        if scale.y > 0.0 {
+        if scale.y > f32::EPSILON {
             y_axis /= scale.y;
         }
 
-        if scale.z > 0.0 {
+        if scale.z > f32::EPSILON {
             z_axis /= scale.z;
         }
 

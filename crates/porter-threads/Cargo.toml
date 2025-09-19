@@ -1,8 +1,7 @@
 [package]
 name = "porter-threads"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-rayon = { version = "1.7", default-features = false }
-num_cpus = { version = "1.16" }
+rayon.workspace = true

@@ -1,6 +1,6 @@
 use std::borrow::Cow;
+use std::io::BufRead;
 use std::io::Cursor;
-use std::io::Read;
 use std::io::Seek;
 use std::io::Write;
 
@@ -236,7 +236,7 @@ impl TiffValue for IccProfileValue {
         ICC_SRGB_PROFILE.len()
     }
 
-    fn data(&self) -> Cow<[u8]> {
+    fn data(&self) -> Cow<'_, [u8]> {
         Cow::Borrowed(&ICC_SRGB_PROFILE)
     }
 }
@@ -411,7 +411,7 @@ pub fn to_tiff<O: Write + Seek>(image: &Image, mut output: &mut O) -> Result<(),
 }
 
 /// Reads a tiff file from the input stream to an image.
-pub fn from_tiff<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
+pub fn from_tiff<I: BufRead + Seek>(input: &mut I) -> Result<Image, TextureError> {
     let mut decoder = Decoder::new(input)?;
 
     let (width, height) = decoder.dimensions()?;

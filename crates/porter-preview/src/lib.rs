@@ -1,5 +1,6 @@
 #![deny(unsafe_code)]
 
+mod error;
 mod preview_camera;
 mod preview_key_state;
 mod preview_renderer;
@@ -11,6 +12,7 @@ mod render_model;
 mod render_skeleton;
 mod render_type;
 
+pub use error::*;
 pub use preview_key_state::*;
 pub use preview_renderer::*;
 

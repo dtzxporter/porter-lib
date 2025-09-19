@@ -1,11 +1,12 @@
 [package]
 name = "porter-animation"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 porter-math = { path = "../porter-math" }
 porter-utils = { path = "../porter-utils" }
 porter-cast = { path = "../porter-cast" }
-static_assertions = { version = "1.1" }
-bincode = { version = "2.0.0-rc.3", default-features = false, features = ["std", "derive"] }
+
+static_assertions.workspace = true
+bincode.workspace = true

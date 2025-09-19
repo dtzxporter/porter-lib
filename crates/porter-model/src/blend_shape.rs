@@ -42,4 +42,25 @@ impl BlendShape {
         self.target_scale = target_scale;
         self
     }
+
+    /// Validates the blend shape has some form of valid data.
+    #[cfg(debug_assertions)]
+    pub fn validate(&self, vertex_count: usize) {
+        if self.vertex_deltas.len() > vertex_count {
+            println!(
+                "Validate Error: Found invalid blend shape too much data: {:?}",
+                self.name
+            );
+            return;
+        }
+
+        for (index, vertex_index) in self.vertex_deltas.keys().enumerate() {
+            if *vertex_index as usize >= vertex_count {
+                println!(
+                    "Validate Error: Found invalid blend shape index: {:?} [{}:{}]",
+                    vertex_index, self.name, index
+                );
+            }
+        }
+    }
 }

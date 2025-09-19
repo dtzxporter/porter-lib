@@ -7,17 +7,11 @@ use porter_math::Axis;
 use porter_math::Matrix4x4;
 use porter_math::Vector3;
 
-use crate::model_file_type_cast;
-use crate::model_file_type_fbx;
-use crate::model_file_type_maya;
-use crate::model_file_type_obj;
-use crate::model_file_type_smd;
-use crate::model_file_type_xmodel_export;
-use crate::model_file_type_xna_lara;
 use crate::Aabb;
 use crate::BlendShape;
 use crate::Face;
 use crate::FaceBuffer;
+use crate::Hair;
 use crate::Material;
 use crate::MaterialRemapFaces;
 use crate::MaterialRemapVertices;
@@ -28,6 +22,13 @@ use crate::ModelFileType;
 use crate::Skeleton;
 use crate::VertexBuffer;
 use crate::WeightBoneId;
+use crate::model_file_type_cast;
+use crate::model_file_type_fbx;
+use crate::model_file_type_maya;
+use crate::model_file_type_obj;
+use crate::model_file_type_smd;
+use crate::model_file_type_xmodel_export;
+use crate::model_file_type_xna_lara;
 
 /// A 3d model, with optional skeleton and materials.
 #[derive(Debug, Clone)]
@@ -36,6 +37,8 @@ pub struct Model {
     pub skeleton: Skeleton,
     /// The 3d meshes for this model which can be empty.
     pub meshes: Vec<Mesh>,
+    /// The 3d hairs for this model which can be empty.
+    pub hairs: Vec<Hair>,
     /// A collection of materials for this model.
     pub materials: Vec<Material>,
     /// The up axis for this model.
@@ -48,6 +51,7 @@ impl Model {
         Self {
             skeleton: Skeleton::new(),
             meshes: Vec::new(),
+            hairs: Vec::new(),
             materials: Vec::new(),
             up_axis: Axis::Z,
         }
@@ -58,6 +62,7 @@ impl Model {
         Self {
             skeleton: Skeleton::with_capacity(bones),
             meshes: Vec::with_capacity(meshes),
+            hairs: Vec::new(),
             materials: Vec::new(),
             up_axis: Axis::Z,
         }
@@ -79,6 +84,10 @@ impl Model {
             mesh.scale(factor);
         }
 
+        for hair in &mut self.hairs {
+            hair.scale(factor);
+        }
+
         self.skeleton.scale(factor);
     }
 
@@ -86,6 +95,10 @@ impl Model {
     pub fn transform(&mut self, matrix: &Matrix4x4) {
         for mesh in &mut self.meshes {
             mesh.transform(matrix);
+        }
+
+        for hair in &mut self.hairs {
+            hair.transform(matrix);
         }
 
         self.skeleton.transform(matrix);
@@ -155,17 +168,7 @@ impl Model {
                         )
                         .name(old_mesh.name.clone());
 
-                        let mut blend_shapes = HashMap::with_capacity(old_mesh.blend_shapes.len());
-
-                        for blend_shape in &old_mesh.blend_shapes {
-                            blend_shapes.insert(
-                                blend_shape.name.clone(),
-                                BlendShape::new(blend_shape.name.clone())
-                                    .target_scale(blend_shape.target_scale),
-                            );
-                        }
-
-                        (mesh, blend_shapes)
+                        (mesh, HashMap::with_capacity(old_mesh.blend_shapes.len()))
                     });
 
                 new_mesh.material = material_index;
@@ -184,8 +187,11 @@ impl Model {
                     for blend_shape in &old_mesh.blend_shapes {
                         if let Some(delta) = blend_shape.vertex_deltas.get(&index) {
                             new_shapes
-                                .get_mut(&blend_shape.name)
-                                .expect("Blend shape must exist!")
+                                .entry(blend_shape.name.clone())
+                                .or_insert_with(|| {
+                                    BlendShape::new(blend_shape.name.clone())
+                                        .target_scale(blend_shape.target_scale)
+                                })
                                 .vertex_deltas
                                 .insert(vertices, *delta);
                         }
@@ -298,17 +304,7 @@ impl Model {
                         )
                         .name(old_mesh.name.clone());
 
-                        let mut blend_shapes = HashMap::with_capacity(old_mesh.blend_shapes.len());
-
-                        for blend_shape in &old_mesh.blend_shapes {
-                            blend_shapes.insert(
-                                blend_shape.name.clone(),
-                                BlendShape::new(blend_shape.name.clone())
-                                    .target_scale(blend_shape.target_scale),
-                            );
-                        }
-
-                        (mesh, blend_shapes)
+                        (mesh, HashMap::with_capacity(old_mesh.blend_shapes.len()))
                     });
 
                 new_mesh.material = material_index;
@@ -334,8 +330,11 @@ impl Model {
                                 for blend_shape in &old_mesh.blend_shapes {
                                     if let Some(delta) = blend_shape.vertex_deltas.get(&index) {
                                         new_shapes
-                                            .get_mut(&blend_shape.name)
-                                            .expect("Blend shape must exist!")
+                                            .entry(blend_shape.name.clone())
+                                            .or_insert_with(|| {
+                                                BlendShape::new(blend_shape.name.clone())
+                                                    .target_scale(blend_shape.target_scale)
+                                            })
                                             .vertex_deltas
                                             .insert(vertices, *delta);
                                     }
@@ -433,6 +432,10 @@ impl Model {
 
         for mesh in &self.meshes {
             mesh.validate(self.skeleton.bones.len());
+        }
+
+        for hair in &self.hairs {
+            hair.validate();
         }
     }
 }

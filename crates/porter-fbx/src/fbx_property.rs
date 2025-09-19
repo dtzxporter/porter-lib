@@ -110,13 +110,13 @@ impl FbxProperty {
         writer.write_all(&[self.property_type as u8])?;
 
         let array_size: Option<u32> = match self.property_type {
-            FbxPropertyType::BoolArray => Some(std::mem::size_of::<bool>() as u32),
-            FbxPropertyType::ByteArray => Some(std::mem::size_of::<u8>() as u32),
-            FbxPropertyType::Float32Array => Some(std::mem::size_of::<f32>() as u32),
-            FbxPropertyType::Float64Array => Some(std::mem::size_of::<f64>() as u32),
-            FbxPropertyType::Integer16Array => Some(std::mem::size_of::<u16>() as u32),
-            FbxPropertyType::Integer32Array => Some(std::mem::size_of::<u32>() as u32),
-            FbxPropertyType::Integer64Array => Some(std::mem::size_of::<u64>() as u32),
+            FbxPropertyType::BoolArray => Some(size_of::<bool>() as u32),
+            FbxPropertyType::ByteArray => Some(size_of::<u8>() as u32),
+            FbxPropertyType::Float32Array => Some(size_of::<f32>() as u32),
+            FbxPropertyType::Float64Array => Some(size_of::<f64>() as u32),
+            FbxPropertyType::Integer16Array => Some(size_of::<u16>() as u32),
+            FbxPropertyType::Integer32Array => Some(size_of::<u32>() as u32),
+            FbxPropertyType::Integer64Array => Some(size_of::<u64>() as u32),
             _ => None,
         };
 
@@ -174,49 +174,48 @@ impl FbxProperty {
 
     /// Gets the length of this property in bytes.
     pub(crate) fn length(&self) -> u32 {
-        let mut result = std::mem::size_of::<u8>() as u32;
+        let mut result = size_of::<u8>() as u32;
 
-        const SIZE_OF_ARRAY: u32 = std::mem::size_of::<u32>() as u32
-            + std::mem::size_of::<u32>() as u32
-            + std::mem::size_of::<u32>() as u32;
+        const SIZE_OF_ARRAY: u32 =
+            size_of::<u32>() as u32 + size_of::<u32>() as u32 + size_of::<u32>() as u32;
 
         match self.property_type {
-            FbxPropertyType::Byte => result += std::mem::size_of::<u8>() as u32,
-            FbxPropertyType::Bool => result += std::mem::size_of::<bool>() as u32,
-            FbxPropertyType::Integer16 => result += std::mem::size_of::<u16>() as u32,
-            FbxPropertyType::Integer32 => result += std::mem::size_of::<u32>() as u32,
-            FbxPropertyType::Integer64 => result += std::mem::size_of::<u64>() as u32,
-            FbxPropertyType::Float32 => result += std::mem::size_of::<f32>() as u32,
-            FbxPropertyType::Float64 => result += std::mem::size_of::<f64>() as u32,
+            FbxPropertyType::Byte => result += size_of::<u8>() as u32,
+            FbxPropertyType::Bool => result += size_of::<bool>() as u32,
+            FbxPropertyType::Integer16 => result += size_of::<u16>() as u32,
+            FbxPropertyType::Integer32 => result += size_of::<u32>() as u32,
+            FbxPropertyType::Integer64 => result += size_of::<u64>() as u32,
+            FbxPropertyType::Float32 => result += size_of::<f32>() as u32,
+            FbxPropertyType::Float64 => result += size_of::<f64>() as u32,
             FbxPropertyType::String | FbxPropertyType::Raw => {
-                result += self.property_string.len() as u32 + std::mem::size_of::<u32>() as u32
+                result += self.property_string.len() as u32 + size_of::<u32>() as u32
             }
             FbxPropertyType::ByteArray => {
-                result += self.property_values.len() as u32 * std::mem::size_of::<u8>() as u32;
+                result += self.property_values.len() as u32 * size_of::<u8>() as u32;
                 result += SIZE_OF_ARRAY;
             }
             FbxPropertyType::BoolArray => {
-                result += self.property_values.len() as u32 * std::mem::size_of::<bool>() as u32;
+                result += self.property_values.len() as u32 * size_of::<bool>() as u32;
                 result += SIZE_OF_ARRAY;
             }
             FbxPropertyType::Integer16Array => {
-                result += self.property_values.len() as u32 * std::mem::size_of::<u16>() as u32;
+                result += self.property_values.len() as u32 * size_of::<u16>() as u32;
                 result += SIZE_OF_ARRAY;
             }
             FbxPropertyType::Integer32Array => {
-                result += self.property_values.len() as u32 * std::mem::size_of::<u32>() as u32;
+                result += self.property_values.len() as u32 * size_of::<u32>() as u32;
                 result += SIZE_OF_ARRAY;
             }
             FbxPropertyType::Integer64Array => {
-                result += self.property_values.len() as u32 * std::mem::size_of::<u64>() as u32;
+                result += self.property_values.len() as u32 * size_of::<u64>() as u32;
                 result += SIZE_OF_ARRAY;
             }
             FbxPropertyType::Float32Array => {
-                result += self.property_values.len() as u32 * std::mem::size_of::<f32>() as u32;
+                result += self.property_values.len() as u32 * size_of::<f32>() as u32;
                 result += SIZE_OF_ARRAY;
             }
             FbxPropertyType::Float64Array => {
-                result += self.property_values.len() as u32 * std::mem::size_of::<f64>() as u32;
+                result += self.property_values.len() as u32 * size_of::<f64>() as u32;
                 result += SIZE_OF_ARRAY;
             }
         }

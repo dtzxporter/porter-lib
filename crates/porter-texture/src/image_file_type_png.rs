@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::io::BufRead;
 use std::io::Seek;
 use std::io::Write;
 
@@ -151,7 +151,7 @@ pub fn to_png<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), Text
 }
 
 /// Reads a png file from the input stream to an image.
-pub fn from_png<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
+pub fn from_png<I: BufRead + Seek>(input: &mut I) -> Result<Image, TextureError> {
     let mut decoder = Decoder::new(input);
 
     decoder.set_transformations(Transformations::ALPHA);

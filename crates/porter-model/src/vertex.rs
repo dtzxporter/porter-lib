@@ -34,24 +34,26 @@ impl<'a> Vertex<'a> {
 
     /// Returns the normal of this vertex.
     pub fn normal(&self) -> Vector3 {
-        self.read(std::mem::size_of::<Vector3>())
+        self.read(size_of::<Vector3>())
     }
 
     /// Returns the uv layer of this vertex.
+    #[track_caller]
     pub fn uv(&self, index: usize) -> Vector2 {
         debug_assert!(index < self.buffer.uv_layers());
 
-        self.read((std::mem::size_of::<Vector3>() * 2) + (std::mem::size_of::<Vector2>() * index))
+        self.read((size_of::<Vector3>() * 2) + (size_of::<Vector2>() * index))
     }
 
     /// Returns a weight for this vertex.
+    #[track_caller]
     pub fn weight(&self, index: usize) -> VertexWeight {
         debug_assert!(index < self.buffer.maximum_influence());
 
         self.read(
-            (std::mem::size_of::<Vector3>() * 2)
-                + (std::mem::size_of::<Vector2>() * self.buffer.uv_layers())
-                + (std::mem::size_of::<VertexWeight>() * index),
+            (size_of::<Vector3>() * 2)
+                + (size_of::<Vector2>() * self.buffer.uv_layers())
+                + (size_of::<VertexWeight>() * index),
         )
     }
 
@@ -69,14 +71,15 @@ impl<'a> Vertex<'a> {
     }
 
     /// Returns the color for this vertex.
+    #[track_caller]
     pub fn color(&self, index: usize) -> VertexColor {
         debug_assert!(index < self.buffer.colors());
 
         self.read(
-            (std::mem::size_of::<Vector3>() * 2)
-                + (std::mem::size_of::<Vector2>() * self.buffer.uv_layers())
-                + (std::mem::size_of::<VertexWeight>() * self.buffer.maximum_influence())
-                + (std::mem::size_of::<VertexColor>() * index),
+            (size_of::<Vector3>() * 2)
+                + (size_of::<Vector2>() * self.buffer.uv_layers())
+                + (size_of::<VertexWeight>() * self.buffer.maximum_influence())
+                + (size_of::<VertexColor>() * index),
         )
     }
 
@@ -85,7 +88,7 @@ impl<'a> Vertex<'a> {
     fn read<T: Copy>(&self, offset: usize) -> T {
         let count = (self.index * self.buffer.stride()) + offset;
 
-        debug_assert!((count + std::mem::size_of::<T>()) <= self.buffer.as_slice().len());
+        debug_assert!((count + size_of::<T>()) <= self.buffer.as_slice().len());
 
         // SAFETY: We assert that the count of bytes is less than the buffer size.
         unsafe { std::ptr::read(self.buffer.as_slice().as_ptr().add(count) as *const T) }
@@ -111,28 +114,30 @@ impl<'a> VertexMut<'a> {
 
     /// Returns the normal of this vertex.
     pub fn normal(&self) -> Vector3 {
-        self.read(std::mem::size_of::<Vector3>())
+        self.read(size_of::<Vector3>())
     }
 
     /// Sets the normal of this vertex.
     pub fn set_normal(&mut self, normal: Vector3) -> &mut Self {
-        self.write(std::mem::size_of::<Vector3>(), normal);
+        self.write(size_of::<Vector3>(), normal);
         self
     }
 
     /// Returns the uv layer of this vertex.
+    #[track_caller]
     pub fn uv(&self, index: usize) -> Vector2 {
         debug_assert!(index < self.buffer.uv_layers());
 
-        self.read((std::mem::size_of::<Vector3>() * 2) + (std::mem::size_of::<Vector2>() * index))
+        self.read((size_of::<Vector3>() * 2) + (size_of::<Vector2>() * index))
     }
 
     /// Sets the uv layer of this vertex.
+    #[track_caller]
     pub fn set_uv(&mut self, index: usize, value: Vector2) -> &mut Self {
         debug_assert!(index < self.buffer.uv_layers());
 
         self.write(
-            (std::mem::size_of::<Vector3>() * 2) + (std::mem::size_of::<Vector2>() * index),
+            (size_of::<Vector3>() * 2) + (size_of::<Vector2>() * index),
             value,
         );
 
@@ -140,13 +145,14 @@ impl<'a> VertexMut<'a> {
     }
 
     /// Returns a weight for this vertex.
+    #[track_caller]
     pub fn weight(&self, index: usize) -> VertexWeight {
         debug_assert!(index < self.buffer.maximum_influence());
 
         self.read(
-            (std::mem::size_of::<Vector3>() * 2)
-                + (std::mem::size_of::<Vector2>() * self.buffer.uv_layers())
-                + (std::mem::size_of::<VertexWeight>() * index),
+            (size_of::<Vector3>() * 2)
+                + (size_of::<Vector2>() * self.buffer.uv_layers())
+                + (size_of::<VertexWeight>() * index),
         )
     }
 
@@ -164,13 +170,14 @@ impl<'a> VertexMut<'a> {
     }
 
     /// Sets a weight for this vertex.
+    #[track_caller]
     pub fn set_weight(&mut self, index: usize, weight: VertexWeight) -> &mut Self {
         debug_assert!(index < self.buffer.maximum_influence());
 
         self.write(
-            (std::mem::size_of::<Vector3>() * 2)
-                + (std::mem::size_of::<Vector2>() * self.buffer.uv_layers())
-                + (std::mem::size_of::<VertexWeight>() * index),
+            (size_of::<Vector3>() * 2)
+                + (size_of::<Vector2>() * self.buffer.uv_layers())
+                + (size_of::<VertexWeight>() * index),
             weight,
         );
 
@@ -198,26 +205,28 @@ impl<'a> VertexMut<'a> {
     }
 
     /// Returns the color for this vertex.
+    #[track_caller]
     pub fn color(&self, index: usize) -> VertexColor {
         debug_assert!(index < self.buffer.colors());
 
         self.read(
-            (std::mem::size_of::<Vector3>() * 2)
-                + (std::mem::size_of::<Vector2>() * self.buffer.uv_layers())
-                + (std::mem::size_of::<VertexWeight>() * self.buffer.maximum_influence())
-                + (std::mem::size_of::<VertexColor>() * index),
+            (size_of::<Vector3>() * 2)
+                + (size_of::<Vector2>() * self.buffer.uv_layers())
+                + (size_of::<VertexWeight>() * self.buffer.maximum_influence())
+                + (size_of::<VertexColor>() * index),
         )
     }
 
     /// Returns the color for this vertex.
+    #[track_caller]
     pub fn set_color(&mut self, index: usize, color: VertexColor) -> &mut Self {
         debug_assert!(index < self.buffer.colors());
 
         self.write(
-            (std::mem::size_of::<Vector3>() * 2)
-                + (std::mem::size_of::<Vector2>() * self.buffer.uv_layers())
-                + (std::mem::size_of::<VertexWeight>() * self.buffer.maximum_influence())
-                + (std::mem::size_of::<VertexColor>() * index),
+            (size_of::<Vector3>() * 2)
+                + (size_of::<Vector2>() * self.buffer.uv_layers())
+                + (size_of::<VertexWeight>() * self.buffer.maximum_influence())
+                + (size_of::<VertexColor>() * index),
             color,
         );
 
@@ -225,6 +234,7 @@ impl<'a> VertexMut<'a> {
     }
 
     /// Copies all of the values from the given vertex.
+    #[track_caller]
     pub fn copy_from(&mut self, vertex: &Vertex<'_>) {
         debug_assert!(self.buffer.colors() == vertex.buffer.colors());
         debug_assert!(self.buffer.uv_layers() == vertex.buffer.uv_layers());
@@ -245,6 +255,7 @@ impl<'a> VertexMut<'a> {
     }
 
     /// Copies all of the values from the given vertex.
+    #[track_caller]
     pub fn copy_from_mut(&mut self, vertex: &VertexMut<'_>) {
         debug_assert!(self.buffer.colors() == vertex.buffer.colors());
         debug_assert!(self.buffer.uv_layers() == vertex.buffer.uv_layers());
@@ -270,7 +281,7 @@ impl<'a> VertexMut<'a> {
     fn read<T: Copy>(&self, offset: usize) -> T {
         let count = (self.index * self.buffer.stride()) + offset;
 
-        debug_assert!((count + std::mem::size_of::<T>()) <= self.buffer.as_slice().len());
+        debug_assert!((count + size_of::<T>()) <= self.buffer.as_slice().len());
 
         // SAFETY: We assert that the count of bytes is less than the buffer size.
         unsafe { std::ptr::read(self.buffer.as_slice().as_ptr().add(count) as *const T) }
@@ -281,14 +292,14 @@ impl<'a> VertexMut<'a> {
     fn write<T: Copy>(&mut self, offset: usize, value: T) {
         let count = (self.index * self.buffer.stride()) + offset;
 
-        debug_assert!((count + std::mem::size_of::<T>()) <= self.buffer.as_slice().len());
+        debug_assert!((count + size_of::<T>()) <= self.buffer.as_slice().len());
 
         // SAFETY: We assert that the count of bytes is less than the buffer size.
         unsafe { std::ptr::write(self.buffer.as_slice().as_ptr().add(count) as *mut T, value) };
     }
 }
 
-impl<'a> fmt::Debug for Vertex<'a> {
+impl fmt::Debug for Vertex<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug = f.debug_struct("Vertex");
 
@@ -312,9 +323,9 @@ impl<'a> fmt::Debug for Vertex<'a> {
     }
 }
 
-impl<'a> fmt::Debug for VertexMut<'a> {
+impl fmt::Debug for VertexMut<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut debug = f.debug_struct("Vertex");
+        let mut debug = f.debug_struct("VertexMut");
 
         debug
             .field("position", &self.position())

@@ -2,11 +2,18 @@ use wgpu::util::*;
 use wgpu::*;
 
 use porter_gpu::GPUInstance;
+
 use porter_math::Vector2;
 use porter_math::Vector3;
+
 use porter_texture::Image;
+use porter_texture::ImageFormat;
+
 use porter_utils::AsByteSlice;
 use porter_utils::AsThisSlice;
+use porter_utils::VecExt;
+
+use crate::PreviewError;
 
 /// A 3d render image.
 pub struct RenderImage {
@@ -15,6 +22,7 @@ pub struct RenderImage {
     vertex_buffer: Buffer,
     width: u32,
     height: u32,
+    format: ImageFormat,
 }
 
 impl RenderImage {
@@ -23,11 +31,16 @@ impl RenderImage {
         instance: &GPUInstance,
         bind_group_layouts: &[&BindGroupLayout],
         image: &Image,
-    ) -> Self {
-        let format_convert = image.format().to_wgpu();
-        let format = *format_convert
-            .as_ref()
-            .unwrap_or(&TextureFormat::Rgba8Unorm);
+    ) -> Result<Self, PreviewError> {
+        let format = image.format();
+
+        if format.is_int() {
+            return Err(PreviewError::Unsupported);
+        }
+
+        let Ok(format) = format.to_wgpu() else {
+            return Err(PreviewError::Unsupported);
+        };
 
         let texture_desc = TextureDescriptor {
             label: None,
@@ -44,26 +57,22 @@ impl RenderImage {
             view_formats: &[],
         };
 
-        let texture = if let (Some(frame), Ok(_)) = (image.frames().first(), format_convert) {
-            instance.device().create_texture_with_data(
-                instance.queue(),
-                &texture_desc,
-                TextureDataOrder::LayerMajor,
-                frame.buffer(),
-            )
-        } else {
-            instance.device().create_texture_with_data(
-                instance.queue(),
-                &texture_desc,
-                TextureDataOrder::LayerMajor,
-                &vec![0; image.width() as usize * image.height() as usize * 0x4],
-            )
+        let Some(frame) = image.frames().first() else {
+            return Err(PreviewError::InvalidAsset);
         };
+
+        let texture = instance.device().create_texture_with_data(
+            instance.queue(),
+            &texture_desc,
+            TextureDataOrder::LayerMajor,
+            frame.buffer(),
+        );
 
         let texture_view = texture.create_view(&Default::default());
 
         let texture_sampler = instance.device().create_sampler(&SamplerDescriptor {
             mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
             ..Default::default()
         });
 
@@ -123,10 +132,9 @@ impl RenderImage {
                 layout: Some(&render_pipeline_layout),
                 vertex: VertexState {
                     module: instance.gpu_preview_shader(),
-                    entry_point: "vs_image_main",
+                    entry_point: Some("vs_image_main"),
                     buffers: &[VertexBufferLayout {
-                        array_stride: (std::mem::size_of::<Vector3>()
-                            + std::mem::size_of::<Vector2>())
+                        array_stride: (size_of::<Vector3>() + size_of::<Vector2>())
                             as BufferAddress,
                         step_mode: VertexStepMode::Vertex,
                         attributes: &[
@@ -136,12 +144,13 @@ impl RenderImage {
                                 format: VertexFormat::Float32x3,
                             },
                             VertexAttribute {
-                                offset: std::mem::size_of::<Vector3>() as BufferAddress,
+                                offset: size_of::<Vector3>() as BufferAddress,
                                 shader_location: 1,
                                 format: VertexFormat::Float32x2,
                             },
                         ],
                     }],
+                    compilation_options: Default::default(),
                 },
                 primitive: PrimitiveState {
                     topology: PrimitiveTopology::TriangleList,
@@ -166,17 +175,24 @@ impl RenderImage {
                 },
                 fragment: Some(FragmentState {
                     module: instance.gpu_preview_shader(),
-                    entry_point: "fs_image_main",
+                    entry_point: if format.components() > 1 {
+                        Some("fs_image_main")
+                    } else {
+                        Some("fs_image_grayscale")
+                    },
                     targets: &[Some(ColorTargetState {
                         format: TextureFormat::Rgba8Unorm,
                         blend: Some(BlendState::REPLACE),
                         write_mask: ColorWrites::ALL,
                     })],
+                    compilation_options: Default::default(),
                 }),
                 multiview: None,
+                cache: None,
             });
 
-        let mut vertex_buffer = Vec::new();
+        let mut vertex_buffer =
+            Vec::try_with_exact_capacity((size_of::<Vector3>() * 6) + (size_of::<Vector2>() * 6))?;
 
         let width = image.width() as f32;
         let height = image.height() as f32;
@@ -201,13 +217,14 @@ impl RenderImage {
             usage: BufferUsages::VERTEX,
         });
 
-        Self {
+        Ok(Self {
             bind_group,
             render_pipeline,
             vertex_buffer,
             width: image.width(),
             height: image.height(),
-        }
+            format: image.format(),
+        })
     }
 
     /// Returns the width of the image.
@@ -218,6 +235,11 @@ impl RenderImage {
     /// Returns the height of the image.
     pub fn height(&self) -> u32 {
         self.height
+    }
+
+    /// Returns whether or not the image is in sRGB colorspace.
+    pub fn srgb(&self) -> bool {
+        self.format.is_srgb()
     }
 
     /// Draws the image using the given render pass.

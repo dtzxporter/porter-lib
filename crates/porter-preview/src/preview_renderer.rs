@@ -1,22 +1,32 @@
 use wgpu::util::*;
 use wgpu::*;
 
-use porter_gpu::gpu_instance;
-use porter_gpu::GPUInstance;
+use porter_model::MaterialTextureRefUsage;
+use porter_model::Model;
 
+use porter_gpu::GPUInstance;
+use porter_gpu::gpu_instance;
+
+use porter_math::Angles;
 use porter_math::Axis;
+use porter_math::Matrix4x4;
+use porter_math::Quaternion;
 use porter_math::Vector2;
 use porter_math::Vector3;
 
 use porter_utils::AsAligned;
 use porter_utils::AsThisSlice;
 
+use porter_texture::Image;
 use porter_texture::TextureExtensions;
 
 use crate::PreviewCamera;
+use crate::PreviewError;
 use crate::PreviewKeyState;
+use crate::RenderImage;
+use crate::RenderMaterial;
+use crate::RenderModel;
 use crate::RenderType;
-use crate::ToRenderType;
 
 /// Renders 'preview' versions of models, animations, images, and materials.
 pub struct PreviewRenderer {
@@ -172,9 +182,9 @@ fn create_grid_render(
             layout: Some(&render_pipeline_layout),
             vertex: VertexState {
                 module: instance.gpu_preview_shader(),
-                entry_point: "vs_grid_main",
+                entry_point: Some("vs_grid_main"),
                 buffers: &[VertexBufferLayout {
-                    array_stride: (std::mem::size_of::<Vector3>() * 2) as BufferAddress,
+                    array_stride: (size_of::<Vector3>() * 2) as BufferAddress,
                     step_mode: VertexStepMode::Vertex,
                     attributes: &[
                         VertexAttribute {
@@ -183,12 +193,13 @@ fn create_grid_render(
                             format: VertexFormat::Float32x3,
                         },
                         VertexAttribute {
-                            offset: std::mem::size_of::<Vector3>() as BufferAddress,
+                            offset: size_of::<Vector3>() as BufferAddress,
                             shader_location: 1,
                             format: VertexFormat::Float32x3,
                         },
                     ],
                 }],
+                compilation_options: Default::default(),
             },
             primitive: PrimitiveState {
                 topology: PrimitiveTopology::LineList,
@@ -213,14 +224,16 @@ fn create_grid_render(
             },
             fragment: Some(FragmentState {
                 module: instance.gpu_preview_shader(),
-                entry_point: "fs_grid_main",
+                entry_point: Some("fs_grid_main"),
                 targets: &[Some(ColorTargetState {
                     format: TextureFormat::Rgba8Unorm,
                     blend: Some(BlendState::REPLACE),
                     write_mask: ColorWrites::ALL,
                 })],
+                compilation_options: Default::default(),
             }),
             multiview: None,
+            cache: None,
         });
 
     (size, buffer, render_pipeline)
@@ -240,7 +253,6 @@ impl PreviewRenderer {
             0.5 * std::f32::consts::PI,
             0.45 * std::f32::consts::PI,
             100.0,
-            Axis::Z,
         );
 
         let (grid_size, grid_render_buffer, grid_render_pipeline) =
@@ -271,50 +283,112 @@ impl PreviewRenderer {
         }
     }
 
-    /// Sets the asset to preview.
-    pub fn set_preview<P: ToRenderType>(&mut self, name: String, preview: P) {
-        let render =
-            preview.to_render_type(self.instance, &[self.camera.uniform_bind_group_layout()]);
+    /// Sets the image asset to preview.
+    pub fn set_preview_image(&mut self, name: String, image: Image) -> Result<(), PreviewError> {
+        let render_image = RenderImage::from_image(
+            self.instance,
+            &[self.camera.uniform_bind_group_layout()],
+            &image,
+        )?;
 
-        match &render {
-            RenderType::Model(_) => self.camera.set_orthographic(None),
-            RenderType::Image(image) => {
-                let scale =
-                    (self.width / image.width() as f32).min(self.height / image.height() as f32);
+        let scale = (self.width / image.width() as f32).min(self.height / image.height() as f32);
 
-                self.scale = 100.min((scale * 100.0) as u32);
+        self.scale = 100.min((scale * 100.0) as u32);
 
-                self.camera.set_orthographic(Some((
-                    image.width() as f32,
-                    image.height() as f32,
-                    self.scale as f32 / 100.0,
-                )));
-            }
-            RenderType::Material(material) => {
-                let scale = (self.width / material.width() as f32)
-                    .min(self.height / material.height() as f32);
+        self.camera.set_orthographic(Some((
+            image.width() as f32,
+            image.height() as f32,
+            self.scale as f32 / 100.0,
+        )));
 
-                self.scale = 100.min((scale * 100.0) as u32);
-
-                self.camera.set_orthographic(Some((
-                    material.width() as f32,
-                    material.height() as f32,
-                    self.scale as f32 / 100.0,
-                )));
-            }
-        }
-
-        self.camera
-            .update(self.instance, self.width, self.height, self.far_clip);
-
-        self.render = Some(render);
+        self.render = Some(RenderType::Image(render_image));
         self.render_name = Some(name);
+
+        self.update_camera();
+
+        Ok(())
+    }
+
+    /// Sets the material asset to preview.
+    pub fn set_preview_material(
+        &mut self,
+        name: String,
+        material: Vec<(MaterialTextureRefUsage, Image)>,
+    ) -> Result<(), PreviewError> {
+        let render_material = RenderMaterial::from_images(
+            self.instance,
+            &[self.camera.uniform_bind_group_layout()],
+            &material,
+        )?;
+
+        let scale = (self.width / render_material.width() as f32)
+            .min(self.height / render_material.height() as f32);
+
+        self.scale = 100.min((scale * 100.0) as u32);
+
+        self.camera.set_orthographic(Some((
+            render_material.width() as f32,
+            render_material.height() as f32,
+            self.scale as f32 / 100.0,
+        )));
+
+        self.render = Some(RenderType::Material(render_material));
+        self.render_name = Some(name);
+
+        self.update_camera();
+
+        Ok(())
+    }
+
+    /// Sets the model asset to preview.
+    pub fn set_preview_model(
+        &mut self,
+        name: String,
+        model: Model,
+        materials: Vec<Option<Image>>,
+        srgb: bool,
+    ) -> Result<(), PreviewError> {
+        let render_model = RenderModel::from_model(
+            self.instance,
+            &[self.camera.uniform_bind_group_layout()],
+            &model,
+            &materials,
+            srgb,
+        )?;
+
+        let model_matrix = match model.up_axis {
+            Axis::X => {
+                Quaternion::from_euler(Vector3::new(0.0, 0.0, -90.0), Angles::Degrees).to_4x4()
+            }
+            Axis::Y => Matrix4x4::new(),
+            Axis::Z => {
+                Quaternion::from_euler(Vector3::new(-90.0, 0.0, 0.0), Angles::Degrees).to_4x4()
+            }
+        };
+
+        self.camera.set_orthographic(None);
+        self.camera.set_model_matrix(model_matrix);
+
+        self.render = Some(RenderType::Model(render_model));
+        self.render_name = Some(name);
+
+        self.update_camera();
+
+        Ok(())
     }
 
     /// Clears the asset being previewed.
     pub fn clear_preview(&mut self) {
         self.render = None;
         self.render_name = None;
+
+        self.camera.set_orthographic(None);
+        self.update_camera();
+    }
+
+    /// Returns true if the preview is empty.
+    pub fn is_empty_preview(&self) -> bool {
+        self.render.is_none()
     }
 
     /// Resizes the renderer output.
@@ -344,8 +418,7 @@ impl PreviewRenderer {
             create_msaa_texture(self.instance, self.width as u32, self.height as u32);
         self.msaa_texture_view = self.msaa_texture.create_view(&Default::default());
 
-        self.camera
-            .update(self.instance, self.width, self.height, self.far_clip);
+        self.update_camera();
     }
 
     /// Cycles to the next material in the list.
@@ -364,8 +437,7 @@ impl PreviewRenderer {
                 self.scale as f32 / 100.0,
             )));
 
-            self.camera
-                .update(self.instance, self.width, self.height, self.far_clip);
+            self.update_camera();
         }
     }
 
@@ -387,8 +459,7 @@ impl PreviewRenderer {
     /// Toggles the shaded view.
     pub fn toggle_shaded(&mut self) {
         self.camera.toggle_shaded();
-        self.camera
-            .update(self.instance, self.width, self.height, self.far_clip);
+        self.update_camera();
     }
 
     /// Performs a reset operation.
@@ -400,8 +471,7 @@ impl PreviewRenderer {
                 100.0,
             );
 
-            self.camera
-                .update(self.instance, self.width, self.height, self.far_clip);
+            self.update_camera();
         }
     }
 
@@ -422,8 +492,7 @@ impl PreviewRenderer {
             self.camera.zoom(delta * 0.5);
         }
 
-        self.camera
-            .update(self.instance, self.width, self.height, self.far_clip);
+        self.update_camera();
     }
 
     /// Performs a mouse move operation.
@@ -434,44 +503,50 @@ impl PreviewRenderer {
             return;
         }
 
+        let mut dirty = false;
+
         if key_state.maya {
             if key_state.left {
                 let phi = delta.y / 200.0;
                 let theta = delta.x / 200.0;
 
                 self.camera.rotate(theta, phi);
-                self.camera
-                    .update(self.instance, self.width, self.height, self.far_clip);
+
+                dirty = true;
             } else if key_state.right {
                 self.camera.zoom(-(delta.x / 2.0));
-                self.camera
-                    .update(self.instance, self.width, self.height, self.far_clip);
+
+                dirty = true;
             } else if key_state.middle {
                 let x = delta.x * 0.1;
                 let y = delta.y * 0.1;
 
                 self.camera.pan(x, y);
-                self.camera
-                    .update(self.instance, self.width, self.height, self.far_clip);
+
+                dirty = true;
             }
         } else if key_state.middle && key_state.shift {
             let x = delta.x * 0.1;
             let y = delta.y * 0.1;
 
             self.camera.pan(x, y);
-            self.camera
-                .update(self.instance, self.width, self.height, self.far_clip);
+
+            dirty = true;
         } else if key_state.middle && key_state.alt {
             self.camera.zoom(-(delta.x / 2.0));
-            self.camera
-                .update(self.instance, self.width, self.height, self.far_clip);
+
+            dirty = true;
         } else if key_state.middle {
             let phi = delta.y / 200.0;
             let theta = delta.x / 200.0;
 
             self.camera.rotate(theta, phi);
-            self.camera
-                .update(self.instance, self.width, self.height, self.far_clip);
+
+            dirty = true;
+        }
+
+        if dirty {
+            self.update_camera();
         }
     }
 
@@ -506,7 +581,7 @@ impl PreviewRenderer {
                 ]
             }
             Some(RenderType::Material(material)) => {
-                vec![
+                let mut result = vec![
                     (
                         String::from("Name"),
                         self.render_name
@@ -521,11 +596,23 @@ impl PreviewRenderer {
                             format!("{} of {}", material.index() + 1, material.len())
                         },
                     ),
-                    (String::from("Usage"), material.usage()),
-                    (String::from("Width"), material.width().to_string()),
-                    (String::from("Height"), material.height().to_string()),
-                    (String::from("Scale"), format!("{}%", self.scale)),
-                ]
+                ];
+
+                if material.is_error() {
+                    result.push((
+                        String::from("Status"),
+                        String::from("Unable to preview this image"),
+                    ));
+                } else {
+                    result.extend([
+                        (String::from("Usage"), material.usage()),
+                        (String::from("Width"), material.width().to_string()),
+                        (String::from("Height"), material.height().to_string()),
+                        (String::from("Scale"), format!("{}%", self.scale)),
+                    ]);
+                }
+
+                result
             }
             _ => vec![(String::from("Name"), String::from("N/A"))],
         }
@@ -598,15 +685,15 @@ impl PreviewRenderer {
 
         {
             encoder.copy_texture_to_buffer(
-                ImageCopyTexture {
+                TexelCopyTextureInfo {
                     texture: &self.output_texture,
                     mip_level: 0,
                     origin: Origin3d::ZERO,
                     aspect: TextureAspect::All,
                 },
-                ImageCopyBuffer {
+                TexelCopyBufferInfo {
                     buffer: &self.output_buffer,
-                    layout: ImageDataLayout {
+                    layout: TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(bytes_per_row.as_aligned(COPY_BYTES_PER_ROW_ALIGNMENT)),
                         rows_per_image: None,
@@ -629,7 +716,8 @@ impl PreviewRenderer {
             tx.send(result).unwrap();
         });
 
-        self.instance
+        let _ = self
+            .instance
             .device()
             .poll(MaintainBase::WaitForSubmissionIndex(submission));
 
@@ -639,8 +727,7 @@ impl PreviewRenderer {
 
         let buffer = output_slice.get_mapped_range();
 
-        let nbh = (self.height as usize + (block_dimensions.1 as usize - 1))
-            / block_dimensions.1 as usize;
+        let nbh = (self.height as usize).div_ceil(block_dimensions.1 as usize);
 
         let truncated_size = bytes_per_row as usize * nbh;
         let aligned_bytes_per_row = bytes_per_row.as_aligned(COPY_BYTES_PER_ROW_ALIGNMENT) as usize;
@@ -664,6 +751,19 @@ impl PreviewRenderer {
         self.output_buffer.unmap();
 
         (self.width as u32, self.height as u32, pixels)
+    }
+
+    /// Updates the camera with current parameters.
+    fn update_camera(&mut self) {
+        let srgb = match &self.render {
+            Some(RenderType::Image(image)) => image.srgb(),
+            Some(RenderType::Material(material)) => material.srgb(),
+            Some(RenderType::Model(model)) => model.srgb(),
+            None => false,
+        };
+
+        self.camera
+            .update(self.instance, self.width, self.height, srgb, self.far_clip);
     }
 }
 

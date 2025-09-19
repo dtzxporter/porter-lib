@@ -1,7 +1,7 @@
 use std::fs::File;
+use std::io::BufRead;
 use std::io::BufReader;
 use std::io::BufWriter;
-use std::io::Read;
 use std::io::Seek;
 use std::io::Write;
 use std::path::Path;
@@ -167,6 +167,10 @@ impl Image {
             self.format = format;
 
             return Ok(());
+        }
+
+        if self.format.is_int() {
+            return Err(TextureError::UnsupportedImageFormat(format));
         }
 
         let source_format = self.format.to_wgpu()?;
@@ -377,7 +381,7 @@ impl Image {
     }
 
     /// Loads the image from the given input buffer with the given file type.
-    pub fn load_from<I: Read + Seek>(
+    pub fn load_from<I: BufRead + Seek>(
         input: &mut I,
         file_type: ImageFileType,
     ) -> Result<Self, TextureError> {

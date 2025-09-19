@@ -1,8 +1,8 @@
 use std::io::Read;
 use std::io::Seek;
-use std::io::SeekFrom;
 use std::marker::PhantomData;
 
+use porter_utils::SeekExt;
 use porter_utils::StringReadExt;
 use porter_utils::StructReadExt;
 
@@ -24,11 +24,11 @@ impl ProcessPointer<u64, &str> {
     pub fn read_string<R: Read + Seek>(&self, reader: &mut R) -> Result<String, ProcessError> {
         let current_position = reader.stream_position()?;
 
-        reader.seek(SeekFrom::Start(self.inner))?;
+        reader.reset_to(self.inner)?;
 
         let string = reader.read_null_terminated_string()?;
 
-        let _ = reader.seek(SeekFrom::Start(current_position));
+        let _ = reader.reset_to(current_position);
 
         Ok(string)
     }
@@ -39,11 +39,11 @@ impl ProcessPointer<u32, &str> {
     pub fn read_string<R: Read + Seek>(&self, reader: &mut R) -> Result<String, ProcessError> {
         let current_position = reader.stream_position()?;
 
-        reader.seek(SeekFrom::Start(self.inner as u64))?;
+        reader.reset_to(self.inner)?;
 
         let string = reader.read_null_terminated_string()?;
 
-        let _ = reader.seek(SeekFrom::Start(current_position));
+        let _ = reader.reset_to(current_position);
 
         Ok(string)
     }
@@ -57,11 +57,11 @@ where
     pub fn read<R: Read + Seek>(&self, reader: &mut R) -> Result<T, ProcessError> {
         let current_position = reader.stream_position()?;
 
-        reader.seek(SeekFrom::Start(self.inner))?;
+        reader.reset_to(self.inner)?;
 
         let value: T = reader.read_struct()?;
 
-        let _ = reader.seek(SeekFrom::Start(current_position));
+        let _ = reader.reset_to(current_position);
 
         Ok(value)
     }
@@ -75,11 +75,11 @@ where
     pub fn read<R: Read + Seek>(&self, reader: &mut R) -> Result<T, ProcessError> {
         let current_position = reader.stream_position()?;
 
-        reader.seek(SeekFrom::Start(self.inner as u64))?;
+        reader.reset_to(self.inner)?;
 
         let value: T = reader.read_struct()?;
 
-        let _ = reader.seek(SeekFrom::Start(current_position));
+        let _ = reader.reset_to(current_position);
 
         Ok(value)
     }

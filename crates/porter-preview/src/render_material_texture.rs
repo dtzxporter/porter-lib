@@ -2,9 +2,13 @@ use wgpu::util::*;
 use wgpu::*;
 
 use porter_gpu::GPUInstance;
+
 use porter_texture::Image;
 use porter_texture::ImageFormat;
+
 use porter_utils::AsThisSlice;
+
+use crate::PreviewError;
 
 /// A 3d mesh render material texture.
 pub struct RenderMaterialTexture {
@@ -13,33 +17,46 @@ pub struct RenderMaterialTexture {
 }
 
 /// Utility to allocate the fallback image for a material texture.
-fn default_image() -> Image {
-    let mut image = Image::new(4, 4, ImageFormat::R8G8B8A8Unorm).unwrap();
+fn default_image() -> Result<Image, PreviewError> {
+    let mut image =
+        Image::new(4, 4, ImageFormat::R8G8B8A8Unorm).map_err(|_| PreviewError::InvalidAsset)?;
 
     image
         .create_frame()
-        .unwrap()
+        .map_err(|_| PreviewError::OutOfMemory)?
         .buffer_mut()
         .copy_from_slice([0xFFA1A1A1u32; 4 * 4].as_slice().as_this_slice());
 
-    image
+    Ok(image)
 }
 
 impl RenderMaterialTexture {
-    /// Constructs a new render material texture from the given image, or defaults to a 4x4 grey square.
-    pub fn from_image_default(instance: &GPUInstance, image: &Option<Image>) -> Self {
+    /// Constructs a new render material texture from the given image, or defaults to a 4x4 gray square.
+    pub fn from_image_default(
+        instance: &GPUInstance,
+        image: &Option<Image>,
+    ) -> Result<Self, PreviewError> {
         let mut default: Option<Image> = None;
 
         if image.is_none() {
-            default = Some(default_image());
+            default = Some(default_image()?);
         }
 
-        let image = image.as_ref().or(default.as_ref()).unwrap();
-
-        let format_convert = image.format().to_wgpu();
-        let format = *format_convert
+        let image = image
             .as_ref()
-            .unwrap_or(&TextureFormat::Rgba8Unorm);
+            .or(default.as_ref())
+            // This ends up being a no-op because we've set default above.
+            .unwrap();
+
+        let format = image.format();
+
+        if format.is_int() {
+            return Err(PreviewError::Unsupported);
+        }
+
+        let Ok(format) = format.to_wgpu() else {
+            return Err(PreviewError::Unsupported);
+        };
 
         let texture_desc = TextureDescriptor {
             label: None,
@@ -56,21 +73,16 @@ impl RenderMaterialTexture {
             view_formats: &[],
         };
 
-        let texture = if let (Some(frame), Ok(_)) = (image.frames().first(), format_convert) {
-            instance.device().create_texture_with_data(
-                instance.queue(),
-                &texture_desc,
-                TextureDataOrder::LayerMajor,
-                frame.buffer(),
-            )
-        } else {
-            instance.device().create_texture_with_data(
-                instance.queue(),
-                &texture_desc,
-                TextureDataOrder::LayerMajor,
-                &vec![0; image.width() as usize * image.height() as usize * 0x4],
-            )
+        let Some(frame) = image.frames().first() else {
+            return Err(PreviewError::InvalidAsset);
         };
+
+        let texture = instance.device().create_texture_with_data(
+            instance.queue(),
+            &texture_desc,
+            TextureDataOrder::LayerMajor,
+            frame.buffer(),
+        );
 
         let texture_view = texture.create_view(&Default::default());
 
@@ -79,6 +91,7 @@ impl RenderMaterialTexture {
             address_mode_v: AddressMode::Repeat,
             address_mode_w: AddressMode::Repeat,
             mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
             ..Default::default()
         });
 
@@ -122,10 +135,10 @@ impl RenderMaterialTexture {
             ],
         });
 
-        Self {
+        Ok(Self {
             bind_group,
             bind_group_layout,
-        }
+        })
     }
 
     /// The bind group for this material texture.

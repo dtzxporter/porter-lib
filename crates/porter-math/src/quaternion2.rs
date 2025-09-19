@@ -114,6 +114,12 @@ impl Quaternion2 {
     pub fn to_quat4(self) -> Quaternion {
         Quaternion::from(self)
     }
+
+    /// Returns `true` if the quaternion is normalized having a length of `1.0`.
+    #[inline]
+    pub fn is_normalized(&self) -> bool {
+        (self.length_squared().abs() - 1.0) <= 2e-4
+    }
 }
 
 impl Default for Quaternion2 {

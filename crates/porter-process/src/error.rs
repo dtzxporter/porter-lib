@@ -1,10 +1,10 @@
+/// Errors that can occur in the process crate.
 #[derive(Debug)]
 pub enum ProcessError {
     NotFound,
     AccessDenied,
     IoError(std::io::Error),
-    #[cfg(target_os = "windows")]
-    NulErrorU16(widestring::error::NulError<u16>),
+    TryReserveError(std::collections::TryReserveError),
     #[cfg(target_os = "linux")]
     ProcError(procfs::ProcError),
 }
@@ -15,10 +15,9 @@ impl From<std::io::Error> for ProcessError {
     }
 }
 
-#[cfg(target_os = "windows")]
-impl From<widestring::error::NulError<u16>> for ProcessError {
-    fn from(value: widestring::error::NulError<u16>) -> Self {
-        Self::NulErrorU16(value)
+impl From<std::collections::TryReserveError> for ProcessError {
+    fn from(value: std::collections::TryReserveError) -> Self {
+        Self::TryReserveError(value)
     }
 }
 

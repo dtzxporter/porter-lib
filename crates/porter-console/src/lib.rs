@@ -172,21 +172,21 @@ pub fn initialize_console<T: AsRef<str>, D: AsRef<str>>(title: T, desc: D) {
 /// Utility to configure the windows console.
 #[cfg(target_os = "windows")]
 fn setup_windows_console(title: &str) {
-    use widestring::U16CString;
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
     use windows_sys::Win32::System::Console::*;
 
-    let Ok(str) = U16CString::from_str(title) else {
-        panic!("invalid title");
-    };
+    let title: Vec<u16> = OsStr::new(title).encode_wide().chain(Some(0x0)).collect();
 
-    unsafe { SetConsoleTitleW(str.as_ptr()) };
+    unsafe { SetConsoleTitleW(title.as_ptr()) };
 
     let _buffer = standard_stream();
 
     let stdout = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
 
     let mut screen_buffer: CONSOLE_SCREEN_BUFFER_INFOEX = unsafe { std::mem::zeroed() };
-    screen_buffer.cbSize = std::mem::size_of_val(&screen_buffer) as u32;
+    screen_buffer.cbSize = size_of_val(&screen_buffer) as u32;
 
     unsafe { GetConsoleScreenBufferInfoEx(stdout, &mut screen_buffer as *mut _) };
 

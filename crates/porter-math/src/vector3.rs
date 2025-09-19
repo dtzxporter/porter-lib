@@ -4,6 +4,7 @@ use std::ops;
 use static_assertions::assert_eq_size;
 
 use crate::Matrix4x4;
+use crate::Quaternion;
 use crate::Vector4;
 
 /// A 3d XYZ vector.
@@ -97,6 +98,16 @@ impl Vector3 {
             x: 1.0,
             y: 1.0,
             z: 1.0,
+        }
+    }
+
+    /// Construct a new vector where all components are `value`.
+    #[inline]
+    pub const fn splat(value: f32) -> Self {
+        Self {
+            x: value,
+            y: value,
+            z: value,
         }
     }
 
@@ -196,6 +207,18 @@ impl Vector3 {
         }
     }
 
+    /// Rotates this vector with the given quaternion.
+    #[inline]
+    pub fn rotate(&self, value: Quaternion) -> Self {
+        let u = Vector3::new(value.x, value.y, value.z);
+        let s = value.w;
+
+        let uv = u.cross(*self);
+        let uuv = u.cross(uv);
+
+        *self + (uv * (2.0 * s)) + (uuv * 2.0)
+    }
+
     /// Returns a vector with any components that are `NaN` set to `0.0`.
     #[inline]
     pub fn nan_to_zero(self) -> Self {
@@ -204,6 +227,54 @@ impl Vector3 {
             y: if self.y.is_nan() { 0.0 } else { self.y },
             z: if self.z.is_nan() { 0.0 } else { self.z },
         }
+    }
+
+    /// Returns any unit vector that is orthogonal to this unit vector.
+    #[inline]
+    pub fn orthonormal_vector(&self) -> Self {
+        debug_assert!(self.is_normalized());
+
+        let sign = self.z.signum();
+        let a = -1.0 / (sign + self.z);
+        let b = self.x * self.y * a;
+
+        Self {
+            x: b,
+            y: sign + self.y * self.y * a,
+            z: -self.y,
+        }
+    }
+
+    /// Returns the angle (in radians) between two unit vectors in the range `[0, +π]`.
+    #[inline]
+    pub fn angle_between(&self, rhs: Self) -> f32 {
+        debug_assert!(self.is_normalized());
+        debug_assert!(rhs.is_normalized());
+
+        let cosine = self.dot(rhs);
+
+        if cosine >= 1.0 {
+            0.0
+        } else if cosine <= -1.0 {
+            std::f32::consts::PI
+        } else {
+            cosine.acos()
+        }
+    }
+
+    /// Return `true` if the unit vector is parallel (same or opposite direction) to the given unit vector.
+    #[inline]
+    pub fn is_parallel(&self, rhs: Self) -> bool {
+        debug_assert!(self.is_normalized());
+        debug_assert!(rhs.is_normalized());
+
+        self.dot(rhs).abs() >= 1.0 - f32::EPSILON
+    }
+
+    /// Returns `true` if the vector is normalized having a length of `1.0`.
+    #[inline]
+    pub fn is_normalized(&self) -> bool {
+        (self.length_squared().abs() - 1.0) <= 2e-4
     }
 }
 

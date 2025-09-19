@@ -3,9 +3,12 @@ use std::sync::Arc;
 use wgpu::*;
 
 use porter_gpu::GPUInstance;
+
 use porter_model::Model;
+
 use porter_texture::Image;
 
+use crate::PreviewError;
 use crate::RenderMaterialTexture;
 use crate::RenderMesh;
 use crate::RenderSkeleton;
@@ -14,6 +17,7 @@ use crate::RenderSkeleton;
 pub struct RenderModel {
     meshes: Vec<RenderMesh>,
     skeleton: Option<RenderSkeleton>,
+    srgb: bool,
 }
 
 impl RenderModel {
@@ -23,20 +27,37 @@ impl RenderModel {
         bind_group_layouts: &[&BindGroupLayout],
         model: &Model,
         materials: &[Option<Image>],
-    ) -> Self {
+        srgb: bool,
+    ) -> Result<Self, PreviewError> {
         let materials: Vec<Arc<_>> = materials
             .iter()
-            .map(|image| RenderMaterialTexture::from_image_default(instance, image))
+            .map(|image| {
+                RenderMaterialTexture::from_image_default(instance, image)
+                    .or_else(|_| RenderMaterialTexture::from_image_default(instance, &None))
+            })
             .chain([RenderMaterialTexture::from_image_default(instance, &None)])
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
             .map(Arc::new)
             .collect();
 
-        Self {
+        Ok(Self {
             meshes: model
                 .meshes
                 .iter()
-                .map(|mesh| RenderMesh::from_mesh(instance, bind_group_layouts, mesh, &materials))
-                .collect(),
+                .map(|mesh| {
+                    RenderMesh::from_mesh(instance, bind_group_layouts, mesh, &materials, true)
+                })
+                .chain(model.hairs.iter().map(|hair| {
+                    RenderMesh::from_mesh(
+                        instance,
+                        bind_group_layouts,
+                        &hair.to_mesh(),
+                        &materials,
+                        false,
+                    )
+                }))
+                .collect::<Result<Vec<_>, _>>()?,
             skeleton: if model.skeleton.bones.is_empty() {
                 None
             } else {
@@ -46,7 +67,8 @@ impl RenderModel {
                     &model.skeleton,
                 ))
             },
-        }
+            srgb,
+        })
     }
 
     /// Returns the mesh count for this model.
@@ -72,16 +94,19 @@ impl RenderModel {
             .unwrap_or_default()
     }
 
+    /// Returns whether or not the models materials are in sRGB colorspace.
+    pub fn srgb(&self) -> bool {
+        self.srgb
+    }
+
     /// Draws the model using the given render pass.
     pub fn draw<'a>(&'a self, render_pass: &mut RenderPass<'a>, show_bones: bool, wireframe: bool) {
         for mesh in &self.meshes {
             mesh.draw(render_pass, wireframe);
         }
 
-        if show_bones {
-            if let Some(skeleton) = &self.skeleton {
-                skeleton.draw(render_pass);
-            }
+        if show_bones && let Some(skeleton) = &self.skeleton {
+            skeleton.draw(render_pass);
         }
     }
 }

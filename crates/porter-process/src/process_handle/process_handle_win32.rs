@@ -1,5 +1,3 @@
-use std::ffi::c_void;
-
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::System::Diagnostics::Debug::*;
 use windows_sys::Win32::System::ProcessStatus::*;
@@ -22,9 +20,9 @@ impl ProcessHandlePlatform for ProcessHandle {
             access |= PROCESS_VM_WRITE;
         }
 
-        let result: HANDLE = unsafe { OpenProcess(access, FALSE, pid as u32) };
+        let result: HANDLE = unsafe { OpenProcess(access, FALSE, pid as _) };
 
-        if result == 0 {
+        if result.is_null() {
             match unsafe { GetLastError() } {
                 ERROR_INVALID_PARAMETER => return Err(ProcessError::NotFound),
                 ERROR_ACCESS_DENIED => return Err(ProcessError::AccessDenied),
@@ -49,8 +47,8 @@ impl ProcessHandlePlatform for ProcessHandle {
         let result = unsafe {
             ReadProcessMemory(
                 self.handle,
-                offset as *const c_void,
-                buf.as_mut_ptr() as *mut c_void,
+                offset as _,
+                buf.as_mut_ptr() as _,
                 buf.len(),
                 &mut size_read,
             )
@@ -71,14 +69,14 @@ impl ProcessHandlePlatform for ProcessHandle {
     }
 
     fn base_address(&self) -> Result<u64, ProcessError> {
-        let mut modules: [HMODULE; 256] = [0; 256];
+        let mut modules: [HMODULE; 256] = [std::ptr::null_mut(); 256];
         let mut size_needed: u32 = 0;
 
         let result = unsafe {
             EnumProcessModules(
                 self.handle,
                 modules.as_mut_ptr(),
-                std::mem::size_of_val(&modules) as u32,
+                size_of_val(&modules) as _,
                 &mut size_needed,
             )
         };
@@ -91,18 +89,18 @@ impl ProcessHandlePlatform for ProcessHandle {
             }
         }
 
-        Ok(modules[0] as u64)
+        Ok(modules[0] as _)
     }
 
     fn main_module_size(&self) -> Result<u64, ProcessError> {
-        let mut modules: [HMODULE; 256] = [0; 256];
+        let mut modules: [HMODULE; 256] = [std::ptr::null_mut(); 256];
         let mut size_needed: u32 = 0;
 
         let result = unsafe {
             EnumProcessModules(
                 self.handle,
                 modules.as_mut_ptr(),
-                std::mem::size_of_val(&modules) as u32,
+                size_of_val(&modules) as _,
                 &mut size_needed,
             )
         };
@@ -122,7 +120,7 @@ impl ProcessHandlePlatform for ProcessHandle {
                 self.handle,
                 modules[0],
                 &mut module_info,
-                std::mem::size_of_val(&module_info) as u32,
+                size_of_val(&module_info) as _,
             )
         };
 
@@ -134,7 +132,7 @@ impl ProcessHandlePlatform for ProcessHandle {
             }
         }
 
-        Ok(module_info.SizeOfImage as u64)
+        Ok(module_info.SizeOfImage as _)
     }
 
     fn close(&mut self) {

@@ -15,10 +15,10 @@ const fn compute_stride(uv_layers: usize, maximum_influence: usize, colors: usiz
     // Vector2[self.uv_layers]: UV layer
     // VertexWeight[self.maximum_influence]: Vertex weight
     // VertexColor[self.colors]: Vertex color
-    (std::mem::size_of::<Vector3>() * 2)
-        + (std::mem::size_of::<Vector2>() * uv_layers)
-        + (std::mem::size_of::<VertexWeight>() * maximum_influence)
-        + (std::mem::size_of::<VertexColor>() * colors)
+    (size_of::<Vector3>() * 2)
+        + (size_of::<Vector2>() * uv_layers)
+        + (size_of::<VertexWeight>() * maximum_influence)
+        + (size_of::<VertexColor>() * colors)
 }
 
 // A buffer of vertices for a mesh.
@@ -64,6 +64,7 @@ impl VertexBuffer {
     }
 
     /// Removes the vertex at the given index.
+    #[track_caller]
     pub fn remove(&mut self, index: usize) {
         debug_assert!(index < self.len());
 
@@ -109,14 +110,16 @@ impl VertexBuffer {
     }
 
     /// Gets the vertex at the given index.
-    pub fn vertex(&self, index: usize) -> Vertex {
+    #[track_caller]
+    pub fn vertex(&self, index: usize) -> Vertex<'_> {
         debug_assert!(index < self.len());
 
         Vertex::new(self, index)
     }
 
     /// Gets a mutable vertex at the given index.
-    pub fn vertex_mut(&mut self, index: usize) -> VertexMut {
+    #[track_caller]
+    pub fn vertex_mut(&mut self, index: usize) -> VertexMut<'_> {
         debug_assert!(index < self.len());
 
         VertexMut::new(self, index)

@@ -1,19 +1,18 @@
 [package]
 name = "porter-process"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 porter-utils = { path = "../porter-utils" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-sys = { version = "0.52", default-features = false, features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_System_Console", "Win32_System_ProcessStatus", "Win32_System_WindowsProgramming", "Win32_System_Diagnostics_Debug", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_LibraryLoader", "Wdk_System_SystemInformation"] }
-widestring = "1.0"
+windows-sys.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
-libc = "0.2"
-mach2 = "0.4"
+libc.workspace = true
+mach2.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
-libc = "0.2"
-procfs = "0.16.0-RC1"
+libc.workspace = true
+procfs.workspace = true

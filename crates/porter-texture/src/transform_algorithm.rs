@@ -6,6 +6,8 @@ use crate::ImageConvertOptions;
 use crate::ImageFormat;
 use crate::TextureError;
 use crate::linear_to_srgb;
+use crate::pack_unorm8;
+use crate::unpack_unorm8;
 
 /// The algorithm used to transform an image.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -58,18 +60,18 @@ fn uniform_scale_bias(image: &mut Image, scale: f32, bias: f32) -> Result<(), Te
 
     for frame in image.frames_mut() {
         for pixel in frame.buffer_mut().chunks_exact_mut(4) {
-            let r = pixel[0] as f32 / 255.0;
-            let g = pixel[1] as f32 / 255.0;
-            let b = pixel[2] as f32 / 255.0;
+            let r = unpack_unorm8(pixel[0]);
+            let g = unpack_unorm8(pixel[1]);
+            let b = unpack_unorm8(pixel[2]);
 
             if source_format.is_srgb() {
-                pixel[0] = (linear_to_srgb((r * scale) + bias) * 255.0).clamp(0.0, 255.0) as u8;
-                pixel[1] = (linear_to_srgb((g * scale) + bias) * 255.0).clamp(0.0, 255.0) as u8;
-                pixel[2] = (linear_to_srgb((b * scale) + bias) * 255.0).clamp(0.0, 255.0) as u8;
+                pixel[0] = pack_unorm8(linear_to_srgb((r * scale) + bias));
+                pixel[1] = pack_unorm8(linear_to_srgb((g * scale) + bias));
+                pixel[2] = pack_unorm8(linear_to_srgb((b * scale) + bias));
             } else {
-                pixel[0] = (((r * scale) + bias) * 255.0).clamp(0.0, 255.0) as u8;
-                pixel[1] = (((g * scale) + bias) * 255.0).clamp(0.0, 255.0) as u8;
-                pixel[2] = (((b * scale) + bias) * 255.0).clamp(0.0, 255.0) as u8;
+                pixel[0] = pack_unorm8((r * scale) + bias);
+                pixel[1] = pack_unorm8((g * scale) + bias);
+                pixel[2] = pack_unorm8((b * scale) + bias);
             }
         }
     }
@@ -90,7 +92,7 @@ fn reconstruct_z(image: &mut Image, invert_y: bool) -> Result<(), TextureError> 
 
     for frame in image.frames_mut() {
         for pixel in frame.buffer_mut().chunks_exact_mut(4) {
-            let xy = Vector2::new(pixel[0] as f32 / 255.0, pixel[1] as f32 / 255.0);
+            let xy = Vector2::new(unpack_unorm8(pixel[0]), unpack_unorm8(pixel[1]));
             let xy_snorm = (xy * 2.0) - 1.0;
 
             let z = (1.0 - xy_snorm.length_squared().min(1.0)).sqrt();
@@ -103,9 +105,9 @@ fn reconstruct_z(image: &mut Image, invert_y: bool) -> Result<(), TextureError> 
 
             let xyz = (xyz_snorm * 0.5) + 0.5;
 
-            pixel[0] = (xyz.x * 255.0) as u8;
-            pixel[1] = (xyz.y * 255.0) as u8;
-            pixel[2] = (xyz.z * 255.0) as u8;
+            pixel[0] = pack_unorm8(xyz.x);
+            pixel[1] = pack_unorm8(xyz.y);
+            pixel[2] = pack_unorm8(xyz.z);
             pixel[3] = 0xFF;
         }
     }

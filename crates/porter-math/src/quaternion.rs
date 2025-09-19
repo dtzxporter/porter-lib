@@ -26,13 +26,13 @@ assert_eq_size!([u8; 0x10], Quaternion);
 impl Quaternion {
     /// Constructs a new quaternion with the given component values.
     #[inline]
-    pub fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
+    pub const fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
         Self { x, y, z, w }
     }
 
     /// Constructs a new identity quaternion.
     #[inline]
-    pub fn identity() -> Self {
+    pub const fn identity() -> Self {
         Self {
             x: 0.0,
             y: 0.0,
@@ -121,7 +121,7 @@ impl Quaternion {
         .normalized()
     }
 
-    /// Calculates the inverse of this quaternion.
+    /// Calculates the inverse of this quaternion, which is just the normalized quaternion conjugate.
     #[inline]
     pub fn inverse(&self) -> Self {
         let length_squared = self.length_squared();
@@ -138,6 +138,8 @@ impl Quaternion {
     /// Calculates the conjugate of this quaternion.
     #[inline]
     pub fn conjugate(&self) -> Self {
+        debug_assert!(self.is_normalized());
+
         !*self
     }
 
@@ -275,6 +277,8 @@ impl Quaternion {
     /// Constructs a new quaternion from the given axis rotation.
     #[inline]
     pub fn from_axis_rotation(axis: Vector3, angle: f32, measurment: Angles) -> Self {
+        debug_assert!(axis.is_normalized());
+
         let radians = match measurment {
             Angles::Degrees => degrees_to_radians(angle),
             Angles::Radians => angle,
@@ -296,7 +300,7 @@ impl Quaternion {
     /// Constructs a new quaternion from the given log vector rotation.
     #[inline]
     pub fn from_log_vector(vector: Vector3) -> Self {
-        let half_angle = vector.length_squared().sqrt();
+        let half_angle = vector.length();
 
         if half_angle < f32::EPSILON {
             Self::identity()
@@ -310,6 +314,35 @@ impl Quaternion {
                 w: half_angle.cos(),
             }
         }
+    }
+
+    /// Constructs a new quaternion that is the minimal rotation for transforming `from` to `to`.
+    #[inline]
+    pub fn from_rotation_arc(from: Vector3, to: Vector3) -> Self {
+        debug_assert!(from.is_normalized());
+        debug_assert!(to.is_normalized());
+
+        const ONE_MINUS_EPS: f32 = 1.0 - 2.0 * f32::EPSILON;
+
+        let dot = from.dot(to);
+
+        if dot > ONE_MINUS_EPS {
+            Self::identity()
+        } else if dot < -ONE_MINUS_EPS {
+            let axis = from.orthonormal_vector();
+
+            Self::from_axis_rotation(axis, std::f32::consts::PI, Angles::Radians)
+        } else {
+            let cross = from.cross(to);
+
+            Self::new(cross.x, cross.y, cross.z, 1.0 + dot).normalized()
+        }
+    }
+
+    /// Returns `true` if the quaternion is normalized having a length of `1.0`.
+    #[inline]
+    pub fn is_normalized(&self) -> bool {
+        (self.length_squared().abs() - 1.0) <= 2e-4
     }
 }
 

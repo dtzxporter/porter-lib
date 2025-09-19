@@ -1,0 +1,7 @@
+[package]
+name = "porter-build"
+version = "0.1.1"
+edition = "2024"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winres.workspace = true

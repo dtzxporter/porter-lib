@@ -10,9 +10,8 @@ use crate::CurveDataType;
 use crate::CurveModeOverride;
 use crate::KeyframeValue;
 use crate::animation_file_type_cast;
-use crate::animation_file_type_seanim;
 
-// A 3d animation.
+/// A 3d animation.
 #[derive(Debug, Clone)]
 pub struct Animation {
     /// The framerate this animation should play at.
@@ -46,9 +45,31 @@ impl Animation {
         file_type: AnimationFileType,
     ) -> Result<(), AnimationError> {
         match file_type {
-            AnimationFileType::SEAnim => animation_file_type_seanim::to_seanim(path, self),
             AnimationFileType::Cast => animation_file_type_cast::to_cast(path, self),
         }
+    }
+
+    /// Attempts to find a curve with the given name and attribute.
+    pub fn find<N: AsRef<str>>(&self, name: N, attribute: CurveAttribute) -> Option<&Curve> {
+        self.curves.get(self.index(name, attribute)?)
+    }
+
+    /// Attempts to find a mutable curve with the given name and attribute.
+    pub fn find_mut<N: AsRef<str>>(
+        &mut self,
+        name: N,
+        attribute: CurveAttribute,
+    ) -> Option<&mut Curve> {
+        let index = self.index(name, attribute)?;
+
+        self.curves.get_mut(index)
+    }
+
+    /// Attempts to find the index of the curve with the given name and attribute.
+    pub fn index<N: AsRef<str>>(&self, name: N, attribute: CurveAttribute) -> Option<usize> {
+        self.curves
+            .iter()
+            .position(|curve| curve.name() == name.as_ref() && curve.attribute() == attribute)
     }
 
     /// Returns the most common curve data type.

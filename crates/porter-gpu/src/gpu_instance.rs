@@ -7,12 +7,14 @@ use wgpu::DeviceDescriptor;
 use wgpu::Features;
 use wgpu::Instance;
 use wgpu::InstanceDescriptor;
+use wgpu::InstanceFlags;
 use wgpu::PowerPreference;
 use wgpu::Queue;
 use wgpu::RequestAdapterOptionsBase;
 use wgpu::ShaderModule;
 
 /// Stores an active GPU device, queue, and compiled shaders.
+#[derive(Clone)]
 pub struct GPUInstance {
     instance: Instance,
     device: Device,
@@ -67,8 +69,13 @@ impl GPUInstance {
 
 /// Async initialization routine required for `wgpu`.
 async fn initialize() -> GPUInstance {
-    let instance = Instance::new(InstanceDescriptor {
+    let instance = Instance::new(&InstanceDescriptor {
         backends: Backends::all() & !Backends::GL,
+        flags: if cfg!(debug_assertions) {
+            InstanceFlags::debugging()
+        } else {
+            InstanceFlags::empty()
+        },
         ..Default::default()
     });
 
@@ -91,7 +98,7 @@ async fn initialize() -> GPUInstance {
         ..Default::default()
     };
 
-    let (device, queue) = adapter.request_device(&descriptor, None).await.unwrap();
+    let (device, queue) = adapter.request_device(&descriptor).await.unwrap();
 
     let gpu_converter_shader =
         device.create_shader_module(wgpu::include_wgsl!("../shaders/gpu_converter.wgsl"));

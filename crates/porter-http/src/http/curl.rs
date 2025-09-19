@@ -260,7 +260,7 @@ fn make_request(request: &Request, write_error: Option<io::Error>) -> Result<(),
         _ => {
             let message = unsafe { CStr::from_ptr(curl_easy_strerror(result)) }
                 .to_string_lossy()
-                .to_string();
+                .into_owned();
 
             let message = format!("Request failed with code: {result} {message:?}");
 
@@ -320,8 +320,8 @@ extern "C" fn write_data_callback(
     let total_size = size * nmemb;
     let slice = unsafe { std::slice::from_raw_parts(data, total_size) };
 
-    if userdata.buffer.try_reserve(slice.len()).is_err() {
-        userdata.error = Some(io::Error::from(io::ErrorKind::OutOfMemory));
+    if let Err(error) = userdata.buffer.try_reserve(slice.len()) {
+        userdata.error = Some(io::Error::from(error));
         return 0;
     }
 

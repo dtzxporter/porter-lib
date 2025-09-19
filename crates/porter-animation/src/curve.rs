@@ -95,6 +95,11 @@ impl Curve {
         result
     }
 
+    /// Sorts the curve's keyframes in order by time.
+    pub fn sort(&mut self) {
+        self.keyframes.sort_by_key(|keyframe| keyframe.time);
+    }
+
     /// Insert a keyframe at the given time with the given value.
     pub fn insert<T: Into<KeyframeValue>>(&mut self, time: u32, value: T) {
         let value = value.into();
@@ -129,9 +134,7 @@ impl Curve {
     /// # Errors
     /// If the capacity overflows, or the allocator reports a failure, then an error is returned.
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), AnimationError> {
-        self.keyframes
-            .try_reserve(additional)
-            .map_err(|_| AnimationError::CurveAllocationFailed)
+        Ok(self.keyframes.try_reserve(additional)?)
     }
 
     /// Tries to reserve the minimum capacity for at least `additional` keyframes to be inserted in the given `Curve`.
@@ -145,8 +148,6 @@ impl Curve {
     /// # Errors
     /// If the capacity overflows, or the allocator reports a failure, then an error is returned.
     pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), AnimationError> {
-        self.keyframes
-            .try_reserve_exact(additional)
-            .map_err(|_| AnimationError::CurveAllocationFailed)
+        Ok(self.keyframes.try_reserve_exact(additional)?)
     }
 }

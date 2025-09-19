@@ -186,7 +186,7 @@ impl ProcessInfoPlatform for ProcessInfo {
 
         let mut result = Vec::with_capacity(256);
 
-        for info in process_info_buffer.chunks_exact(std::mem::size_of::<kinfo_proc>()) {
+        for info in process_info_buffer.chunks_exact(size_of::<kinfo_proc>()) {
             let kinfo: kinfo_proc = Cursor::new(info).read_struct()?;
 
             if !filter.is_empty() && !filter.contains(&(kinfo.kp_proc.p_pid as u64)) {
@@ -195,7 +195,7 @@ impl ProcessInfoPlatform for ProcessInfo {
 
             let mut name: [c_int; 3] = [CTL_KERN, KERN_PROCARGS2, kinfo.kp_proc.p_pid];
             let mut size: size_t = 4096;
-            let mut buffer = vec![0; 4096];
+            let mut buffer: [u8; 4096] = [0; 4096];
 
             let (name, path) = if unsafe {
                 sysctl(
@@ -212,7 +212,7 @@ impl ProcessInfoPlatform for ProcessInfo {
 
                 let name = name_and_path
                     .file_stem()
-                    .map(|x| x.to_string_lossy().to_string())
+                    .map(|x| x.to_string_lossy().into_owned())
                     .unwrap_or(format!("Process_{}", kinfo.kp_proc.p_pid));
 
                 (name, Some(name_and_path))

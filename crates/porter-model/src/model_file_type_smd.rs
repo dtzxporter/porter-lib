@@ -50,7 +50,10 @@ macro_rules! write_face_vertex {
 pub fn to_smd<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> {
     let mut smd = BufWriter::new(File::create(path.as_ref().with_extension("smd"))?);
 
-    writeln!(smd, "version 1\n// Exported by PorterLib\n// Please credit DTZxPorter for use of this asset!\nnodes")?;
+    writeln!(
+        smd,
+        "version 1\n// Exported by PorterLib\n// Please credit DTZxPorter for use of this asset!\nnodes"
+    )?;
 
     for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
         writeln!(
@@ -67,11 +70,8 @@ pub fn to_smd<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
     writeln!(smd, "end\nskeleton\ntime 0")?;
 
     for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
-        let local_rotation = bone
-            .local_rotation
-            .unwrap_or_default()
-            .to_euler(Angles::Radians);
-        let local_position = bone.local_position.unwrap_or_default();
+        let local_rotation = bone.local_rotation.to_euler(Angles::Radians);
+        let local_position = bone.local_position;
 
         writeln!(
             smd,

@@ -1,14 +1,21 @@
+use std::io::Cursor;
 use std::sync::Arc;
 
 use wgpu::util::*;
 use wgpu::*;
 
 use porter_gpu::GPUInstance;
+
 use porter_math::Vector2;
 use porter_math::Vector3;
-use porter_model::Mesh;
-use porter_utils::AsThisSlice;
 
+use porter_model::Mesh;
+
+use porter_utils::AsThisSlice;
+use porter_utils::StructWriteExt;
+use porter_utils::VecExt;
+
+use crate::PreviewError;
 use crate::RenderMaterialTexture;
 
 /// A 3d render mesh.
@@ -29,31 +36,41 @@ impl RenderMesh {
         bind_group_layouts: &[&BindGroupLayout],
         mesh: &Mesh,
         material_textures: &[Arc<RenderMaterialTexture>],
-    ) -> Self {
-        let stride = (std::mem::size_of::<Vector3>() * 2) + std::mem::size_of::<Vector2>();
-        let mesh_stride = mesh.vertices.stride();
-        let min_stride = stride.min(mesh_stride);
-
-        let slice = mesh.vertices.as_slice();
+        culling: bool,
+    ) -> Result<Self, PreviewError> {
+        let vertex_stride = (size_of::<Vector3>() * 2) + size_of::<Vector2>();
 
         let material_texture = match mesh.material {
-            Some(index) => material_textures[index].clone(),
+            Some(index) => material_textures
+                .get(index)
+                .cloned()
+                .unwrap_or_else(|| material_textures[material_textures.len() - 1].clone()),
             None => material_textures[material_textures.len() - 1].clone(),
         };
 
-        let mut vertex_buffer = vec![0; stride * mesh.vertices.len()];
-        let mut offset = 0;
+        let vertex_buffer: Vec<u8> =
+            Vec::try_with_exact_capacity(vertex_stride * mesh.vertices.len())?;
 
-        for chunk in vertex_buffer.chunks_exact_mut(stride) {
-            chunk[..min_stride].copy_from_slice(&slice[offset..offset + min_stride]);
-            offset += mesh_stride;
+        let mut vertex_buffer = Cursor::new(vertex_buffer);
+
+        for v in 0..mesh.vertices.len() {
+            let vertex = mesh.vertices.vertex(v);
+
+            vertex_buffer.write_struct(vertex.position())?;
+            vertex_buffer.write_struct(vertex.normal())?;
+
+            if mesh.vertices.uv_layers() > 0 {
+                vertex_buffer.write_struct(vertex.uv(0))?;
+            } else {
+                vertex_buffer.write_struct(Vector2::zero())?;
+            }
         }
 
         let vertex_buffer = instance
             .device()
             .create_buffer_init(&util::BufferInitDescriptor {
                 label: None,
-                contents: &vertex_buffer,
+                contents: &vertex_buffer.into_inner(),
                 usage: BufferUsages::VERTEX,
             });
 
@@ -83,9 +100,9 @@ impl RenderMesh {
             layout: Some(&render_pipeline_layout),
             vertex: VertexState {
                 module: instance.gpu_preview_shader(),
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &[VertexBufferLayout {
-                    array_stride: stride as BufferAddress,
+                    array_stride: vertex_stride as BufferAddress,
                     step_mode: VertexStepMode::Vertex,
                     attributes: &[
                         VertexAttribute {
@@ -94,23 +111,24 @@ impl RenderMesh {
                             format: VertexFormat::Float32x3,
                         },
                         VertexAttribute {
-                            offset: std::mem::size_of::<Vector3>() as BufferAddress,
+                            offset: size_of::<Vector3>() as BufferAddress,
                             shader_location: 1,
                             format: VertexFormat::Float32x3,
                         },
                         VertexAttribute {
-                            offset: (std::mem::size_of::<Vector3>() * 2) as BufferAddress,
+                            offset: (size_of::<Vector3>() * 2) as BufferAddress,
                             shader_location: 2,
                             format: VertexFormat::Float32x2,
                         },
                     ],
                 }],
+                compilation_options: Default::default(),
             },
             primitive: PrimitiveState {
                 topology: PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: FrontFace::Cw,
-                cull_mode: Some(Face::Back),
+                cull_mode: if culling { Some(Face::Back) } else { None },
                 unclipped_depth: false,
                 polygon_mode: PolygonMode::Fill,
                 conservative: false,
@@ -129,14 +147,20 @@ impl RenderMesh {
             },
             fragment: Some(FragmentState {
                 module: instance.gpu_preview_shader(),
-                entry_point: "fs_main",
+                entry_point: if culling {
+                    Some("fs_main")
+                } else {
+                    Some("fs_main_nocull")
+                },
                 targets: &[Some(ColorTargetState {
                     format: TextureFormat::Rgba8Unorm,
                     blend: Some(BlendState::REPLACE),
                     write_mask: ColorWrites::ALL,
                 })],
+                compilation_options: Default::default(),
             }),
             multiview: None,
+            cache: None,
         };
 
         let render_pipeline = instance
@@ -154,7 +178,7 @@ impl RenderMesh {
                     ..render_pipeline_desc
                 });
 
-        Self {
+        Ok(Self {
             render_pipeline,
             render_pipeline_wireframe,
             vertex_buffer,
@@ -162,11 +186,15 @@ impl RenderMesh {
             face_buffer,
             face_count: mesh.faces.len(),
             material_texture,
-        }
+        })
     }
 
     /// Draws the mesh using the given render pass.
     pub fn draw<'a>(&'a self, render_pass: &mut RenderPass<'a>, wireframe: bool) {
+        if self.vertex_count == 0 || self.face_count == 0 {
+            return;
+        }
+
         if wireframe {
             render_pass.set_pipeline(&self.render_pipeline_wireframe);
         } else {

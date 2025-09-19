@@ -1,6 +1,7 @@
 use porter_math::Vector3;
 
 /// Represents a 3D bounding box with min/max bounds.
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Aabb {
     /// The minimum box bounds.

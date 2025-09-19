@@ -32,8 +32,12 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
 
 struct OptionsUniform {
     input_unorm: u32,
+    input_snorm: u32,
     output_unorm: u32,
+    output_snorm: u32,
     invert_y: u32,
+    scale: f32,
+    bias: f32,
 }
 
 @group(0) @binding(0)
@@ -46,7 +50,15 @@ var s_input: sampler;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(t_input, s_input, in.tex_coord);
+    var sample: vec4<f32> = textureSample(t_input, s_input, in.tex_coord).xyzw;
+
+    if options.input_unorm == 1u && options.output_snorm == 1u {
+        sample = sample * 2.0 - 1.0;
+    } else if options.input_snorm == 1u && options.output_unorm == 1u {
+        sample = sample * 0.5 + 0.5;
+    }
+
+    return sample;
 }
 
 @fragment
@@ -73,4 +85,11 @@ fn fs_rz_main(in: VertexOutput) -> @location(0) vec4<f32> {
     } else {
         return vec4<f32>(normalized, 1.0);
     }
+}
+
+@fragment
+fn fs_sb_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    var sample: vec4<f32> = textureSample(t_input, s_input, in.tex_coord).xyzw;
+
+    return vec4<f32>(fma(sample.xyz, vec3<f32>(options.scale), vec3<f32>(options.bias)), sample.w);
 }

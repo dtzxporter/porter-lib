@@ -1,24 +1,26 @@
 use std::collections::HashSet;
 use std::fmt;
 
-use porter_utils::SanitizeFilename;
+use porter_utils::SanitizeExt;
 
 /// A material texture usage.
 #[repr(u32)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum MaterialTextureRefUsage {
-    Unknown,
     Albedo,
     Diffuse,
     Specular,
     Normal,
     Emissive,
+    EmissiveMask,
+    EmissiveStrength,
     Gloss,
     Roughness,
     AmbientOcclusion,
     Anisotropy,
     Cavity,
     Metalness,
+    Unknown,
     Count,
 }
 
@@ -36,10 +38,9 @@ pub struct MaterialTextureRef {
 }
 
 /// The parameter type.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MaterialParameterType {
-    BaseColor,
-    Custom(String),
+    Usage(MaterialTextureRefUsage),
 }
 
 /// A parameter for a material.
@@ -56,8 +57,10 @@ pub struct MaterialParameter {
 pub enum MaterialParameterValue {
     /// A custom string value.
     String(String),
-    /// A RGBA 32bit float color value.
-    Color { r: f32, g: f32, b: f32, a: f32 },
+    /// A Linear RGBA 32bit float color value.
+    ColorLinear { r: f32, g: f32, b: f32, a: f32 },
+    /// A sRGB RGBA 32bit float color value.
+    ColorSRGB { r: f32, g: f32, b: f32, a: f32 },
 }
 
 /// A material which has a name, and is a collection of textures.
@@ -89,7 +92,7 @@ fn sanitize_material_name(name: &str) -> String {
 impl Material {
     /// Constructs a new material instance.
     pub fn new<N: Into<String>>(name: N) -> Self {
-        let name = name.into();
+        let name: String = name.into();
 
         Self {
             name: sanitize_material_name(&name),
@@ -109,7 +112,14 @@ impl Material {
 
     /// Adds a texture to the material.
     pub fn push(&mut self, texture_ref: MaterialTextureRef) {
-        self.textures.push(texture_ref);
+        let indices = self
+            .textures
+            .binary_search_by_key(&texture_ref.texture_usage, |entry| entry.texture_usage);
+
+        match indices {
+            Ok(index) => self.textures.insert(index + 1, texture_ref),
+            Err(index) => self.textures.insert(index, texture_ref),
+        }
     }
 
     /// Adds a parameter to the material.
@@ -118,10 +128,21 @@ impl Material {
         param: N,
         value: P,
     ) {
-        self.parameters.push(MaterialParameter {
-            param: param.into(),
-            value: value.into(),
-        });
+        let param = param.into();
+        let value = value.into();
+
+        let indices = self
+            .parameters
+            .binary_search_by_key(&param, |entry| entry.param);
+
+        match indices {
+            Ok(index) => self
+                .parameters
+                .insert(index + 1, MaterialParameter { param, value }),
+            Err(index) => self
+                .parameters
+                .insert(index, MaterialParameter { param, value }),
+        }
     }
 
     /// Removes the texture at the given index.
@@ -129,38 +150,14 @@ impl Material {
         self.textures.remove(index)
     }
 
-    /// Returns the number of textures in the material.
-    pub fn len(&self) -> usize {
-        self.textures.len()
-    }
-
-    /// Whether or not the material is empty.
-    pub fn is_empty(&self) -> bool {
-        self.textures.is_empty()
-    }
-
     /// Returns a collection of unique textures that belong to this material.
     pub fn unique_textures(&self) -> HashSet<MaterialTextureRef> {
         self.textures
             .iter()
-            .take(self.len())
+            .take(self.textures.len())
             .filter(|x| !x.is_empty())
             .cloned()
             .collect::<HashSet<MaterialTextureRef>>()
-    }
-
-    /// Attempts to find the 'base' color parameter in this material.
-    pub fn base_color(&self) -> Option<(f32, f32, f32, f32)> {
-        self.parameters
-            .iter()
-            .find(|x| x.param == MaterialParameterType::BaseColor)
-            .and_then(|x| {
-                if let MaterialParameterValue::Color { r, g, b, a } = x.value {
-                    Some((r, g, b, a))
-                } else {
-                    None
-                }
-            })
     }
 
     /// Attempts to find the 'base' color texture in this material.
@@ -234,6 +231,8 @@ impl fmt::Display for MaterialTextureRefUsage {
             MaterialTextureRefUsage::Specular => write!(f, "Specular"),
             MaterialTextureRefUsage::Normal => write!(f, "Normal"),
             MaterialTextureRefUsage::Emissive => write!(f, "Emissive"),
+            MaterialTextureRefUsage::EmissiveMask => write!(f, "Emissive Mask"),
+            MaterialTextureRefUsage::EmissiveStrength => write!(f, "Emissive Strength"),
             MaterialTextureRefUsage::Gloss => write!(f, "Gloss"),
             MaterialTextureRefUsage::Roughness => write!(f, "Roughness"),
             MaterialTextureRefUsage::AmbientOcclusion => write!(f, "Ambient Occlusion"),
@@ -245,15 +244,9 @@ impl fmt::Display for MaterialTextureRefUsage {
     }
 }
 
-impl From<String> for MaterialParameterType {
-    fn from(value: String) -> Self {
-        Self::Custom(value)
-    }
-}
-
-impl From<&str> for MaterialParameterType {
-    fn from(value: &str) -> Self {
-        Self::Custom(value.to_owned())
+impl From<MaterialTextureRefUsage> for MaterialParameterType {
+    fn from(value: MaterialTextureRefUsage) -> Self {
+        Self::Usage(value)
     }
 }
 
@@ -266,16 +259,5 @@ impl From<String> for MaterialParameterValue {
 impl From<&str> for MaterialParameterValue {
     fn from(value: &str) -> Self {
         Self::String(value.to_owned())
-    }
-}
-
-impl From<(f32, f32, f32, f32)> for MaterialParameterValue {
-    fn from(value: (f32, f32, f32, f32)) -> Self {
-        Self::Color {
-            r: value.0,
-            g: value.1,
-            b: value.2,
-            a: value.3,
-        }
     }
 }

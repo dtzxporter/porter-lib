@@ -3,8 +3,6 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
 
-use porter_math::Vector3;
-
 use crate::Model;
 use crate::ModelError;
 
@@ -114,17 +112,29 @@ pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), Mo
     writeln!(xmodel)?;
 
     for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
-        let rotation = bone.world_rotation.unwrap_or_default().to_4x4();
-        let position = bone.world_position.unwrap_or_default();
-        let scale = bone.local_scale.unwrap_or_else(Vector3::one);
+        let rotation = bone.world_rotation.to_4x4();
+        let position = bone.world_position;
+        let scale = bone.local_scale;
 
-        writeln!(xmodel, "BONE {}\nOFFSET {:.6}, {:.6}, {:.6}\nSCALE {:.6}, {:.6}, {:.6}\nX {:.6}, {:.6}, {:.6}\nY {:.6}, {:.6}, {:.6}\nZ {:.6}, {:.6}, {:.6}\n",
+        writeln!(
+            xmodel,
+            "BONE {}\nOFFSET {:.6}, {:.6}, {:.6}\nSCALE {:.6}, {:.6}, {:.6}\nX {:.6}, {:.6}, {:.6}\nY {:.6}, {:.6}, {:.6}\nZ {:.6}, {:.6}, {:.6}\n",
             bone_index,
-            position.x, position.y, position.z,
-            scale.x, scale.y, scale.z,
-            rotation.mat::<0, 0>(), rotation.mat::<0, 1>(), rotation.mat::<0, 2>(),
-            rotation.mat::<1, 0>(), rotation.mat::<1, 1>(), rotation.mat::<1, 2>(),
-            rotation.mat::<2, 0>(), rotation.mat::<2, 1>(), rotation.mat::<2, 2>(),
+            position.x,
+            position.y,
+            position.z,
+            scale.x,
+            scale.y,
+            scale.z,
+            rotation.mat::<0, 0>(),
+            rotation.mat::<0, 1>(),
+            rotation.mat::<0, 2>(),
+            rotation.mat::<1, 0>(),
+            rotation.mat::<1, 1>(),
+            rotation.mat::<1, 2>(),
+            rotation.mat::<2, 0>(),
+            rotation.mat::<2, 1>(),
+            rotation.mat::<2, 2>(),
         )?;
     }
 
@@ -223,11 +233,18 @@ pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), Mo
             write!(xmodel, "color:{}", diffuse.file_name)?;
         }
 
-        writeln!(xmodel, "\"\nCOLOR 0.000000 0.000000 0.000000 1.000000\nTRANSPARENCY 0.000000 0.000000 0.000000 1.000000\nAMBIENTCOLOR 1.000000 1.000000 1.000000 1.000000\nINCANDESCENCE 0.000000 0.000000 0.000000 1.000000\nCOEFFS 0.800000 0.000000\nGLOW 0.000000 0\nREFRACTIVE 6 1.000000\nSPECULARCOLOR 0.500000 0.500000 0.500000 1.000000\nREFLECTIVECOLOR 0.000000 0.000000 0.000000 1.000000\nREFLECTIVE 1 0.500000\nBLINN -1.000000 -1.000000\nPHONG 20.000000")?;
+        writeln!(
+            xmodel,
+            "\"\nCOLOR 0.000000 0.000000 0.000000 1.000000\nTRANSPARENCY 0.000000 0.000000 0.000000 1.000000\nAMBIENTCOLOR 1.000000 1.000000 1.000000 1.000000\nINCANDESCENCE 0.000000 0.000000 0.000000 1.000000\nCOEFFS 0.800000 0.000000\nGLOW 0.000000 0\nREFRACTIVE 6 1.000000\nSPECULARCOLOR 0.500000 0.500000 0.500000 1.000000\nREFLECTIVECOLOR 0.000000 0.000000 0.000000 1.000000\nREFLECTIVE 1 0.500000\nBLINN -1.000000 -1.000000\nPHONG 20.000000"
+        )?;
     }
 
     if needs_default_material {
-        writeln!(xmodel, "MATERIAL {} \"default_material\" \"Phong\" \"\"\nCOLOR 0.000000 0.000000 0.000000 1.000000\nTRANSPARENCY 0.000000 0.000000 0.000000 1.000000\nAMBIENTCOLOR 1.000000 1.000000 1.000000 1.000000\nINCANDESCENCE 0.000000 0.000000 0.000000 1.000000\nCOEFFS 0.800000 0.000000\nGLOW 0.000000 0\nREFRACTIVE 6 1.000000\nSPECULARCOLOR 0.500000 0.500000 0.500000 1.000000\nREFLECTIVECOLOR 0.000000 0.000000 0.000000 1.000000\nREFLECTIVE 1 0.500000\nBLINN -1.000000 -1.000000\nPHONG 20.000000", model.materials.len())?;
+        writeln!(
+            xmodel,
+            "MATERIAL {} \"default_material\" \"Phong\" \"\"\nCOLOR 0.000000 0.000000 0.000000 1.000000\nTRANSPARENCY 0.000000 0.000000 0.000000 1.000000\nAMBIENTCOLOR 1.000000 1.000000 1.000000 1.000000\nINCANDESCENCE 0.000000 0.000000 0.000000 1.000000\nCOEFFS 0.800000 0.000000\nGLOW 0.000000 0\nREFRACTIVE 6 1.000000\nSPECULARCOLOR 0.500000 0.500000 0.500000 1.000000\nREFLECTIVECOLOR 0.000000 0.000000 0.000000 1.000000\nREFLECTIVE 1 0.500000\nBLINN -1.000000 -1.000000\nPHONG 20.000000",
+            model.materials.len()
+        )?;
     }
 
     Ok(())

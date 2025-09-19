@@ -31,6 +31,18 @@ fn powf(x: f32, p: f32) -> f32 {
     pow2(p * log2(x))
 }
 
+/// Unpacks a unorm u8 value.
+#[inline(always)]
+pub fn unpack_unorm8(value: u8) -> f32 {
+    value as f32 / 255.0
+}
+
+/// Packs a unorm u8 value.
+#[inline(always)]
+pub fn pack_unorm8(value: f32) -> u8 {
+    ((value.clamp(0.0, 1.0) * 255.0) + 0.5) as u8
+}
+
 /// Converts a linear color value to an srgb color value.
 #[inline(always)]
 pub fn linear_to_srgb(value: f32) -> f32 {

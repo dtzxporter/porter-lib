@@ -3,6 +3,7 @@ use libc::*;
 use mach2::mach_port::mach_port_deallocate;
 use mach2::task;
 use mach2::task_info::*;
+use mach2::traps::mach_task_self;
 use mach2::vm::*;
 
 use crate::ProcessError;
@@ -86,9 +87,8 @@ impl ProcessHandlePlatform for ProcessHandle {
 
     fn base_address(&self) -> Result<u64, ProcessError> {
         let mut vm_info: task_vm_info = task_vm_info::default();
-        let mut count: mach_msg_type_number_t = (std::mem::size_of::<task_vm_info>()
-            / std::mem::size_of::<natural_t>())
-            as mach_msg_type_number_t;
+        let mut count: mach_msg_type_number_t =
+            (size_of::<task_vm_info>() / size_of::<natural_t>()) as mach_msg_type_number_t;
 
         let result = unsafe {
             task::task_info(

@@ -1,9 +1,21 @@
+use porter_math::Quaternion;
+use porter_math::Vector3;
+
 /// The type of constraint to apply.
 #[derive(Debug, Clone, Copy)]
 pub enum ConstraintType {
     Point,
     Orient,
     Scale,
+}
+
+/// Type of offset the constraint has.
+#[derive(Debug, Clone, Copy)]
+pub enum ConstraintOffset {
+    None,
+    Maintain,
+    Vector3(Vector3),
+    Quaternion(Quaternion),
 }
 
 /// A 3d bone constraint.
@@ -13,7 +25,8 @@ pub struct Constraint {
     pub constraint_type: ConstraintType,
     pub constraint_bone: usize,
     pub target_bone: usize,
-    pub maintain_offset: bool,
+    pub offset: ConstraintOffset,
+    pub weight: f32,
     pub skip_x: bool,
     pub skip_y: bool,
     pub skip_z: bool,
@@ -21,19 +34,21 @@ pub struct Constraint {
 
 impl Constraint {
     /// Constructs a new instance of a constraint.
-    pub fn new(
+    pub fn new<T: Into<ConstraintOffset>>(
         name: Option<String>,
         constraint_type: ConstraintType,
         constraint_bone: usize,
         target_bone: usize,
-        maintain_offset: bool,
+        offset: T,
+        weight: f32,
     ) -> Self {
         Self {
             name,
             constraint_type,
             constraint_bone,
             target_bone,
-            maintain_offset,
+            offset: offset.into(),
+            weight,
             skip_x: false,
             skip_y: false,
             skip_z: false,
@@ -59,5 +74,26 @@ impl Constraint {
     pub fn skip_z(mut self, skip: bool) -> Self {
         self.skip_z = skip;
         self
+    }
+}
+
+impl From<bool> for ConstraintOffset {
+    fn from(value: bool) -> Self {
+        match value {
+            true => Self::Maintain,
+            false => Self::None,
+        }
+    }
+}
+
+impl From<Vector3> for ConstraintOffset {
+    fn from(value: Vector3) -> Self {
+        Self::Vector3(value)
+    }
+}
+
+impl From<Quaternion> for ConstraintOffset {
+    fn from(value: Quaternion) -> Self {
+        Self::Quaternion(value)
     }
 }

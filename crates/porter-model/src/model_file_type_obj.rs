@@ -129,19 +129,21 @@ pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
     }
 
     // These must match the enumeration for texture usage.
-    const MATERIAL_MAPPINGS: [&str; 12] = [
-        "map_Unk", // Unknown (Custom extension)
-        "map_Kd",  // Albedo (Diffuse)
-        "map_Kd",  // Diffuse (Diffuse)
-        "map_Ks",  // Specular (Specular)
-        "norm",    // Normal (Normal extension)
-        "map_Ke",  // Emissive (Emissive extension)
-        "map_Pr",  // Gloss (Roughness extension)
-        "map_Pr",  // Roughness (Roughness extension)
-        "map_RMA", // AmbientOcclusion (RMA Extension)
-        "aniso",   // Anisotropy (Anisotropy extension)
-        "detail",  // Cavity (Custom extension)
-        "map_Pm",  // Metallic (Metallic extension)
+    const MATERIAL_MAPPINGS: [&str; 14] = [
+        "map_Kd",    // Albedo (Diffuse)
+        "map_Kd",    // Diffuse (Diffuse)
+        "map_Ks",    // Specular (Specular)
+        "norm",      // Normal (Normal extension)
+        "map_Ke",    // Emissive (Emissive extension)
+        "emask",     // Emissive Mask (Custom extension)
+        "estrength", // Emissive Strength (Custom extension)
+        "map_Pr",    // Gloss (Roughness extension)
+        "map_Pr",    // Roughness (Roughness extension)
+        "map_RMA",   // AmbientOcclusion (RMA Extension)
+        "aniso",     // Anisotropy (Anisotropy extension)
+        "detail",    // Cavity (Custom extension)
+        "map_Pm",    // Metallic (Metallic extension)
+        "map_Unk",   // Unknown (Custom extension)
     ];
 
     const_assert!(MATERIAL_MAPPINGS.len() == MaterialTextureRefUsage::Count as usize);

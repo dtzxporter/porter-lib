@@ -37,7 +37,7 @@ impl ProcessInfoPlatform for ProcessInfo {
 
                     let name = name_and_path
                         .file_stem()
-                        .map(|x| x.to_string_lossy().to_string())
+                        .map(|x| x.to_string_lossy().into_owned())
                         .unwrap_or(format!("Process_{}", process.pid()));
 
                     (name, Some(name_and_path))

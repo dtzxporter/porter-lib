@@ -1,7 +1,7 @@
-use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::btree_map::Entry;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
@@ -14,7 +14,6 @@ use porter_fbx::FbxPropertyValue;
 
 use porter_math::Angles;
 use porter_math::Matrix4x4;
-use porter_math::Vector3;
 
 use crate::MaterialTextureRef;
 use crate::MaterialTextureRefUsage;
@@ -77,7 +76,7 @@ fn initialize_texture_node(
     let texture_node = root.objects_node().create("Texture");
     let texture_name = PathBuf::from(texture.file_name.as_str())
         .file_stem()
-        .map(|x| x.to_string_lossy().to_string())
+        .map(|x| x.to_string_lossy().into_owned())
         .unwrap_or_else(|| String::from("not_found"));
 
     texture_node.create_hash();
@@ -448,7 +447,7 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
 
             {
                 let props = properties.create("P");
-                let position = bone.local_position.unwrap_or_default();
+                let position = bone.local_position;
 
                 props
                     .create_property(FbxPropertyType::String)
@@ -475,10 +474,7 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
 
             {
                 let props = properties.create("P");
-                let rotation = bone
-                    .local_rotation
-                    .unwrap_or_default()
-                    .to_euler(Angles::Degrees);
+                let rotation = bone.local_rotation.to_euler(Angles::Degrees);
 
                 props
                     .create_property(FbxPropertyType::String)
@@ -505,7 +501,7 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
 
             {
                 let props = properties.create("P");
-                let scale = bone.local_scale.unwrap_or(Vector3::one());
+                let scale = bone.local_scale;
 
                 props
                     .create_property(FbxPropertyType::String)
@@ -618,7 +614,7 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
             "{}\u{0000}\u{0001}Model",
             path.as_ref()
                 .file_stem()
-                .map(|x| x.to_string_lossy().to_string())
+                .map(|x| x.to_string_lossy().into_owned())
                 .unwrap_or_else(|| String::from("PorterModel"))
         ));
     model_node
@@ -970,10 +966,11 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
         add_object_connection(root.connections_node(), mesh_hash, model_hash);
         add_object_connection(root.connections_node(), geometry_hash, mesh_hash);
 
-        if let Some(material_index) = mesh.material {
-            if let Some(material) = material_map.get(&material_index) {
-                add_object_connection(root.connections_node(), *material, mesh_hash);
-            }
+        if let Some(material) = mesh
+            .material
+            .and_then(|material_index| material_map.get(&material_index))
+        {
+            add_object_connection(root.connections_node(), *material, mesh_hash);
         }
 
         if mesh.vertices.maximum_influence() == 0 {

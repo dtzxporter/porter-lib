@@ -5,14 +5,10 @@ edition = "2024"
 
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-sys = { version = "0.59", default-features = false, features = [
-    "Win32_Foundation",
-    "Win32_System_WindowsProgramming",
-    "Win32_Networking_WinHttp",
-] }
+windows-sys.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
-curl-sys = { version = "0.4", default-features = false }
+curl-sys.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
-curl-sys = { version = "0.4", default-features = false }
+curl-sys.workspace = true

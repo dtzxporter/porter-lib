@@ -467,7 +467,7 @@ impl TryFrom<CastPropertyValue> for String {
 
 impl From<&str> for CastPropertyValue {
     fn from(value: &str) -> Self {
-        Self::String(value.to_string())
+        Self::String(value.to_owned())
     }
 }
 

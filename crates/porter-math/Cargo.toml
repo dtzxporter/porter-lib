@@ -1,9 +1,9 @@
 [package]
 name = "porter-math"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-unroll = "0.1.5"
-static_assertions = { version = "1.1" }
-half = { version = "2.3", default-features = false, features = ["std"] }
+unroll.workspace = true
+static_assertions.workspace = true
+half.workspace = true

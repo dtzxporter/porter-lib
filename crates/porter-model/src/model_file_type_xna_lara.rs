@@ -17,7 +17,7 @@ pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelEr
     writeln!(xna, "{}", model.skeleton.bones.len())?;
 
     for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
-        let world_position = bone.world_position.unwrap_or_default();
+        let world_position = bone.world_position;
 
         writeln!(
             xna,
@@ -44,14 +44,10 @@ pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelEr
         )?;
 
         for i in 0..mesh.vertices.uv_layers() {
-            if let Some(material_index) = mesh.material {
-                let diffuse = model.materials[material_index].base_color_texture();
-
-                if let Some(diffuse) = diffuse {
-                    writeln!(xna, "{}\n{}", diffuse.file_name, i)?;
-                } else {
-                    writeln!(xna, "default_material\n{}", i)?;
-                }
+            if let Some(material_index) = mesh.material
+                && let Some(diffuse) = model.materials[material_index].base_color_texture()
+            {
+                writeln!(xna, "{}\n{}", diffuse.file_name, i)?;
             } else {
                 writeln!(xna, "default_material\n{}", i)?;
             }
@@ -123,11 +119,7 @@ pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelEr
         writeln!(xna, "{}", mesh.faces.len())?;
 
         for face in &mesh.faces {
-            writeln!(
-                xna,
-                "{} {} {}",
-                face.i1 as i16, face.i2 as i16, face.i3 as i16
-            )?;
+            writeln!(xna, "{} {} {}", { face.i1 }, { face.i2 }, { face.i3 })?;
         }
     }
 

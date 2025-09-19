@@ -67,10 +67,10 @@ pub fn download_memory(client: HttpClient) -> Result<(Vec<u8>, String), io::Erro
             }
         }
 
-        if let Some(timeout) = timeout {
-            if start.elapsed() > timeout {
-                return Err(io::Error::from(io::ErrorKind::TimedOut));
-            }
+        if let Some(timeout) = timeout
+            && start.elapsed() > timeout
+        {
+            return Err(io::Error::from(io::ErrorKind::TimedOut));
         }
     }
 
@@ -112,10 +112,10 @@ pub fn download_file(client: HttpClient, path: &Path) -> Result<(), io::Error> {
             }
         }
 
-        if let Some(timeout) = timeout {
-            if start.elapsed() > timeout {
-                return Err(io::Error::from(io::ErrorKind::TimedOut));
-            }
+        if let Some(timeout) = timeout
+            && start.elapsed() > timeout
+        {
+            return Err(io::Error::from(io::ErrorKind::TimedOut));
         }
     }
 
@@ -405,7 +405,7 @@ fn make_request(request: &Request) -> Result<(String, f64), io::Error> {
         .to_string_lossy()
         .to_lowercase();
 
-    let mut content_length: [u16; 256] = [0; 256];
+    let mut content_length: [u16; 64] = [0; 64];
     let mut content_length_length: u32 = content_length.len() as u32 * 2;
 
     let result = unsafe {

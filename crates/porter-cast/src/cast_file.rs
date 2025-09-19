@@ -1,6 +1,3 @@
-use core::slice::Iter;
-use core::slice::IterMut;
-
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Read;
@@ -41,14 +38,14 @@ impl CastFile {
         self.root_nodes.push(node);
     }
 
-    /// Returns an iterator over the root nodes in this file.
-    pub fn roots(&self) -> Iter<'_, CastNode> {
-        self.root_nodes.iter()
+    /// Returns a slice of roots in the file.
+    pub fn roots(&self) -> &[CastNode] {
+        &self.root_nodes
     }
 
-    /// Returns an iterator that allows modifying the root nodes in this file.
-    pub fn roots_mut(&mut self) -> IterMut<'_, CastNode> {
-        self.root_nodes.iter_mut()
+    /// Returns a mutable slice of roots in the file.
+    pub fn roots_mut(&mut self) -> &mut [CastNode] {
+        &mut self.root_nodes
     }
 
     /// Serializes the cast file to the writer.

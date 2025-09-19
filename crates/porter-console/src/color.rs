@@ -44,14 +44,14 @@ impl From<Color> for TColor {
     fn from(value: Color) -> Self {
         if color_mode() {
             match value {
-                Color::Red => Self::Rgb(243, 68, 54),
+                Color::Red => Self::Rgb(0xF3, 0x44, 0x36),
                 Color::Blue => Self::Rgb(0x27, 0x9B, 0xD4),
-                Color::Green => Self::Rgb(0, 213, 133),
-                Color::Orange => Self::Rgb(255, 152, 0),
-                Color::Yellow => Self::Rgb(244, 246, 0),
-                Color::Pink => Self::Rgb(255, 0, 208),
-                Color::DarkGray => Self::Rgb(35, 35, 35),
-                Color::White => Self::Rgb(255, 255, 255),
+                Color::Green => Self::Rgb(0x00, 0xD5, 0x85),
+                Color::Orange => Self::Rgb(0xFF, 0x98, 0x00),
+                Color::Yellow => Self::Rgb(0xF4, 0xF6, 0x00),
+                Color::Pink => Self::Rgb(0xFF, 0x00, 0xD0),
+                Color::DarkGray => Self::Rgb(0x23, 0x23, 0x23),
+                Color::White => Self::Rgb(0xFF, 0xFF, 0xFF),
             }
         } else {
             match value {

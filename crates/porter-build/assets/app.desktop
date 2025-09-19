@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Terminal=false
+Exec={NAME}
+Name={NAME-UPPERCASE}
+Icon={NAME}
+Comment={DESCRIPTION}
+Categories=Game;

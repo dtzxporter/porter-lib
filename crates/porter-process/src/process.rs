@@ -34,8 +34,10 @@ impl Process {
     }
 
     /// Attempts to get a process by it's unique id.
-    pub fn get_process_by_id<P: Into<u64>>(pid: P) -> Result<Self, ProcessError> {
-        ProcessInfo::get_processes([pid.into()])?
+    pub fn get_process_by_id<P: TryInto<u64>>(pid: P) -> Result<Self, ProcessError> {
+        let pid = pid.try_into().map_err(|_| ProcessError::NotFound)?;
+
+        ProcessInfo::get_processes([pid])?
             .into_iter()
             .next()
             .map(|info| Process { info })
@@ -51,9 +53,9 @@ impl Process {
             return false;
         };
 
-        return process.name == self.name()
+        process.name == self.name()
             && process.pid == self.pid()
-            && process.started_at == self.started_at();
+            && process.started_at == self.started_at()
     }
 
     /// The name of the process executable without the extension.

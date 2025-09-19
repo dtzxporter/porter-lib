@@ -49,16 +49,15 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
         .push(animation.looping);
 
     for curve in &animation.curves {
-        if matches!(curve.attribute(), CurveAttribute::Notetrack) {
-            continue;
-        }
-
         let (num_curves, curve_props) = match curve.attribute() {
             CurveAttribute::Rotation => (1, ["rq", "", ""]),
             CurveAttribute::Scale => (3, ["sx", "sy", "sz"]),
             CurveAttribute::Translate => (3, ["tx", "ty", "tz"]),
             CurveAttribute::Visibility => (1, ["vb", "", ""]),
-            CurveAttribute::Notetrack => unreachable!(),
+            CurveAttribute::Notetrack => {
+                // Handled separately via notification tracks.
+                continue;
+            }
             CurveAttribute::BlendShape => (1, ["bs", "", ""]),
         };
 
@@ -103,9 +102,7 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
 
             let keyframes = curve.keyframes();
 
-            keyframe_buffer
-                .try_reserve_exact(keyframes.len())
-                .map_err(|_| AnimationError::CurveAllocationFailed)?;
+            keyframe_buffer.try_reserve_exact(keyframes.len())?;
 
             for keyframe in keyframes {
                 if largest_frame_time <= 0xFF {
@@ -128,9 +125,7 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
 
             let keyvalue_buffer = curve_node.create_property(property_type, "kv");
 
-            keyvalue_buffer
-                .try_reserve_exact(keyframes.len())
-                .map_err(|_| AnimationError::CurveAllocationFailed)?;
+            keyvalue_buffer.try_reserve_exact(keyframes.len())?;
 
             for keyframe in keyframes {
                 match keyframe.value {
@@ -169,9 +164,7 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
 
         let key_buffer = track_node.create_property(CastPropertyId::Integer32, "kb");
 
-        key_buffer
-            .try_reserve_exact(keyframes.len())
-            .map_err(|_| AnimationError::CurveAllocationFailed)?;
+        key_buffer.try_reserve_exact(keyframes.len())?;
 
         for key in keyframes {
             key_buffer.push(key.time);

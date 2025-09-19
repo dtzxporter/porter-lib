@@ -11,8 +11,12 @@ use porter_cast::CastPropertyId;
 use porter_cast::CastPropertyValue;
 
 use porter_math::Axis;
+use porter_math::Vector4;
 
+use crate::ConstraintOffset;
 use crate::ConstraintType;
+use crate::MaterialParameterType;
+use crate::MaterialParameterValue;
 use crate::MaterialTextureRefUsage;
 use crate::Model;
 use crate::ModelError;
@@ -63,33 +67,27 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 .create_property(CastPropertyId::Integer32, "p")
                 .push(bone.parent as u32);
 
-            if let (Some(local_position), Some(local_rotation)) =
-                (bone.local_position, bone.local_rotation)
-            {
-                bone_node
-                    .create_property(CastPropertyId::Vector3, "lp")
-                    .push(local_position);
-                bone_node
-                    .create_property(CastPropertyId::Vector4, "lr")
-                    .push(local_rotation);
-            }
+            bone_node
+                .create_property(CastPropertyId::Byte, "ssc")
+                .push(bone.segment_scale_compensate);
 
-            if let (Some(world_position), Some(world_rotation)) =
-                (bone.world_position, bone.world_rotation)
-            {
-                bone_node
-                    .create_property(CastPropertyId::Vector3, "wp")
-                    .push(world_position);
-                bone_node
-                    .create_property(CastPropertyId::Vector4, "wr")
-                    .push(world_rotation);
-            }
+            bone_node
+                .create_property(CastPropertyId::Vector3, "lp")
+                .push(bone.local_position);
+            bone_node
+                .create_property(CastPropertyId::Vector4, "lr")
+                .push(bone.local_rotation);
 
-            if let Some(local_scale) = bone.local_scale {
-                bone_node
-                    .create_property(CastPropertyId::Vector3, "s")
-                    .push(local_scale);
-            }
+            bone_node
+                .create_property(CastPropertyId::Vector3, "wp")
+                .push(bone.world_position);
+            bone_node
+                .create_property(CastPropertyId::Vector4, "wr")
+                .push(bone.world_rotation);
+
+            bone_node
+                .create_property(CastPropertyId::Vector3, "s")
+                .push(bone.local_scale);
 
             bone_map.insert(bone_index, CastPropertyValue::from(bone_node));
         }
@@ -161,9 +159,32 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 .create_property(CastPropertyId::Integer64, "tb")
                 .push(bone_map[&constraint.target_bone].clone());
 
+            match constraint.offset {
+                ConstraintOffset::None => {
+                    constraint_node
+                        .create_property(CastPropertyId::Byte, "mo")
+                        .push(false);
+                }
+                ConstraintOffset::Maintain => {
+                    constraint_node
+                        .create_property(CastPropertyId::Byte, "mo")
+                        .push(true);
+                }
+                ConstraintOffset::Vector3(vector3) => {
+                    constraint_node
+                        .create_property(CastPropertyId::Vector3, "co")
+                        .push(vector3);
+                }
+                ConstraintOffset::Quaternion(quaternion) => {
+                    constraint_node
+                        .create_property(CastPropertyId::Vector4, "co")
+                        .push(quaternion);
+                }
+            }
+
             constraint_node
-                .create_property(CastPropertyId::Byte, "mo")
-                .push(constraint.maintain_offset as u8);
+                .create_property(CastPropertyId::Float, "wt")
+                .push(constraint.weight);
 
             constraint_node
                 .create_property(CastPropertyId::Byte, "sx")
@@ -194,21 +215,23 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             .push("pbr");
 
         let mut used_slots: HashSet<String> = HashSet::new();
+        let mut extras = 0;
 
-        for i in 0..material.len() {
-            let texture = &material.textures[i];
+        let mut extra_index = || {
+            let index = extras;
+            extras += 1;
+            index
+        };
 
-            let file = material_node.create(CastId::File);
-
-            file.create_property(CastPropertyId::String, "p")
-                .push(texture.file_name.as_str());
-
-            let slot = match texture.texture_usage {
+        let mut usage_to_slot = |usage: MaterialTextureRefUsage| {
+            let slot = match usage {
                 MaterialTextureRefUsage::Albedo => String::from("albedo"),
                 MaterialTextureRefUsage::Diffuse => String::from("diffuse"),
                 MaterialTextureRefUsage::Specular => String::from("specular"),
                 MaterialTextureRefUsage::Normal => String::from("normal"),
                 MaterialTextureRefUsage::Emissive => String::from("emissive"),
+                MaterialTextureRefUsage::EmissiveMask => String::from("emask"),
+                MaterialTextureRefUsage::EmissiveStrength => String::from("estrength"),
                 MaterialTextureRefUsage::Gloss => String::from("gloss"),
                 MaterialTextureRefUsage::Roughness => String::from("roughness"),
                 MaterialTextureRefUsage::AmbientOcclusion => String::from("ao"),
@@ -216,18 +239,74 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 MaterialTextureRefUsage::Metalness => String::from("metal"),
                 MaterialTextureRefUsage::Anisotropy => String::from("aniso"),
                 MaterialTextureRefUsage::Unknown | MaterialTextureRefUsage::Count => {
-                    format!("extra{}", i)
+                    format!("extra{}", extra_index())
                 }
             };
 
-            let slot = if used_slots.contains(&slot) {
-                format!("extra{}", i)
+            if used_slots.contains(&slot) {
+                format!("extra{}", extra_index())
             } else {
                 used_slots.insert(slot.clone());
                 slot
-            };
+            }
+        };
+
+        for texture in &material.textures {
+            let file = material_node.create(CastId::File);
+
+            file.create_property(CastPropertyId::String, "p")
+                .push(texture.file_name.as_str());
+
+            let slot = usage_to_slot(texture.texture_usage);
 
             let hash = CastPropertyValue::from(file);
+
+            material_node
+                .create_property(CastPropertyId::Integer64, slot)
+                .push(hash);
+        }
+
+        for parameter in &material.parameters {
+            #[allow(clippy::needless_late_init)]
+            let hash: CastPropertyValue;
+            #[allow(clippy::needless_late_init)]
+            let slot: String;
+
+            match parameter.param {
+                MaterialParameterType::Usage(usage) => {
+                    slot = usage_to_slot(usage);
+                }
+            }
+
+            match parameter.value {
+                MaterialParameterValue::ColorLinear { r, g, b, a } => {
+                    let color = material_node.create(CastId::Color);
+
+                    color
+                        .create_property(CastPropertyId::String, "cs")
+                        .push("linear");
+
+                    color
+                        .create_property(CastPropertyId::Vector4, "rgba")
+                        .push(Vector4::new(r, g, b, a));
+
+                    hash = CastPropertyValue::from(color);
+                }
+                MaterialParameterValue::ColorSRGB { r, g, b, a } => {
+                    let color = material_node.create(CastId::Color);
+
+                    color
+                        .create_property(CastPropertyId::String, "cs")
+                        .push("srgb");
+
+                    color
+                        .create_property(CastPropertyId::Vector4, "rgba")
+                        .push(Vector4::new(r, g, b, a));
+
+                    hash = CastPropertyValue::from(color);
+                }
+                _ => continue,
+            }
 
             material_node
                 .create_property(CastPropertyId::Integer64, slot)
@@ -237,10 +316,7 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         material_map.insert(material_index, CastPropertyValue::from(material_node));
     }
 
-    let mut mesh_map: HashMap<usize, CastPropertyValue> =
-        HashMap::with_capacity(model.meshes.len());
-
-    for (mesh_index, mesh) in model.meshes.iter().enumerate() {
+    for mesh in &model.meshes {
         let mesh_node = model_node.create(CastId::Mesh);
 
         if let Some(name) = &mesh.name {
@@ -268,15 +344,20 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             .create_property(CastPropertyId::String, "sm")
             .push(sm);
 
+        let vertex_count = mesh.vertices.len();
         let vertex_positions = mesh_node.create_property(CastPropertyId::Vector3, "vp");
 
-        for i in 0..mesh.vertices.len() {
+        vertex_positions.try_reserve_exact(vertex_count)?;
+
+        for i in 0..vertex_count {
             vertex_positions.push(mesh.vertices.vertex(i).position());
         }
 
         let vertex_normals = mesh_node.create_property(CastPropertyId::Vector3, "vn");
 
-        for i in 0..mesh.vertices.len() {
+        vertex_normals.try_reserve_exact(vertex_count)?;
+
+        for i in 0..vertex_count {
             vertex_normals.push(mesh.vertices.vertex(i).normal());
         }
 
@@ -284,7 +365,9 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             let color_layer =
                 mesh_node.create_property(CastPropertyId::Integer32, format!("c{}", cl));
 
-            for i in 0..mesh.vertices.len() {
+            color_layer.try_reserve_exact(vertex_count)?;
+
+            for i in 0..vertex_count {
                 color_layer.push(u32::from(mesh.vertices.vertex(i).color(cl)));
             }
         }
@@ -292,13 +375,16 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         for uv in 0..mesh.vertices.uv_layers() {
             let uv_layer = mesh_node.create_property(CastPropertyId::Vector2, format!("u{}", uv));
 
-            for i in 0..mesh.vertices.len() {
+            uv_layer.try_reserve_exact(vertex_count)?;
+
+            for i in 0..vertex_count {
                 uv_layer.push(mesh.vertices.vertex(i).uv(uv));
             }
         }
 
         if !model.skeleton.bones.is_empty() {
             let bone_count = model.skeleton.bones.len();
+            let maximum_influence = mesh.vertices.maximum_influence();
 
             let vertex_weight_bones = if bone_count <= 0xFF {
                 mesh_node.create_property(CastPropertyId::Byte, "wb")
@@ -308,10 +394,12 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 mesh_node.create_property(CastPropertyId::Integer32, "wb")
             };
 
-            for i in 0..mesh.vertices.len() {
+            vertex_weight_bones.try_reserve_exact(vertex_count * maximum_influence)?;
+
+            for i in 0..vertex_count {
                 let vertex = mesh.vertices.vertex(i);
 
-                for w in 0..mesh.vertices.maximum_influence() {
+                for w in 0..maximum_influence {
                     let weight = vertex.weight(w);
 
                     if bone_count <= 0xFF {
@@ -326,6 +414,8 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
 
             let vertex_weight_values = mesh_node.create_property(CastPropertyId::Float, "wv");
 
+            vertex_weight_values.try_reserve_exact(vertex_count * maximum_influence)?;
+
             for i in 0..mesh.vertices.len() {
                 let vertex = mesh.vertices.vertex(i);
 
@@ -335,8 +425,6 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             }
         }
 
-        let vertex_count = mesh.vertices.len();
-
         let faces = if vertex_count <= 0xFF {
             mesh_node.create_property(CastPropertyId::Byte, "f")
         } else if vertex_count <= 0xFFFF {
@@ -344,6 +432,8 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         } else {
             mesh_node.create_property(CastPropertyId::Integer32, "f")
         };
+
+        faces.try_reserve_exact(mesh.faces.len() * 3)?;
 
         for face in &*mesh.faces {
             if vertex_count <= 0xFF {
@@ -361,17 +451,16 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             }
         }
 
-        if let Some(material_index) = mesh.material {
-            if let Some(material) = material_map.get(&material_index) {
-                mesh_node
-                    .create_property(CastPropertyId::Integer64, "m")
-                    .push(material.clone());
-            }
+        if let Some(material) = mesh
+            .material
+            .and_then(|material_index| material_map.get(&material_index))
+        {
+            mesh_node
+                .create_property(CastPropertyId::Integer64, "m")
+                .push(material.clone());
         }
 
         let mesh_hash = CastPropertyValue::from(mesh_node);
-
-        mesh_map.insert(mesh_index, mesh_hash.clone());
 
         for blend_shape in &*mesh.blend_shapes {
             let blend_shape_node = model_node.create(CastId::BlendShape);
@@ -404,6 +493,8 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 blend_shape_node.create_property(CastPropertyId::Integer32, "vi")
             };
 
+            indices.try_reserve_exact(blend_shape.vertex_deltas.len())?;
+
             for index in blend_shape.vertex_deltas.keys() {
                 if indices_size <= 0xFF {
                     indices.push(*index as u8);
@@ -416,6 +507,8 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
 
             let positions = blend_shape_node.create_property(CastPropertyId::Vector3, "vp");
 
+            positions.try_reserve_exact(blend_shape.vertex_deltas.len())?;
+
             for (vertex_index, vertex_position_delta) in &blend_shape.vertex_deltas {
                 let vertex_position = blend_shape_mesh
                     .vertices
@@ -424,6 +517,62 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
 
                 positions.push(vertex_position + *vertex_position_delta);
             }
+        }
+    }
+
+    for hair in &model.hairs {
+        let hair_node = model_node.create(CastId::Hair);
+
+        if let Some(name) = &hair.name {
+            hair_node
+                .create_property(CastPropertyId::String, "n")
+                .push(name.as_str());
+        }
+
+        // Output each segment for every strand.
+        let largest_segment: u32 = hair
+            .segments
+            // Get each strand, find the maximum.
+            .iter()
+            .max()
+            .copied()
+            .unwrap_or_default();
+
+        let segments = if largest_segment <= 0xFF {
+            hair_node.create_property(CastPropertyId::Byte, "se")
+        } else if largest_segment <= 0xFFFF {
+            hair_node.create_property(CastPropertyId::Short, "se")
+        } else {
+            hair_node.create_property(CastPropertyId::Integer32, "se")
+        };
+
+        segments.try_reserve_exact(hair.segments.len())?;
+
+        for segment in &hair.segments {
+            if largest_segment <= 0xFF {
+                segments.push(*segment as u8);
+            } else if largest_segment <= 0xFFFF {
+                segments.push(*segment as u16);
+            } else {
+                segments.push(*segment);
+            }
+        }
+
+        let particles = hair_node.create_property(CastPropertyId::Vector3, "pt");
+
+        particles.try_reserve_exact(hair.particles.len())?;
+
+        for particle in &hair.particles {
+            particles.push(*particle);
+        }
+
+        if let Some(material) = hair
+            .material
+            .and_then(|material_index| material_map.get(&material_index))
+        {
+            hair_node
+                .create_property(CastPropertyId::Integer64, "m")
+                .push(material.clone());
         }
     }
 

@@ -1,13 +1,14 @@
 [package]
 name = "porter-texture"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-wgpu = { version = "0.19.4", default-features = false, features = ["wgsl"] }
-png = "0.17"
-tiff = "0.10"
 porter-utils = { path = "../porter-utils" }
-porter-math = { path = "../porter-math" }
 porter-gpu = { path = "../porter-gpu" }
-bincode = { version = "2.0.0-rc.3", default-features = false, features = ["std", "derive"] }
+porter-math = { path = "../porter-math" }
+
+wgpu.workspace = true
+png.workspace = true
+tiff.workspace = true
+bincode.workspace = true

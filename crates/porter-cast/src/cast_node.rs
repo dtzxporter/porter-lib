@@ -1,6 +1,3 @@
-use core::slice::Iter;
-use core::slice::IterMut;
-
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Read;
@@ -88,14 +85,14 @@ impl CastNode {
         self.properties.iter().find(|x| x.name() == name.as_ref())
     }
 
-    /// Iterates over the children of this node.
-    pub fn children(&self) -> Iter<'_, Self> {
-        self.children.iter()
+    /// Returns a slice of children of this node.
+    pub fn children(&self) -> &[CastNode] {
+        &self.children
     }
 
-    /// Iterates and optionally change children of this node.
-    pub fn children_mut(&mut self) -> IterMut<'_, Self> {
-        self.children.iter_mut()
+    /// Returns a mutable slice of children of this node.
+    pub fn children_mut(&mut self) -> &mut [CastNode] {
+        &mut self.children
     }
 
     /// Iterates over all children of the given type.

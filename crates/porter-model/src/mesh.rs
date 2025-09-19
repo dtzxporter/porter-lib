@@ -1,10 +1,17 @@
 use std::collections::BTreeMap;
 
+use porter_math::Axis;
 use porter_math::Matrix4x4;
+use porter_math::Vector2;
 use porter_math::Vector3;
 
+use porter_utils::VecExt;
+
+use crate::Aabb;
 use crate::BlendShape;
+use crate::Face;
 use crate::FaceBuffer;
+use crate::ModelError;
 use crate::Skeleton;
 use crate::SkinningMethod;
 use crate::VertexBuffer;
@@ -40,6 +47,67 @@ impl Mesh {
         }
     }
 
+    /// Constructs a new mesh instance as a subdivided flat plane from the provided bounds.
+    pub fn plane(bounds: Aabb, up_axis: Axis, subdivision: usize) -> Self {
+        let mut vertices = VertexBuffer::builder()
+            .colors(0)
+            .uv_layers(1)
+            .maximum_influence(0)
+            .build();
+
+        let normal = match up_axis {
+            Axis::X => Vector3::new(1.0, 0.0, 0.0),
+            Axis::Y => Vector3::new(0.0, 1.0, 0.0),
+            Axis::Z => Vector3::new(0.0, 0.0, 1.0),
+        };
+
+        let delta_x = (bounds.max.x - bounds.min.x) / subdivision as f32;
+        let delta_y = (bounds.max.y - bounds.min.y) / subdivision as f32;
+
+        let mut face_buffer = vec![vec![0; subdivision + 1]; subdivision + 1];
+        let mut index = 0;
+
+        for (y, grid) in face_buffer.iter_mut().enumerate() {
+            for (x, value) in grid.iter_mut().enumerate() {
+                let y = y as f32;
+                let x = x as f32;
+                let s = subdivision as f32;
+
+                let position = Vector3::new(
+                    bounds.min.x + x * delta_x,
+                    bounds.min.y + y * delta_y,
+                    bounds.min.z,
+                );
+
+                *value = index;
+
+                vertices
+                    .create()
+                    .set_position(position)
+                    .set_normal(normal)
+                    .set_uv(0, Vector2::new(x / s, 1.0 - (y / s)));
+
+                index += 1;
+            }
+        }
+
+        let mut faces = FaceBuffer::new();
+
+        for y in 0..subdivision {
+            for x in 0..subdivision {
+                let i1 = face_buffer[y][x];
+                let i2 = face_buffer[y][x + 1];
+                let i3 = face_buffer[y + 1][x + 1];
+                let i4 = face_buffer[y + 1][x];
+
+                faces.push(Face::new(i3, i2, i1));
+                faces.push(Face::new(i4, i3, i1));
+            }
+        }
+
+        Self::new(faces, vertices)
+    }
+
     /// Constructs a new mesh instance with the given skinning method.
     pub fn with_skinning_method(
         faces: FaceBuffer,
@@ -59,6 +127,12 @@ impl Mesh {
     /// Sets an optional name for this mesh.
     pub fn name<S: Into<String>>(mut self, name: Option<S>) -> Self {
         self.name = name.map(|x| x.into());
+        self
+    }
+
+    /// Sets an optional material for this mesh.
+    pub fn material(mut self, index: usize) -> Self {
+        self.material = Some(index);
         self
     }
 
@@ -95,6 +169,43 @@ impl Mesh {
                 face.swap_order();
             }
         }
+    }
+
+    /// Generates vertex normals by averaging the face normals.
+    pub fn generate_vertex_normals(&mut self) -> Result<(), ModelError> {
+        let mut normals: Vec<Vector3> =
+            Vec::try_new_with_value(Vector3::zero(), self.vertices.len())?;
+
+        let face_normal = |v0: Vector3, v1: Vector3, v2: Vector3| {
+            let edge1 = v1 - v0;
+            let edge2 = v2 - v0;
+
+            edge2.cross(edge1).normalized()
+        };
+
+        for face in &self.faces {
+            let normal = face_normal(
+                self.vertices.vertex(face.i1 as usize).position(),
+                self.vertices.vertex(face.i2 as usize).position(),
+                self.vertices.vertex(face.i3 as usize).position(),
+            );
+
+            normals[face.i1 as usize] += normal;
+            normals[face.i2 as usize] += normal;
+            normals[face.i3 as usize] += normal;
+        }
+
+        for (i, mut normal) in normals.into_iter().enumerate() {
+            if normal == Vector3::zero() {
+                normal = Vector3::new(0.0, 1.0, 0.0);
+            } else {
+                normal = normal.normalized();
+            }
+
+            self.vertices.vertex_mut(i).set_normal(normal);
+        }
+
+        Ok(())
     }
 
     /// Applies a different bind pose to the mesh.
@@ -208,23 +319,8 @@ impl Mesh {
             );
         }
 
-        for blend_shape in self.blend_shapes.iter() {
-            if blend_shape.vertex_deltas.len() > self.vertices.len() {
-                println!(
-                    "Validate Error: Found invalid blend shape too much data: {:?}",
-                    blend_shape.name
-                );
-                continue;
-            }
-
-            for (index, vertex_index) in blend_shape.vertex_deltas.keys().enumerate() {
-                if *vertex_index as usize >= self.vertices.len() {
-                    println!(
-                        "Validate Error: Found invalid blend shape index: {:?} [{}:{}]",
-                        vertex_index, blend_shape.name, index
-                    );
-                }
-            }
+        for blend_shape in &self.blend_shapes {
+            blend_shape.validate(self.vertices.len());
         }
     }
 }

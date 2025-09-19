@@ -9,11 +9,11 @@ use porter_math::Vector3;
 /// An instance of a scene in a 3d world.
 #[derive(Debug, Clone)]
 pub struct Instance {
-    name: Option<String>,
-    reference: String,
-    position: Vector3,
-    rotation: Quaternion,
-    scale: Vector3,
+    pub name: Option<String>,
+    pub reference: String,
+    pub position: Vector3,
+    pub rotation: Quaternion,
+    pub scale: Vector3,
 }
 
 impl Instance {

@@ -397,6 +397,38 @@ impl ImageFormat {
         )
     }
 
+    /// Whether or not the image format is an integer format.
+    pub const fn is_int(&self) -> bool {
+        matches!(
+            self,
+            Self::R32G32B32A32Uint
+                | Self::R32G32B32A32Sint
+                | Self::R32G32B32Uint
+                | Self::R32G32B32Sint
+                | Self::R16G16B16A16Uint
+                | Self::R16G16B16A16Sint
+                | Self::R32G32Uint
+                | Self::R32G32Sint
+                | Self::D32FloatS8X24Uint
+                | Self::X32TypelessG8X24Uint
+                | Self::R10G10B10A2Uint
+                | Self::R8G8B8A8Uint
+                | Self::R8G8B8A8Sint
+                | Self::R16G16Uint
+                | Self::R16G16Sint
+                | Self::R32Uint
+                | Self::R32Sint
+                | Self::D24UnormS8Uint
+                | Self::X24TypelessG8Uint
+                | Self::R8G8Uint
+                | Self::R8G8Sint
+                | Self::R16Uint
+                | Self::R16Sint
+                | Self::R8Uint
+                | Self::R8Sint
+        )
+    }
+
     /// Whether or not the image format is in sRGB colorspace.
     pub const fn is_srgb(&self) -> bool {
         matches!(
@@ -523,7 +555,7 @@ impl ImageFormat {
             // Packed formats
             Self::R9G9B9E5Sharedexp => TextureFormat::Rgb9e5Ufloat,
             Self::R10G10B10A2Typeless | Self::R10G10B10A2Unorm => TextureFormat::Rgb10a2Unorm,
-            Self::R11G11B10Float => TextureFormat::Rg11b10Float,
+            Self::R11G11B10Float => TextureFormat::Rg11b10Ufloat,
 
             // R32G32
             Self::R32G32Typeless | Self::R32G32Uint => TextureFormat::Rg32Uint,

@@ -7,8 +7,8 @@ use std::sync::mpsc;
 use porter_utils::AsAligned;
 use porter_utils::AsByteSlice;
 
-use porter_gpu::gpu_instance;
 use porter_gpu::GPUInstance;
+use porter_gpu::gpu_instance;
 
 use crate::ImageConvertOptions;
 use crate::TextureError;
@@ -18,8 +18,12 @@ use crate::TextureExtensions;
 #[derive(Debug, Default, Clone, Copy)]
 struct GPUOptionsUniform {
     input_unorm: u32,
+    input_snorm: u32,
     output_unorm: u32,
+    output_snorm: u32,
     invert_y: u32,
+    scale: f32,
+    bias: f32,
 }
 
 /// Converts textures from one format to another (uncompressed only).
@@ -67,8 +71,8 @@ impl GPUConverter {
 
     /// Creates the input texture data layout.
     #[inline(always)]
-    fn input_texture_data_layout(&self) -> ImageDataLayout {
-        ImageDataLayout {
+    fn input_texture_data_layout(&self) -> TexelCopyBufferLayout {
+        TexelCopyBufferLayout {
             offset: 0,
             bytes_per_row: Some(self.input_format.bytes_per_row(self.width)),
             rows_per_image: None,
@@ -77,12 +81,30 @@ impl GPUConverter {
 
     /// Creates the input options buffer for the converter.
     fn create_input_options(&self) -> Buffer {
+        let mut invert_y: u32 = 0;
+        let mut scale: f32 = 1.0;
+        let mut bias: f32 = 0.0;
+
+        match self.options {
+            ImageConvertOptions::ReconstructZInvertY
+            | ImageConvertOptions::AutoReconstructZInvertY => invert_y = 1,
+            ImageConvertOptions::UniformScaleBias(s, b) => {
+                scale = s;
+                bias = b;
+            }
+            _ => {
+                //
+            }
+        }
+
         let uniforms = GPUOptionsUniform {
             input_unorm: self.input_format.is_unorm() as u32,
+            input_snorm: self.input_format.is_snorm() as u32,
             output_unorm: self.output_format.is_unorm() as u32,
-            invert_y: (matches!(self.options, ImageConvertOptions::ReconstructZInvertY)
-                || matches!(self.options, ImageConvertOptions::AutoReconstructZInvertY))
-                as u32,
+            output_snorm: self.output_format.is_snorm() as u32,
+            invert_y,
+            scale,
+            bias,
         };
 
         self.instance
@@ -204,9 +226,7 @@ impl GPUConverter {
                     "fs_main"
                 }
             }
-            ImageConvertOptions::UniformScaleBias(_, _) => {
-                unimplemented!()
-            }
+            ImageConvertOptions::UniformScaleBias(_, _) => "fs_sb_main",
         };
 
         self.instance
@@ -216,8 +236,9 @@ impl GPUConverter {
                 layout: Some(&pipeline_layout),
                 vertex: VertexState {
                     module: self.instance.gpu_converter_shader(),
-                    entry_point: "vs_main",
+                    entry_point: Some("vs_main"),
                     buffers: &[],
+                    compilation_options: Default::default(),
                 },
                 primitive: PrimitiveState {
                     topology: PrimitiveTopology::TriangleList,
@@ -236,14 +257,16 @@ impl GPUConverter {
                 },
                 fragment: Some(FragmentState {
                     module: self.instance.gpu_converter_shader(),
-                    entry_point: fragment_entry,
+                    entry_point: Some(fragment_entry),
                     targets: &[Some(ColorTargetState {
                         format: self.output_format,
                         blend: Some(BlendState::REPLACE),
                         write_mask: ColorWrites::ALL,
                     })],
+                    compilation_options: Default::default(),
                 }),
                 multiview: None,
+                cache: None,
             })
     }
 
@@ -314,15 +337,15 @@ impl GPUConverter {
         output_buffer: &Buffer,
     ) {
         encoder.copy_texture_to_buffer(
-            ImageCopyTexture {
+            TexelCopyTextureInfo {
                 texture: output_texture,
                 mip_level: 0,
                 origin: Origin3d::ZERO,
                 aspect: TextureAspect::All,
             },
-            ImageCopyBuffer {
+            TexelCopyBufferInfo {
                 buffer: output_buffer,
-                layout: ImageDataLayout {
+                layout: TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(
                         self.output_format
@@ -339,7 +362,7 @@ impl GPUConverter {
     /// Upload the CPU texture data directly to the GPU texture.
     fn upload_cpu_texture_gpu<I: AsRef<[u8]>>(&self, input: I, input_texture: &Texture) {
         self.instance.queue().write_texture(
-            ImageCopyTexture {
+            TexelCopyTextureInfo {
                 texture: input_texture,
                 mip_level: 0,
                 origin: Origin3d::ZERO,
@@ -365,7 +388,8 @@ impl GPUConverter {
             tx.send(result).unwrap();
         });
 
-        self.instance
+        let _ = self
+            .instance
             .device()
             .poll(MaintainBase::WaitForSubmissionIndex(submission));
 

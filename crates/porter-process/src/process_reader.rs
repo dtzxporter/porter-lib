@@ -1,3 +1,5 @@
+use std::io;
+use std::io::SeekFrom;
 use std::sync::Arc;
 
 use crate::ProcessError;
@@ -28,8 +30,8 @@ impl ProcessReader {
     }
 }
 
-impl std::io::Read for ProcessReader {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+impl io::Read for ProcessReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let read = self.handle.read(self.offset, buf)?;
 
         self.offset += read as u64;
@@ -38,16 +40,16 @@ impl std::io::Read for ProcessReader {
     }
 }
 
-impl std::io::Seek for ProcessReader {
-    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+impl io::Seek for ProcessReader {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         match pos {
-            std::io::SeekFrom::Current(offset) => {
-                self.offset = (self.offset as i64).wrapping_add(offset) as u64;
+            SeekFrom::Current(offset) => {
+                self.offset = (self.offset as i64).wrapping_add(offset) as _;
             }
-            std::io::SeekFrom::End(offset) => {
-                self.offset = (i64::MAX).wrapping_add(offset) as u64;
+            SeekFrom::End(offset) => {
+                self.offset = (i64::MAX).wrapping_add(offset) as _;
             }
-            std::io::SeekFrom::Start(offset) => {
+            SeekFrom::Start(offset) => {
                 self.offset = offset;
             }
         }

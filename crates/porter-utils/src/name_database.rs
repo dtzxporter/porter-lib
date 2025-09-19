@@ -38,8 +38,13 @@ impl NameDatabase {
         }
     }
 
-    /// Loads a name databases entries from the given file path.
-    pub fn load<P: AsRef<Path>>(&mut self, file: P) -> Result<(), io::Error> {
+    /// Extends a name database from the entries of another.
+    pub fn extend_from(&mut self, database: Self) {
+        self.inner.extend(database.inner);
+    }
+
+    /// Loads a name database from the given file path.
+    pub fn load<P: AsRef<Path>>(file: P) -> Result<Self, io::Error> {
         let mut file = File::open(file.as_ref())?;
 
         let header: NameDatabaseHeader = file.read_struct()?;
@@ -49,14 +54,14 @@ impl NameDatabase {
         }
 
         if header.entries == 0 {
-            return Ok(());
+            return Ok(Self::new());
         }
 
-        let mut compressed = vec![0; header.compressed_size as usize];
+        let mut compressed = Vec::try_new_with_value(0, header.compressed_size as usize)?;
 
         file.read_exact(&mut compressed)?;
 
-        let mut decompressed = vec![0; header.decompressed_size as usize];
+        let mut decompressed = Vec::try_new_with_value(0, header.decompressed_size as usize)?;
 
         decompress_into(&compressed, &mut decompressed)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
@@ -78,9 +83,9 @@ impl NameDatabase {
             return Err(io::Error::from(io::ErrorKind::InvalidData));
         }
 
-        self.inner.extend(keys.into_iter().zip(values));
-
-        Ok(())
+        Ok(Self {
+            inner: keys.into_iter().zip(values).collect(),
+        })
     }
 
     /// Saves a name database with the current entries to the given file path.

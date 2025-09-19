@@ -1,10 +1,10 @@
 use std::io::Error;
 use std::io::Seek;
 use std::io::Write;
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 
-use porter_utils::AsByteSlice;
+use porter_utils::StructWriteExt;
 
 use crate::FbxNode;
 use crate::FbxPropertyType;
@@ -130,7 +130,7 @@ impl FbxDocument {
             version_major: 7400,
         };
 
-        writer.write_all(header.as_byte_slice())?;
+        writer.write_struct(header)?;
 
         for child in &mut self.root_nodes {
             child.prepare();
@@ -140,10 +140,8 @@ impl FbxDocument {
             child.write(&mut writer)?;
         }
 
-        const HEADER_SIZE: usize = std::mem::size_of::<u32>()
-            + std::mem::size_of::<u32>()
-            + std::mem::size_of::<u32>()
-            + std::mem::size_of::<u8>();
+        const HEADER_SIZE: usize =
+            size_of::<u32>() + size_of::<u32>() + size_of::<u32>() + size_of::<u8>();
 
         writer.write_all(&[0; HEADER_SIZE])?;
         writer.write_all(&FOOTER_DATA)?;

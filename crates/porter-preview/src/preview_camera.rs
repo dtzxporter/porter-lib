@@ -3,10 +3,7 @@ use wgpu::*;
 
 use porter_gpu::GPUInstance;
 
-use porter_math::Angles;
-use porter_math::Axis;
 use porter_math::Matrix4x4;
-use porter_math::Quaternion;
 use porter_math::Vector3;
 
 use porter_utils::AsByteSlice;
@@ -21,6 +18,7 @@ struct PreviewCameraUniform {
     model_matrix: Matrix4x4,
     inverse_model_matrix: Matrix4x4,
     default_shaded: u32,
+    srgb: u32,
 }
 
 /// A 3d preview camera.
@@ -39,25 +37,16 @@ pub struct PreviewCamera {
 
 impl PreviewCamera {
     /// Constructs a new preview camera instance.
-    pub fn new(instance: &GPUInstance, theta: f32, phi: f32, radius: f32, up_axis: Axis) -> Self {
-        let model_matrix = match up_axis {
-            Axis::X => {
-                Quaternion::from_euler(Vector3::new(0.0, 0.0, -90.0), Angles::Degrees).to_4x4()
-            }
-            Axis::Y => Matrix4x4::new(),
-            Axis::Z => {
-                Quaternion::from_euler(Vector3::new(-90.0, 0.0, 0.0), Angles::Degrees).to_4x4()
-            }
-        };
-
+    pub fn new(instance: &GPUInstance, theta: f32, phi: f32, radius: f32) -> Self {
         let uniforms = PreviewCameraUniform {
             target: Vector3::zero(),
             view_matrix: Matrix4x4::new(),
             inverse_view_matrix: Matrix4x4::new(),
             projection_matrix: Matrix4x4::new(),
-            model_matrix,
-            inverse_model_matrix: model_matrix.inverse(),
+            model_matrix: Matrix4x4::new(),
+            inverse_model_matrix: Matrix4x4::new(),
             default_shaded: 0,
+            srgb: 0,
         };
 
         let uniform_buffer = instance.device().create_buffer_init(&BufferInitDescriptor {
@@ -132,6 +121,11 @@ impl PreviewCamera {
         }
     }
 
+    /// Set the model matrix value.
+    pub fn set_model_matrix(&mut self, matrix: Matrix4x4) {
+        self.uniforms.model_matrix = matrix;
+    }
+
     /// Toggles the default shaded camera view.
     pub fn toggle_shaded(&mut self) {
         self.uniforms.default_shaded = if self.uniforms.default_shaded == 1 {
@@ -142,7 +136,14 @@ impl PreviewCamera {
     }
 
     /// Updates the current uniforms on the gpu.
-    pub fn update(&mut self, instance: &GPUInstance, width: f32, height: f32, far_clip: f32) {
+    pub fn update(
+        &mut self,
+        instance: &GPUInstance,
+        width: f32,
+        height: f32,
+        srgb: bool,
+        far_clip: f32,
+    ) {
         if let Some((o_width, o_height, o_scale)) = self.orthographic {
             self.uniforms.projection_matrix =
                 Matrix4x4::orthographic(0.0, width, height, 0.0, -1.0, 1.0);
@@ -167,6 +168,8 @@ impl PreviewCamera {
             self.uniforms.inverse_view_matrix = self.uniforms.view_matrix.inverse();
             self.uniforms.inverse_model_matrix = self.uniforms.model_matrix.inverse();
         }
+
+        self.uniforms.srgb = if srgb { 1 } else { 0 };
 
         instance
             .queue()
@@ -236,7 +239,9 @@ impl PreviewCamera {
         let right = look.cross(world_up);
         let up = look.cross(right);
 
-        self.uniforms.target += (right * x) + (up * y);
+        let scale = self.radius * 0.01;
+
+        self.uniforms.target += (right * x * scale) + (up * y * scale);
     }
 
     /// Returns the camera position.

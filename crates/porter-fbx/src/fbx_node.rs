@@ -2,9 +2,9 @@ use std::io::Error;
 use std::io::Seek;
 use std::io::Write;
 use std::ops;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use crate::FbxProperty;
 use crate::FbxPropertyType;
@@ -68,10 +68,8 @@ impl FbxNode {
 
     /// Serializes the node to the writer.
     pub fn write<W: Write + Seek>(&self, writer: &mut W) -> Result<(), Error> {
-        const HEADER_SIZE: usize = std::mem::size_of::<u32>()
-            + std::mem::size_of::<u32>()
-            + std::mem::size_of::<u32>()
-            + std::mem::size_of::<u8>();
+        const HEADER_SIZE: usize =
+            size_of::<u32>() + size_of::<u32>() + size_of::<u32>() + size_of::<u8>();
 
         if self.name.is_empty() && self.children.is_empty() && self.properties.is_empty() {
             writer.write_all(&[0; HEADER_SIZE])?;
@@ -112,10 +110,10 @@ impl FbxNode {
 
     /// Gets the length of this node in bytes.
     pub(crate) fn length(&self) -> u32 {
-        let mut result = std::mem::size_of::<u32>() as u32
-            + std::mem::size_of::<u32>() as u32
-            + std::mem::size_of::<u32>() as u32
-            + std::mem::size_of::<u8>() as u32
+        let mut result = size_of::<u32>() as u32
+            + size_of::<u32>() as u32
+            + size_of::<u32>() as u32
+            + size_of::<u8>() as u32
             + self.name.len() as u32;
 
         for child in &self.children {

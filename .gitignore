@@ -23,3 +23,11 @@ Cargo.lock
 
 # macOS
 .DS_Store
+
+# Gitkeep
+!**/.gitkeep
+
+# Do not sync
+crates/porter-oodle/
+crates/porter-audio/data/*
+crates/porter-texture/textures/*

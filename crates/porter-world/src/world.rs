@@ -17,6 +17,8 @@ use crate::Instance;
 pub struct World {
     /// A collection of instances for this world.
     pub instances: Vec<Instance>,
+    /// An optional root directory, which can be used to reference instanced files.
+    pub scene_root: Option<String>,
     /// The up axis for this world.
     pub up_axis: Axis,
 }
@@ -26,6 +28,7 @@ impl World {
     pub fn new() -> Self {
         Self {
             instances: Vec::new(),
+            scene_root: None,
             up_axis: Axis::Z,
         }
     }
@@ -56,6 +59,12 @@ impl World {
             Axis::Y => "y",
             Axis::Z => "z",
         };
+
+        if let Some(scene_root) = &self.scene_root {
+            meta_node
+                .create_property(CastPropertyId::String, "sr")
+                .push(scene_root.as_str());
+        }
 
         meta_node
             .create_property(CastPropertyId::String, "up")

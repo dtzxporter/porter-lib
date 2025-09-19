@@ -48,6 +48,7 @@ struct CameraUniform {
     model_matrix: mat4x4<f32>,
     inverse_model_matrix: mat4x4<f32>,
     default_shaded: u32,
+    srgb: u32,
 }
 
 @group(0) @binding(0)
@@ -57,6 +58,12 @@ var<uniform> camera: CameraUniform;
 var t_albedo: texture_2d<f32>;
 @group(1) @binding(1)
 var s_albedo: sampler;
+
+fn linear_to_srgb(linear: vec3<f32>) -> vec3<f32> {
+    let less = linear * 12.92;
+    let more = pow(max(linear, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.4)) * 1.055 - vec3<f32>(0.055);
+    return select(less, more, linear > vec3<f32>(0.0031308));
+}
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
@@ -74,16 +81,35 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    return fs_main_full(in, true);
+}
+
+@fragment
+fn fs_main_nocull(in: VertexOutput) -> @location(0) vec4<f32> {
+    return fs_main_full(in, false);
+}
+
+fn fs_main_full(in: VertexOutput, culling: bool) -> vec4<f32> {
     let ambient_strength: f32 = 0.1;
     let ambient: vec3<f32> = ambient_strength * vec3<f32>(1.0, 1.0, 1.0);
 
     let normal: vec3<f32> = normalize(in.normal);
     let light_dir: vec3<f32> = normalize(camera.inverse_view_matrix[3].xyz - in.frag_position);
-    let diff: f32 = max(dot(normal, light_dir), 0.0);
+
+    var diff: f32;
+
+    if culling {
+        diff = max(dot(normal, light_dir), 0.0);
+    } else {
+        diff = max(abs(dot(normal, light_dir)), 0.0);
+    }
+
     let diffuse: vec3<f32> = diff * vec3<f32>(1.0, 1.0, 1.0);
 
     if camera.default_shaded == 1u {
         return vec4<f32>((ambient + diffuse) * vec3<f32>(0.603, 0.603, 0.603), 1.0);
+    } else if camera.srgb == 1u {
+        return vec4<f32>((ambient + diffuse) * linear_to_srgb(textureSample(t_albedo, s_albedo, in.uv).xyz), 1.0);
     } else {
         return vec4<f32>((ambient + diffuse) * textureSample(t_albedo, s_albedo, in.uv).xyz, 1.0);
     }
@@ -136,5 +162,22 @@ fn vs_image_main(in: ImageInput) -> ImageOutput {
 
 @fragment
 fn fs_image_main(in: ImageOutput) -> @location(0) vec4<f32> {
-    return textureSample(t_albedo, s_albedo, in.uv);
+    let sample: vec4<f32> = textureSample(t_albedo, s_albedo, in.uv);
+
+    if camera.srgb == 1u {
+        return vec4<f32>(linear_to_srgb(sample.xyz), sample.w);
+    } else {
+        return sample;
+    }
+}
+
+@fragment
+fn fs_image_grayscale(in: ImageOutput) -> @location(0) vec4<f32> {
+    let sample: vec4<f32> = textureSample(t_albedo, s_albedo, in.uv);
+
+    if camera.srgb == 1u {
+        return vec4<f32>(linear_to_srgb(sample.xxx), 1.0);
+    } else {
+        return vec4<f32>(sample.xxx, 1.0);
+    }
 }

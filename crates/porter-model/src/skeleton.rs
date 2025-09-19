@@ -1,8 +1,8 @@
 use porter_math::Matrix4x4;
-use porter_math::Vector3;
 
 use crate::Bone;
 use crate::Constraint;
+use crate::ConstraintOffset;
 use crate::ConstraintType;
 use crate::IKHandle;
 
@@ -36,37 +36,22 @@ impl Skeleton {
         }
     }
 
-    /// Generates local transforms based on available global transforms.
+    /// Generates local transforms based on global transforms.
     pub fn generate_local_transforms(&mut self) {
         for i in 0..self.bones.len() {
             if self.bones[i].parent > -1 {
-                let parent_matrix = (!self.bones[self.bones[i].parent as usize]
-                    .world_rotation
-                    .unwrap_or_default())
-                .to_4x4();
+                let parent_index = self.bones[i].parent as usize;
+                let parent_rotation = self.bones[parent_index].world_rotation.conjugate();
 
-                self.bones[i].local_position = Some(
-                    (self.bones[i].world_position.unwrap_or_default()
-                        - self.bones[self.bones[i].parent as usize]
-                            .world_position
-                            .unwrap_or_default())
-                    .transform(&parent_matrix),
-                );
+                self.bones[i].local_position = (self.bones[i].world_position
+                    - self.bones[parent_index].world_position)
+                    .transform(&parent_rotation.to_4x4());
 
-                self.bones[i].local_rotation = Some(
-                    !self.bones[self.bones[i].parent as usize]
-                        .world_rotation
-                        .unwrap_or_default()
-                        * self.bones[i].world_rotation.unwrap_or_default(),
-                );
+                self.bones[i].local_rotation = parent_rotation * self.bones[i].world_rotation;
 
-                self.bones[i].local_scale = Some(
-                    (self.bones[i].world_scale.unwrap_or(Vector3::one())
-                        / self.bones[self.bones[i].parent as usize]
-                            .world_scale
-                            .unwrap_or(Vector3::one()))
-                    .nan_to_zero(),
-                );
+                self.bones[i].local_scale = (self.bones[i].world_scale
+                    / self.bones[parent_index].world_scale)
+                    .nan_to_zero();
             } else {
                 self.bones[i].local_position = self.bones[i].world_position;
                 self.bones[i].local_rotation = self.bones[i].world_rotation;
@@ -81,31 +66,18 @@ impl Skeleton {
             if self.bones[i].parent > -1 {
                 let parent_index = self.bones[i].parent as usize;
                 let parent_world = self.bones[parent_index].world_matrix();
-                let parent_position = self.bones[parent_index].world_position.unwrap_or_default();
-                let local_position =
-                    Matrix4x4::create_position(self.bones[i].local_position.unwrap_or_default());
+
+                let local_position = Matrix4x4::create_position(self.bones[i].local_position);
 
                 let result = ((parent_world * local_position) * parent_world.inverse()).position();
 
-                self.bones[i].world_position = Some(Vector3::new(
-                    parent_position.x + result.x,
-                    parent_position.y + result.y,
-                    parent_position.z + result.z,
-                ));
+                self.bones[i].world_position = self.bones[parent_index].world_position + result;
 
-                self.bones[i].world_rotation = Some(
-                    self.bones[self.bones[i].parent as usize]
-                        .world_rotation
-                        .unwrap_or_default()
-                        * self.bones[i].local_rotation.unwrap_or_default(),
-                );
+                self.bones[i].world_rotation =
+                    self.bones[parent_index].world_rotation * self.bones[i].local_rotation;
 
-                self.bones[i].world_scale = Some(
-                    self.bones[self.bones[i].parent as usize]
-                        .world_scale
-                        .unwrap_or(Vector3::one())
-                        * self.bones[i].local_scale.unwrap_or(Vector3::one()),
-                );
+                self.bones[i].world_scale =
+                    self.bones[parent_index].world_scale * self.bones[i].local_scale;
             } else {
                 self.bones[i].world_position = self.bones[i].local_position;
                 self.bones[i].world_rotation = self.bones[i].local_rotation;
@@ -117,38 +89,27 @@ impl Skeleton {
     /// Scales the skeleton by the given factor.
     pub fn scale(&mut self, factor: f32) {
         for bone in &mut self.bones {
-            if let Some(position) = &mut bone.local_position {
-                *position *= factor;
-            }
-            if let Some(position) = &mut bone.world_position {
-                *position *= factor;
-            }
+            bone.local_position *= factor;
+            bone.world_position *= factor;
         }
     }
 
     /// Transforms the skeleton by the given matrix.
     pub fn transform(&mut self, matrix: &Matrix4x4) {
         for bone in &mut self.bones {
-            let has_locals = bone.local_position.is_some();
-            let has_worlds = bone.world_position.is_some();
+            let result = bone.local_matrix() * *matrix;
+            let (position, rotation, scale) = result.decompose();
 
-            if has_locals {
-                let result = bone.local_matrix() * *matrix;
-                let (position, rotation, scale) = result.decompose();
+            bone.local_position = position;
+            bone.local_rotation = rotation;
+            bone.local_scale = scale;
 
-                bone.local_position = Some(position);
-                bone.local_rotation = Some(rotation);
-                bone.local_scale = Some(scale);
-            }
+            let result = bone.world_matrix() * *matrix;
+            let (position, rotation, scale) = result.decompose();
 
-            if has_worlds {
-                let result = bone.world_matrix() * *matrix;
-                  let (position, rotation, scale) = result.decompose();
-
-                bone.world_position = Some(position);
-                bone.world_rotation = Some(rotation);
-                bone.world_scale = Some(scale);
-            }
+            bone.world_position = position;
+            bone.world_rotation = rotation;
+            bone.world_scale = scale;
         }
     }
 
@@ -206,13 +167,15 @@ impl Skeleton {
     }
 
     /// Creates a constraint if all of the given bones are found in the skeleton.
-    pub fn create_constraint<C: AsRef<str>, T: AsRef<str>>(
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_constraint<C: AsRef<str>, T: AsRef<str>, O: Into<ConstraintOffset>>(
         &mut self,
         name: Option<String>,
         constraint_type: ConstraintType,
         constraint_bone: C,
         target_bone: T,
-        maintain_offset: bool,
+        offset: O,
+        weight: f32,
         axis_to_skip: &'static str,
     ) {
         let constraint_bone = self.index(constraint_bone);
@@ -224,7 +187,8 @@ impl Skeleton {
                 constraint_type,
                 constraint_bone,
                 target_bone,
-                maintain_offset,
+                offset,
+                weight,
             );
 
             if axis_to_skip.contains('x') {
@@ -243,11 +207,23 @@ impl Skeleton {
         }
     }
 
+    /// Attempts to find a bone with the given name.
+    pub fn find<N: AsRef<str>>(&self, name: N) -> Option<&Bone> {
+        self.bones.get(self.index(name)?)
+    }
+
+    /// Attempts to find a mutable bone with the given name.
+    pub fn find_mut<N: AsRef<str>>(&mut self, name: N) -> Option<&mut Bone> {
+        let index = self.index(name)?;
+
+        self.bones.get_mut(index)
+    }
+
     /// Attempts to find the index of the bone with the given name.
-    pub fn index<N: AsRef<str>>(&self, bone: N) -> Option<usize> {
-        self.bones.iter().position(|x| {
-            if let Some(name) = &x.name {
-                name == bone.as_ref()
+    pub fn index<N: AsRef<str>>(&self, name: N) -> Option<usize> {
+        self.bones.iter().position(|bone| {
+            if let Some(bone_name) = &bone.name {
+                bone_name == name.as_ref()
             } else {
                 false
             }

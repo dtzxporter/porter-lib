@@ -23,14 +23,10 @@ impl RenderSkeleton {
         let mut vertex_buffer = Vec::new();
 
         for bone in skeleton.bones.iter().rev() {
-            vertex_buffer.push(bone.world_position.unwrap_or_default());
+            vertex_buffer.push(bone.world_position);
 
             if bone.parent > -1 {
-                vertex_buffer.push(
-                    skeleton.bones[bone.parent as usize]
-                        .world_position
-                        .unwrap_or_default(),
-                );
+                vertex_buffer.push(skeleton.bones[bone.parent as usize].world_position);
             } else {
                 vertex_buffer.push(Vector3::zero());
             }
@@ -58,9 +54,9 @@ impl RenderSkeleton {
                 layout: Some(&render_pipeline_layout),
                 vertex: VertexState {
                     module: instance.gpu_preview_shader(),
-                    entry_point: "vs_bone_main",
+                    entry_point: Some("vs_bone_main"),
                     buffers: &[VertexBufferLayout {
-                        array_stride: std::mem::size_of::<Vector3>() as BufferAddress,
+                        array_stride: size_of::<Vector3>() as BufferAddress,
                         step_mode: VertexStepMode::Vertex,
                         attributes: &[VertexAttribute {
                             offset: 0,
@@ -68,6 +64,7 @@ impl RenderSkeleton {
                             format: VertexFormat::Float32x3,
                         }],
                     }],
+                    compilation_options: Default::default(),
                 },
                 primitive: PrimitiveState {
                     topology: PrimitiveTopology::LineList,
@@ -92,14 +89,16 @@ impl RenderSkeleton {
                 },
                 fragment: Some(FragmentState {
                     module: instance.gpu_preview_shader(),
-                    entry_point: "fs_bone_main",
+                    entry_point: Some("fs_bone_main"),
                     targets: &[Some(ColorTargetState {
                         format: TextureFormat::Rgba8Unorm,
                         blend: Some(BlendState::REPLACE),
                         write_mask: ColorWrites::ALL,
                     })],
+                    compilation_options: Default::default(),
                 }),
                 multiview: None,
+                cache: None,
             });
 
         Self {

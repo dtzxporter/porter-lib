@@ -87,6 +87,12 @@ impl Vector2 {
         Self { x: 1.0, y: 1.0 }
     }
 
+    /// Construct a new vector where all components are `value`.
+    #[inline]
+    pub const fn splat(value: f32) -> Self {
+        Self { x: value, y: value }
+    }
+
     /// Swizzles the order of the vectors components.
     #[inline]
     pub fn swizzle<const X: usize, const Y: usize>(&self) -> Self {
@@ -172,6 +178,12 @@ impl Vector2 {
             x: if self.x.is_nan() { 0.0 } else { self.x },
             y: if self.y.is_nan() { 0.0 } else { self.y },
         }
+    }
+
+    /// Returns `true` if the vector is normalized having a length of `1.0`.
+    #[inline]
+    pub fn is_normalized(&self) -> bool {
+        (self.length_squared().abs() - 1.0) <= 2e-4
     }
 }
 
