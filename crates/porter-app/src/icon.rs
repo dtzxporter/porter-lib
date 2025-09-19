@@ -145,7 +145,7 @@ impl Icon {
                 bitmap.bmHeight as _,
                 buffer.as_mut_ptr() as _,
                 &mut bitmap_info,
-                DIB_PAL_COLORS,
+                DIB_RGB_COLORS,
             )
         };
 
