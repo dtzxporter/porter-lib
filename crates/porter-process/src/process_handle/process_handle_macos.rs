@@ -42,13 +42,7 @@ impl ProcessHandlePlatform for ProcessHandle {
     fn open_process(pid: u64, _: bool, _: bool) -> Result<Self, ProcessError> {
         let mut handle: mach_port_t = 0;
 
-        let result = unsafe {
-            task_for_pid(
-                mach_task_self(),
-                pid as c_int,
-                &mut handle as *mut mach_port_t,
-            )
-        };
+        let result = unsafe { task_for_pid(mach_task_self(), pid as _, &mut handle) };
 
         if result == KERN_SUCCESS {
             return Ok(Self {
@@ -71,10 +65,10 @@ impl ProcessHandlePlatform for ProcessHandle {
         let result = unsafe {
             mach_vm_read_overwrite(
                 self.handle,
-                offset as mach_vm_address_t,
-                buf.len() as mach_vm_size_t,
-                buf.as_mut_ptr() as mach_vm_address_t,
-                &mut size_read as *mut mach_vm_size_t,
+                offset as _,
+                buf.len() as _,
+                buf.as_mut_ptr() as _,
+                &mut size_read,
             )
         };
 
@@ -82,20 +76,20 @@ impl ProcessHandlePlatform for ProcessHandle {
             return Err(std::io::Error::last_os_error().into());
         }
 
-        Ok(size_read as usize)
+        Ok(size_read as _)
     }
 
     fn base_address(&self) -> Result<u64, ProcessError> {
         let mut vm_info: task_vm_info = task_vm_info::default();
         let mut count: mach_msg_type_number_t =
-            (size_of::<task_vm_info>() / size_of::<natural_t>()) as mach_msg_type_number_t;
+            (size_of::<task_vm_info>() / size_of::<natural_t>()) as _;
 
         let result = unsafe {
             task::task_info(
                 self.handle,
                 TASK_VM_INFO,
                 &mut vm_info as *mut task_vm_info as _,
-                &mut count as *mut mach_msg_type_number_t,
+                &mut count,
             )
         };
 

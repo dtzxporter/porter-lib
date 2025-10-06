@@ -6,7 +6,9 @@ edition = "2024"
 [features]
 ms-adpcm = []
 wwise-vorbis = ["dep:lewton"]
+raw-flac = []
 ogg = ["dep:lewton", "lewton/ogg"]
+debug = []
 
 [dependencies]
 porter-utils = { path = "../porter-utils" }

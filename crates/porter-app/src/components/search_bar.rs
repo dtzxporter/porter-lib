@@ -149,7 +149,7 @@ impl SearchBar {
 
         state
             .asset_manager
-            .search(Some(SearchTerm::compile(self.search.clone())));
+            .search(Some(SearchTerm::compile(&self.search)));
         state.reset_item_range();
 
         Task::done(Message::from(VirtualListMessage::ScrollReset))

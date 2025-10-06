@@ -14,6 +14,7 @@ mod asset_column;
 mod asset_manager;
 mod asset_preview;
 mod asset_status;
+mod audio_player;
 mod column_status;
 mod controller;
 mod executor;
@@ -26,6 +27,7 @@ mod windows;
 
 pub(crate) use app::*;
 pub(crate) use asset_column::*;
+pub(crate) use audio_player::*;
 pub(crate) use executor::*;
 pub(crate) use message::*;
 pub(crate) use windows::*;

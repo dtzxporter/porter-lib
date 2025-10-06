@@ -3,7 +3,6 @@ use std::ffi::OsString;
 use std::ffi::c_void;
 use std::fs::File;
 use std::io;
-use std::io::BufWriter;
 use std::io::Write;
 use std::ops;
 use std::os::windows::ffi::OsStrExt;
@@ -12,6 +11,8 @@ use std::path::Path;
 use std::slice::from_raw_parts_mut;
 use std::time::Duration;
 use std::time::Instant;
+
+use porter_utils::BufferWriteExt;
 
 use windows_sys::Win32::Foundation::GetLastError;
 use windows_sys::Win32::Networking::WinHttp::*;
@@ -81,7 +82,7 @@ pub fn download_memory(client: HttpClient) -> Result<(Vec<u8>, String), io::Erro
 pub fn download_file(client: HttpClient, path: &Path) -> Result<(), io::Error> {
     let (request, mut progress, timeout) = create_request(client)?;
 
-    let mut file = BufWriter::new(File::create(path)?);
+    let mut file = File::create(path)?.buffer_write();
     let mut temp: Vec<u8> = Vec::new();
     let mut now: f64 = 0.0;
 

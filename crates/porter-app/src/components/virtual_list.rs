@@ -114,7 +114,7 @@ impl VirtualList {
                         state.asset_manager.supports_games(),
                     ) {
                         (true, true) => {
-                            "Either load a running instance of a supported game or one of the supported game files to view and export assets."
+                            "Load a running instance of a supported game or one of the supported game files to view and export assets."
                         }
                         (false, true) => {
                             "Load a running instance of a supported game to view and export assets."

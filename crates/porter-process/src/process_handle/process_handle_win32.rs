@@ -1,3 +1,5 @@
+use std::io;
+
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::System::Diagnostics::Debug::*;
 use windows_sys::Win32::System::ProcessStatus::*;
@@ -26,7 +28,7 @@ impl ProcessHandlePlatform for ProcessHandle {
             match unsafe { GetLastError() } {
                 ERROR_INVALID_PARAMETER => return Err(ProcessError::NotFound),
                 ERROR_ACCESS_DENIED => return Err(ProcessError::AccessDenied),
-                _ => return Err(std::io::Error::last_os_error().into()),
+                code => return Err(io::Error::from_raw_os_error(code as _).into()),
             }
         }
 
@@ -61,7 +63,7 @@ impl ProcessHandlePlatform for ProcessHandle {
                 ERROR_PARTIAL_COPY => {
                     // Nothing, size read was size read.
                 }
-                _ => return Err(std::io::Error::last_os_error().into()),
+                code => return Err(io::Error::from_raw_os_error(code as _).into()),
             }
         }
 
@@ -85,7 +87,7 @@ impl ProcessHandlePlatform for ProcessHandle {
             match unsafe { GetLastError() } {
                 ERROR_INVALID_PARAMETER => return Err(ProcessError::NotFound),
                 ERROR_ACCESS_DENIED => return Err(ProcessError::AccessDenied),
-                _ => return Err(std::io::Error::last_os_error().into()),
+                code => return Err(io::Error::from_raw_os_error(code as _).into()),
             }
         }
 
@@ -109,7 +111,7 @@ impl ProcessHandlePlatform for ProcessHandle {
             match unsafe { GetLastError() } {
                 ERROR_INVALID_PARAMETER => return Err(ProcessError::NotFound),
                 ERROR_ACCESS_DENIED => return Err(ProcessError::AccessDenied),
-                _ => return Err(std::io::Error::last_os_error().into()),
+                code => return Err(io::Error::from_raw_os_error(code as _).into()),
             }
         }
 
@@ -128,7 +130,7 @@ impl ProcessHandlePlatform for ProcessHandle {
             match unsafe { GetLastError() } {
                 ERROR_INVALID_PARAMETER => return Err(ProcessError::NotFound),
                 ERROR_ACCESS_DENIED => return Err(ProcessError::AccessDenied),
-                _ => return Err(std::io::Error::last_os_error().into()),
+                code => return Err(io::Error::from_raw_os_error(code as _).into()),
             }
         }
 

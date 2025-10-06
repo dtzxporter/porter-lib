@@ -5,6 +5,7 @@ mod resizable;
 mod spinner;
 mod text_wrap;
 mod viewport;
+mod waveform;
 
 pub use viewport::ViewportAction;
 pub use viewport::ViewportState;
@@ -772,6 +773,20 @@ where
     Renderer: iced::advanced::Renderer,
 {
     laser::Laser::new()
+}
+
+/// Waveform animated background widget.
+#[allow(dead_code)]
+pub fn waveform<'a, Message, Theme, Renderer>(
+    is_playing: bool,
+    seed: u64,
+    on_update: Message,
+) -> waveform::Waveform<'a, Message, Theme, Renderer>
+where
+    Message: Clone,
+    Renderer: iced::advanced::Renderer,
+{
+    waveform::Waveform::new(is_playing, seed, on_update)
 }
 
 /// Resizable widget.

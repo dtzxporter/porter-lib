@@ -1,10 +1,11 @@
 use std::fs::File;
-use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
 
 use porter_math::Angles;
 use porter_math::Vector2;
+
+use porter_utils::BufferWriteExt;
 
 use crate::Model;
 use crate::ModelError;
@@ -48,7 +49,7 @@ macro_rules! write_face_vertex {
 
 /// Writes a model in smd format to the given path.
 pub fn to_smd<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> {
-    let mut smd = BufWriter::new(File::create(path.as_ref().with_extension("smd"))?);
+    let mut smd = File::create(path.as_ref().with_extension("smd"))?.buffer_write();
 
     writeln!(
         smd,

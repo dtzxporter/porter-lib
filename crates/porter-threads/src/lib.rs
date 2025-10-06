@@ -7,6 +7,7 @@ use rayon::Scope;
 
 pub use rayon::iter::IndexedParallelIterator;
 pub use rayon::iter::IntoParallelIterator;
+pub use rayon::iter::IntoParallelRefIterator;
 pub use rayon::iter::ParallelIterator;
 pub use rayon::slice::ParallelSlice;
 pub use rayon::slice::ParallelSliceMut;

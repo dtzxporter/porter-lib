@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::BufWriter;
 use std::path::Path;
 
 use porter_cast::CastFile;
@@ -12,6 +11,8 @@ use porter_cast::CastPropertyValue;
 
 use porter_math::Axis;
 use porter_math::Vector4;
+
+use porter_utils::BufferWriteExt;
 
 use crate::ConstraintOffset;
 use crate::ConstraintType;
@@ -576,7 +577,7 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         }
     }
 
-    let writer = BufWriter::new(File::create(path.as_ref().with_extension("cast"))?);
+    let writer = File::create(path.as_ref().with_extension("cast"))?.buffer_write();
 
     let mut file = CastFile::new();
 

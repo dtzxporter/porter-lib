@@ -3,6 +3,8 @@ name = "porter-http"
 version = "0.1.0"
 edition = "2024"
 
+[dependencies]
+porter-utils = { path = "../porter-utils" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys.workspace = true

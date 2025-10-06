@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use porter_utils::HashMurMur64A;
+use porter_utils::HashExt;
 
 use crate::Animation;
 use crate::AnimationError;
@@ -20,10 +20,10 @@ impl SampleKey {
     pub fn new<N: AsRef<str>>(name: N, attribute: CurveAttribute) -> Self {
         let mut hash: [u8; 16] = [0; 16];
 
-        hash[0..8].copy_from_slice(&name.as_ref().hash_murmur64a().to_le_bytes());
+        hash[0..8].copy_from_slice(&name.as_ref().hash_murmura64().to_le_bytes());
         hash[8..16].copy_from_slice(&(attribute as u64).to_le_bytes());
 
-        Self((&hash[0..]).hash_murmur64a())
+        Self((&hash[0..]).hash_murmura64())
     }
 }
 

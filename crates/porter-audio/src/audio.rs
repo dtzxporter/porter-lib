@@ -1,10 +1,12 @@
 use std::fs::File;
-use std::io::BufReader;
-use std::io::BufWriter;
 use std::io::Read;
 use std::io::Seek;
 use std::io::Write;
 use std::path::Path;
+use std::time::Duration;
+
+use porter_utils::BufferReadExt;
+use porter_utils::BufferWriteExt;
 
 use crate::AudioError;
 use crate::AudioFileType;
@@ -143,10 +145,7 @@ impl Audio {
 
     /// Loads an audio stream from the given path.
     pub fn load<P: AsRef<Path>>(path: P, file_type: AudioFileType) -> Result<Self, AudioError> {
-        let input = File::open(path)?;
-        let mut buffered = BufReader::new(input);
-
-        Self::load_from(&mut buffered, file_type)
+        Self::load_from(&mut File::open(path)?.buffer_read(), file_type)
     }
 
     /// Loads an audio stream from the given input buffer with the given file type.
@@ -170,12 +169,11 @@ impl Audio {
         path: P,
         file_type: AudioFileType,
     ) -> Result<(), AudioError> {
-        let output = File::create(path)?;
-        let mut buffered = BufWriter::new(output);
+        let mut output = File::create(path)?.buffer_write();
 
-        self.save_to(&mut buffered, file_type)?;
+        self.save_to(&mut output, file_type)?;
 
-        buffered.flush()?;
+        output.flush()?;
 
         Ok(())
     }
@@ -239,5 +237,63 @@ impl Audio {
     /// Sets a new data buffer.
     pub fn set_data(&mut self, data: Vec<u8>) {
         self.data = data;
+    }
+
+    /// Calculates the position as a duration from the given byte offset for supported formats:
+    /// - [`AudioFormat::IntegerPcm`]
+    /// - [`AudioFormat::FloatPcm`]
+    pub fn position(&self, offset: usize) -> Result<Duration, AudioError> {
+        if !matches!(self.format, AudioFormat::FloatPcm | AudioFormat::IntegerPcm) {
+            return Err(AudioError::UnsupportedAudioFormat(self.format));
+        }
+
+        if offset > self.data.len() {
+            return self.duration();
+        }
+
+        let block_align = self
+            .block_align()
+            .unwrap_or_else(|| (self.channels() * self.bits_per_sample()) / 8);
+
+        let frame_index = offset as u64 / block_align as u64;
+        let position = frame_index * 1000 / self.sample_rate() as u64;
+
+        Ok(Duration::from_millis(position))
+    }
+
+    /// Calculates the byte offset from the given position for supported formats:
+    /// - [`AudioFormat::IntegerPcm`]
+    /// - [`AudioFormat::FloatPcm`]
+    pub fn offset(&self, position: Duration) -> Result<usize, AudioError> {
+        if !matches!(self.format, AudioFormat::FloatPcm | AudioFormat::IntegerPcm) {
+            return Err(AudioError::UnsupportedAudioFormat(self.format));
+        }
+
+        let block_align = self
+            .block_align()
+            .unwrap_or_else(|| (self.channels() * self.bits_per_sample()) / 8);
+
+        let num_frames = position.as_millis() as u64 * self.sample_rate() as u64 / 1000;
+        let offset = num_frames * block_align as u64;
+
+        Ok(self.data.len().min(offset as _))
+    }
+
+    /// Calculates the duration of this audio asset for supported formats:
+    /// - [`AudioFormat::IntegerPcm`]
+    /// - [`AudioFormat::FloatPcm`]
+    pub fn duration(&self) -> Result<Duration, AudioError> {
+        if !matches!(self.format, AudioFormat::FloatPcm | AudioFormat::IntegerPcm) {
+            return Err(AudioError::UnsupportedAudioFormat(self.format));
+        }
+
+        let block_align = self
+            .block_align()
+            .unwrap_or_else(|| (self.channels() * self.bits_per_sample()) / 8);
+
+        let num_frames = self.data.len() as u64 / block_align as u64;
+        let duration = num_frames * 1000 / self.sample_rate() as u64;
+
+        Ok(Duration::from_millis(duration))
     }
 }

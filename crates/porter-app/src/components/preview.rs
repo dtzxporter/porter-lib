@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use iced::border::Radius;
 use iced::border::rounded;
 
@@ -20,10 +22,12 @@ use iced::Length;
 use iced::Task;
 use iced::Theme;
 
-use porter_preview::PreviewError;
+use porter_viewport::PreviewError;
 
 use crate::AppState;
 use crate::AssetPreview;
+use crate::AudioPlayer;
+use crate::AudioPlayerError;
 use crate::Message;
 use crate::fonts;
 use crate::palette;
@@ -52,6 +56,8 @@ pub struct Preview {
     raw_text: text_editor::Content,
     raw_binary: Option<Vec<u8>>,
     raw_name: String,
+    audio_player: Option<AudioPlayer>,
+    audio_player_seek: Option<f64>,
     error: bool,
     unsupported: bool,
     viewport_state: widgets::ViewportState,
@@ -64,6 +70,7 @@ pub enum PreviewTab {
     Viewport,
     Text,
     Binary,
+    Audio,
 }
 
 /// Messages produced by the preview component.
@@ -74,8 +81,15 @@ pub enum PreviewMessage {
     Text,
     TextAction(text_editor::Action),
     Binary,
+    Audio,
+    AudioAction(),
+    Seek(f64),
+    SeekCommit,
+    Play,
+    Pause,
     Update(AssetPreview),
     Request,
+    SyncSettings,
 }
 
 impl Preview {
@@ -86,6 +100,8 @@ impl Preview {
             raw_text: text_editor::Content::new(),
             raw_binary: None,
             raw_name: String::new(),
+            audio_player: None,
+            audio_player_seek: None,
             error: false,
             unsupported: false,
             viewport_state: widgets::ViewportState::new(),
@@ -103,8 +119,15 @@ impl Preview {
             Text => self.on_text(state),
             TextAction(action) => self.on_text_action(state, action),
             Binary => self.on_binary(state),
+            Audio => self.on_audio(state),
+            AudioAction() => panic!(),
+            Seek(position) => self.on_seek(state, position),
+            SeekCommit => self.on_seek_commit(state),
+            Play => self.on_play(state),
+            Pause => self.on_pause(state),
             Update(asset) => self.on_preview_update(state, asset),
             Request => self.on_preview_request(state),
+            SyncSettings => self.on_sync_settings(state),
         }
     }
 
@@ -153,234 +176,11 @@ impl Preview {
         .style(preview_header_style);
 
         let content = match &self.tab {
-            PreviewTab::Viewport => {
-                let viewport = Element::from(widgets::viewport(
-                    &self.viewport_state,
-                    // Keep the viewport state in sync with the external state.
-                    |action| Message::from(PreviewMessage::ViewportAction(action)),
-                ));
-
-                let mut columns: Column<_> = Column::with_capacity(8)
-                    .width(Length::Shrink)
-                    .height(Length::Shrink)
-                    .spacing(2.0);
-
-                if self.error || self.unsupported {
-                    columns = columns.push(
-                        row([
-                            text("Name")
-                                .size(16.0)
-                                .width(75.0)
-                                .font(fonts::MONOSPACE_BOLD_FONT)
-                                .color(palette::TEXT_COLOR_INFO)
-                                .into(),
-                            text(":")
-                                .size(16.0)
-                                .color(palette::TEXT_COLOR_INFO)
-                                .font(fonts::MONOSPACE_BOLD_FONT)
-                                .into(),
-                            text(if self.error {
-                                "<failed to load>"
-                            } else {
-                                "<not supported for preview>"
-                            })
-                            .size(16.0)
-                            .color(palette::TEXT_COLOR_DEFAULT)
-                            .font(fonts::MONOSPACE_BOLD_FONT)
-                            .into(),
-                        ])
-                        .width(Length::Shrink)
-                        .padding(2.0)
-                        .spacing(8.0),
-                    );
-                } else {
-                    let renderer = self.viewport_state.renderer();
-
-                    for (stat_header, stat_value) in renderer.statistics() {
-                        columns = columns.push(
-                            row([
-                                text(stat_header)
-                                    .size(16.0)
-                                    .width(75.0)
-                                    .color(palette::TEXT_COLOR_INFO)
-                                    .font(fonts::MONOSPACE_BOLD_FONT)
-                                    .into(),
-                                text(":")
-                                    .size(16.0)
-                                    .color(palette::TEXT_COLOR_INFO)
-                                    .font(fonts::MONOSPACE_BOLD_FONT)
-                                    .into(),
-                                text(stat_value)
-                                    .size(16.0)
-                                    .color(palette::TEXT_COLOR_DEFAULT)
-                                    .font(fonts::MONOSPACE_BOLD_FONT)
-                                    .into(),
-                            ])
-                            .width(Length::Shrink)
-                            .padding(2.0)
-                            .spacing(8.0),
-                        );
-                    }
-                }
-
-                let columns = container(
-                    container(columns)
-                        .width(Length::Shrink)
-                        .padding(4.0)
-                        .style(preview_overlay_style),
-                )
-                .width(Length::Fill)
-                .height(Length::FillPortion(1))
-                .padding(4.0);
-
-                let mut controls: Column<_> = Column::with_capacity(PREVIEW_CONTROLS.len())
-                    .width(Length::Shrink)
-                    .height(Length::Shrink)
-                    .spacing(2.0);
-
-                for (control_name, control) in PREVIEW_CONTROLS {
-                    controls = controls.push(
-                        row([
-                            text(*control_name)
-                                .size(16.0)
-                                .color(palette::TEXT_COLOR_INFO)
-                                .font(fonts::MONOSPACE_BOLD_FONT)
-                                .into(),
-                            text(*control)
-                                .size(16.0)
-                                .color(palette::TEXT_COLOR_DEFAULT)
-                                .font(fonts::MONOSPACE_BOLD_FONT)
-                                .into(),
-                        ])
-                        .width(Length::Shrink)
-                        .padding(2.0)
-                        .spacing(8.0),
-                    );
-                }
-
-                let controls = container(
-                    container(controls)
-                        .width(Length::Shrink)
-                        .padding(4.0)
-                        .style(preview_overlay_style),
-                )
-                .align_y(Alignment::End)
-                .width(Length::Fill)
-                .height(Length::FillPortion(1))
-                .padding(4.0);
-
-                let controls = if state.settings.preview_overlay() {
-                    controls.into()
-                } else {
-                    vertical_space().into()
-                };
-
-                let overlay = if state.asset_preview_id.is_some() {
-                    let loading = container(widgets::spinner())
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .align_x(Alignment::Center)
-                        .align_y(Alignment::Center);
-
-                    column([columns.into(), loading.into(), controls])
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                } else {
-                    column([columns.into(), controls])
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                };
-
-                Element::from(stack([viewport, overlay.into()]))
-            }
-            PreviewTab::Text => Element::from(
-                widgets::scrollable(
-                    text_editor(&self.raw_text)
-                        .height(Length::Shrink)
-                        .size(14.0)
-                        .padding(4.0)
-                        .font(fonts::MONOSPACE_FONT)
-                        .on_action(|action| Message::from(PreviewMessage::TextAction(action)))
-                        .style(text_editor_style),
-                )
-                .id(self.scroll_id.clone())
-                .direction(scrollable::Direction::Vertical(
-                    scrollable::Scrollbar::new()
-                        .width(16.0)
-                        .scroller_width(16.0)
-                        .spacing(0.0),
-                ))
-                .width(Length::Fill)
-                .height(Length::Fill),
-            ),
-            PreviewTab::Binary => Element::from(
-                widgets::scrollable(widgets::binary(self.raw_binary.as_deref().unwrap_or(&[])))
-                    .id(self.scroll_id.clone())
-                    .direction(scrollable::Direction::Vertical(
-                        scrollable::Scrollbar::new()
-                            .width(16.0)
-                            .scroller_width(16.0)
-                            .spacing(0.0),
-                    ))
-                    .width(Length::Fill)
-                    .height(Length::Fill),
-            ),
+            PreviewTab::Viewport => self.view_viewport(state),
+            PreviewTab::Text => self.view_text(state),
+            PreviewTab::Binary => self.view_binary(state),
+            PreviewTab::Audio => self.view_audio(state),
         };
-
-        let footer: Option<Container<_>> =
-            if matches!(self.tab, PreviewTab::Binary | PreviewTab::Text) {
-                Some(
-                    container(
-                        container(
-                            row([
-                                container(
-                                    text(format!(
-                                        "Name: {}",
-                                        if self.error {
-                                            "<failed to load>"
-                                        } else {
-                                            &self.raw_name
-                                        }
-                                    ))
-                                    .width(Length::Shrink)
-                                    .height(Length::Shrink)
-                                    .color(if self.error {
-                                        palette::TEXT_COLOR_WARN
-                                    } else {
-                                        palette::TEXT_COLOR_DEFAULT
-                                    })
-                                    .wrapping(text::Wrapping::None),
-                                )
-                                .clip(true)
-                                .width(Length::Fill)
-                                .height(Length::Shrink)
-                                .into(),
-                                text(if matches!(self.tab, PreviewTab::Text) {
-                                    format!("Lines: {:?}", self.raw_text.line_count())
-                                } else {
-                                    format!(
-                                        "Size: 0x{:02X}",
-                                        self.raw_binary
-                                            .as_ref()
-                                            .map(|x| x.len())
-                                            .unwrap_or_default()
-                                    )
-                                })
-                                .width(Length::Shrink)
-                                .height(Length::Shrink)
-                                .into(),
-                            ])
-                            .spacing(8.0),
-                        )
-                        .padding([2.0, 4.0])
-                        .style(preview_footer_style),
-                    )
-                    .align_y(Alignment::Center)
-                    .style(preview_content_style),
-                )
-            } else {
-                None
-            };
 
         let content = container(content)
             .width(Length::Fill)
@@ -390,7 +190,8 @@ impl Preview {
             .padding(1.0)
             .style(preview_content_style);
 
-        let tabs = row([
+        #[allow(unused_mut)]
+        let mut tab_row = row([
             widgets::tab(
                 row([
                     text("\u{F1B2}")
@@ -411,11 +212,13 @@ impl Preview {
             )
             .width(Length::Shrink)
             .height(Length::Shrink)
-            .on_press_maybe(if self.raw_binary.is_none() {
-                Some(Message::from(PreviewMessage::Viewport))
-            } else {
-                None
-            })
+            .on_press_maybe(
+                if self.raw_binary.is_none() && self.audio_player.is_none() {
+                    Some(Message::from(PreviewMessage::Viewport))
+                } else {
+                    None
+                },
+            )
             .into(),
             widgets::tab(
                 row([
@@ -437,11 +240,15 @@ impl Preview {
             )
             .width(Length::Shrink)
             .height(Length::Shrink)
-            .on_press_maybe(if self.raw_binary.is_some() {
-                Some(Message::from(PreviewMessage::Text))
-            } else {
-                None
-            })
+            .on_press_maybe(
+                if (self.raw_binary.is_some() && self.audio_player.is_none())
+                    || matches!(self.tab, PreviewTab::Text | PreviewTab::Binary)
+                {
+                    Some(Message::from(PreviewMessage::Text))
+                } else {
+                    None
+                },
+            )
             .into(),
             widgets::tab(
                 row([
@@ -463,23 +270,134 @@ impl Preview {
             )
             .width(Length::Shrink)
             .height(Length::Shrink)
-            .on_press_maybe(if self.raw_binary.is_some() {
-                Some(Message::from(PreviewMessage::Binary))
-            } else {
-                None
-            })
+            .on_press_maybe(
+                if (self.raw_binary.is_some() && self.audio_player.is_none())
+                    || matches!(self.tab, PreviewTab::Text | PreviewTab::Binary)
+                {
+                    Some(Message::from(PreviewMessage::Binary))
+                } else {
+                    None
+                },
+            )
             .into(),
-        ])
-        .width(Length::Fill)
-        .height(Length::Shrink)
-        .spacing(4.0);
+        ]);
+
+        #[cfg(feature = "sounds-convertible")]
+        {
+            tab_row = tab_row.push(
+                widgets::tab(
+                    row([
+                        text("\u{F1CD}")
+                            .size(16.0)
+                            .font(fonts::ICON_FONT)
+                            .height(Length::Shrink)
+                            .align_y(Alignment::Center)
+                            .shaping(text::Shaping::Advanced)
+                            .into(),
+                        text("Audio")
+                            .height(Length::Shrink)
+                            .align_y(Alignment::Center)
+                            .into(),
+                    ])
+                    .height(Length::Shrink)
+                    .spacing(8.0),
+                    matches!(self.tab, PreviewTab::Audio),
+                )
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .on_press_maybe(
+                    if self.audio_player.is_some() || matches!(self.tab, PreviewTab::Audio) {
+                        Some(Message::from(PreviewMessage::Audio))
+                    } else {
+                        None
+                    },
+                ),
+            );
+        }
+
+        let tab_row = tab_row
+            .width(Length::Fill)
+            .height(Length::Shrink)
+            .spacing(4.0);
+
+        let footer: Option<Container<_>> = if matches!(
+            self.tab,
+            PreviewTab::Binary | PreviewTab::Text | PreviewTab::Audio
+        ) {
+            Some(
+                container(
+                    container(
+                        row([
+                            container(
+                                text(format!(
+                                    "Name: {}",
+                                    if self.error {
+                                        "<failed to load>"
+                                    } else {
+                                        &self.raw_name
+                                    }
+                                ))
+                                .width(Length::Shrink)
+                                .height(Length::Shrink)
+                                .color(if self.error {
+                                    palette::TEXT_COLOR_WARN
+                                } else {
+                                    palette::TEXT_COLOR_DEFAULT
+                                })
+                                .wrapping(text::Wrapping::None),
+                            )
+                            .clip(true)
+                            .width(Length::Fill)
+                            .height(Length::Shrink)
+                            .into(),
+                            text(if self.error {
+                                String::from("(Error)")
+                            } else if self.unsupported {
+                                String::from("(Unsupported)")
+                            } else {
+                                match self.tab {
+                                    PreviewTab::Viewport => String::new(),
+                                    PreviewTab::Text => {
+                                        format!("Lines: {:?}", self.raw_text.line_count())
+                                    }
+                                    PreviewTab::Binary => format!(
+                                        "Size: 0x{:02X}",
+                                        self.raw_binary
+                                            .as_ref()
+                                            .map(|x| x.len())
+                                            .unwrap_or_default()
+                                    ),
+                                    PreviewTab::Audio => self
+                                        .audio_player
+                                        .as_ref()
+                                        .map(|x| {
+                                            format!("{:?} Ch, {:?}", x.channels(), x.sample_rate())
+                                        })
+                                        .unwrap_or_default(),
+                                }
+                            })
+                            .width(Length::Shrink)
+                            .height(Length::Shrink)
+                            .into(),
+                        ])
+                        .spacing(8.0),
+                    )
+                    .padding([2.0, 4.0])
+                    .style(preview_footer_style),
+                )
+                .align_y(Alignment::Center)
+                .style(preview_content_style),
+            )
+        } else {
+            None
+        };
 
         let view = if embedded {
             column(
                 [Element::from(header), Element::from(content)]
                     .into_iter()
                     .chain(footer.map(Into::into))
-                    .chain([Element::from(tabs)]),
+                    .chain([Element::from(tab_row)]),
             )
             .spacing(1.0)
         } else {
@@ -487,7 +405,7 @@ impl Preview {
                 [Element::from(content)]
                     .into_iter()
                     .chain(footer.map(Into::into))
-                    .chain([Element::from(tabs)]),
+                    .chain([Element::from(tab_row)]),
             )
             .spacing(1.0)
         };
@@ -498,12 +416,266 @@ impl Preview {
             .into()
     }
 
-    /// Occurs when the viewport tab is clicked.
-    fn on_viewport(&mut self, _state: &mut AppState) -> Task<Message> {
-        if matches!(self.tab, PreviewTab::Viewport) {
-            return Task::none();
+    /// Handles rendering the viewport tab.
+    fn view_viewport(&self, state: &AppState) -> Element<'_, Message> {
+        let viewport = Element::from(widgets::viewport(
+            &self.viewport_state,
+            // Keep the viewport state in sync with the external state.
+            |action| Message::from(PreviewMessage::ViewportAction(action)),
+        ));
+
+        let mut columns: Column<_> = Column::with_capacity(8)
+            .width(Length::Shrink)
+            .height(Length::Shrink)
+            .spacing(2.0);
+
+        if self.error || self.unsupported {
+            columns = columns.push(
+                row([
+                    text("Status")
+                        .size(16.0)
+                        .width(75.0)
+                        .font(fonts::MONOSPACE_BOLD_FONT)
+                        .color(palette::TEXT_COLOR_INFO)
+                        .into(),
+                    text(":")
+                        .size(16.0)
+                        .color(palette::TEXT_COLOR_INFO)
+                        .font(fonts::MONOSPACE_BOLD_FONT)
+                        .into(),
+                    text(if self.error {
+                        "<failed to load>"
+                    } else {
+                        "<not supported for preview>"
+                    })
+                    .size(16.0)
+                    .color(palette::TEXT_COLOR_DEFAULT)
+                    .font(fonts::MONOSPACE_BOLD_FONT)
+                    .into(),
+                ])
+                .width(Length::Shrink)
+                .padding(2.0)
+                .spacing(8.0),
+            );
+        } else {
+            let renderer = self.viewport_state.renderer();
+
+            for (stat_header, stat_value) in renderer.statistics() {
+                columns = columns.push(
+                    row([
+                        text(stat_header)
+                            .size(16.0)
+                            .width(75.0)
+                            .color(palette::TEXT_COLOR_INFO)
+                            .font(fonts::MONOSPACE_BOLD_FONT)
+                            .into(),
+                        text(":")
+                            .size(16.0)
+                            .color(palette::TEXT_COLOR_INFO)
+                            .font(fonts::MONOSPACE_BOLD_FONT)
+                            .into(),
+                        text(stat_value)
+                            .size(16.0)
+                            .color(palette::TEXT_COLOR_DEFAULT)
+                            .font(fonts::MONOSPACE_BOLD_FONT)
+                            .into(),
+                    ])
+                    .width(Length::Shrink)
+                    .padding(2.0)
+                    .spacing(8.0),
+                );
+            }
         }
 
+        let columns = container(
+            container(columns)
+                .width(Length::Shrink)
+                .padding(4.0)
+                .style(preview_overlay_style),
+        )
+        .width(Length::Fill)
+        .height(Length::FillPortion(1))
+        .padding(4.0);
+
+        let mut controls: Column<_> = Column::with_capacity(PREVIEW_CONTROLS.len())
+            .width(Length::Shrink)
+            .height(Length::Shrink)
+            .spacing(2.0);
+
+        for (control_name, control) in PREVIEW_CONTROLS {
+            controls = controls.push(
+                row([
+                    text(*control_name)
+                        .size(16.0)
+                        .color(palette::TEXT_COLOR_INFO)
+                        .font(fonts::MONOSPACE_BOLD_FONT)
+                        .into(),
+                    text(*control)
+                        .size(16.0)
+                        .color(palette::TEXT_COLOR_DEFAULT)
+                        .font(fonts::MONOSPACE_BOLD_FONT)
+                        .into(),
+                ])
+                .width(Length::Shrink)
+                .padding(2.0)
+                .spacing(8.0),
+            );
+        }
+
+        let controls = container(
+            container(controls)
+                .width(Length::Shrink)
+                .padding(4.0)
+                .style(preview_overlay_style),
+        )
+        .align_y(Alignment::End)
+        .width(Length::Fill)
+        .height(Length::FillPortion(1))
+        .padding(4.0);
+
+        let controls = if state.settings.preview_overlay() {
+            controls.into()
+        } else {
+            vertical_space().into()
+        };
+
+        let overlay = if state.asset_preview_id.is_some() {
+            let loading = container(widgets::spinner())
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(Alignment::Center)
+                .align_y(Alignment::Center);
+
+            column([columns.into(), loading.into(), controls])
+                .width(Length::Fill)
+                .height(Length::Fill)
+        } else {
+            column([columns.into(), controls])
+                .width(Length::Fill)
+                .height(Length::Fill)
+        };
+
+        stack([viewport, overlay.into()]).into()
+    }
+
+    /// Handles rendering the text tab.
+    fn view_text(&self, _state: &AppState) -> Element<'_, Message> {
+        widgets::scrollable(
+            text_editor(&self.raw_text)
+                .height(Length::Shrink)
+                .size(14.0)
+                .padding(4.0)
+                .font(fonts::MONOSPACE_FONT)
+                .on_action(|action| Message::from(PreviewMessage::TextAction(action)))
+                .style(text_editor_style),
+        )
+        .id(self.scroll_id.clone())
+        .direction(scrollable::Direction::Vertical(
+            scrollable::Scrollbar::new()
+                .width(16.0)
+                .scroller_width(16.0)
+                .spacing(0.0),
+        ))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+    }
+
+    /// Handles rendering the binary tab.
+    fn view_binary(&self, _state: &AppState) -> Element<'_, Message> {
+        widgets::scrollable(widgets::binary(self.raw_binary.as_deref().unwrap_or(&[])))
+            .id(self.scroll_id.clone())
+            .direction(scrollable::Direction::Vertical(
+                scrollable::Scrollbar::new()
+                    .width(16.0)
+                    .scroller_width(16.0)
+                    .spacing(0.0),
+            ))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
+    }
+
+    /// Handles rendering the audio tab.
+    #[cfg(feature = "sounds-convertible")]
+    fn view_audio(&self, state: &AppState) -> Element<'_, Message> {
+        let (position, duration, is_playing) = self
+            .audio_player
+            .as_ref()
+            .map(|x| (x.position(), x.duration(), x.is_playing()))
+            .unwrap_or_default();
+
+        let seek_position = self.audio_player_seek.unwrap_or(position.as_secs_f64());
+        let seek_duration = duration.as_secs_f64();
+        let seek_seed = duration.as_secs();
+
+        let waveform: Element<'_, Message> =
+            widgets::waveform(is_playing, seek_seed, Message::Noop)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into();
+
+        let content: Element<'_, Message> = if state.asset_preview_id.is_some() {
+            let loading = container(widgets::spinner())
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(Alignment::Center)
+                .align_y(Alignment::Center);
+
+            stack([waveform, loading.into()]).into()
+        } else {
+            stack([waveform]).into()
+        };
+
+        column([
+            content,
+            row([
+                widgets::icon_button(
+                    text(if is_playing { "\u{F1CF}" } else { "\u{F1CE}" })
+                        .size(18.0)
+                        .font(fonts::ICON_FONT)
+                        .height(Length::Fill)
+                        .align_y(Alignment::Center)
+                        .shaping(text::Shaping::Advanced),
+                )
+                .on_press(if is_playing {
+                    Message::from(PreviewMessage::Pause)
+                } else {
+                    Message::from(PreviewMessage::Play)
+                })
+                .into(),
+                widgets::slider(0.0..=seek_duration, seek_position, |position| {
+                    Message::from(PreviewMessage::Seek(position))
+                })
+                .step(if seek_duration > 60.0 { 1.0 } else { 0.01 })
+                .on_release(Message::from(PreviewMessage::SeekCommit))
+                .width(Length::Fill)
+                .into(),
+                text(position_to_hh_mm_ss(seek_position))
+                    .width(Length::Shrink)
+                    .height(Length::Shrink)
+                    .into(),
+            ])
+            .width(Length::Fill)
+            .height(48.0)
+            .padding(8.0)
+            .spacing(8.0)
+            .align_y(Alignment::Center)
+            .into(),
+        ])
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+    }
+
+    /// Handles rendering the audio tab when not enabled.
+    #[cfg(not(feature = "sounds-convertible"))]
+    fn view_audio(&self, _state: &AppState) -> Element<'_, Message> {
+        vertical_space().into()
+    }
+
+    /// Occurs when the viewport tab is clicked.
+    fn on_viewport(&mut self, _state: &mut AppState) -> Task<Message> {
         self.tab = PreviewTab::Viewport;
 
         Task::none()
@@ -526,10 +698,6 @@ impl Preview {
 
     /// Occurs when the text tab is clicked.
     fn on_text(&mut self, _state: &mut AppState) -> Task<Message> {
-        if matches!(self.tab, PreviewTab::Text) {
-            return Task::none();
-        }
-
         self.tab = PreviewTab::Text;
 
         Task::none()
@@ -552,22 +720,62 @@ impl Preview {
 
     /// Occurs when the binary tab is clicked.
     fn on_binary(&mut self, _state: &mut AppState) -> Task<Message> {
-        if matches!(self.tab, PreviewTab::Binary) {
-            return Task::none();
-        }
-
         self.tab = PreviewTab::Binary;
 
         Task::none()
     }
 
+    /// Occurs when the audio tab is clicked.
+    fn on_audio(&mut self, _state: &mut AppState) -> Task<Message> {
+        self.tab = PreviewTab::Audio;
+
+        Task::none()
+    }
+
+    /// Occurs when the audio is being seeked.
+    fn on_seek(&mut self, _state: &mut AppState, position: f64) -> Task<Message> {
+        self.audio_player_seek = Some(position);
+
+        Task::none()
+    }
+
+    /// Occurs when audio has been seeked and needs to update the player.
+    fn on_seek_commit(&mut self, _state: &mut AppState) -> Task<Message> {
+        if let Some(audio_player_seek) = self.audio_player_seek.take()
+            && let Some(audio_player) = &mut self.audio_player
+        {
+            audio_player.seek(Duration::from_secs_f64(audio_player_seek));
+        }
+
+        Task::none()
+    }
+
+    /// Occurs when the audio player should start playing audio.
+    fn on_play(&mut self, _state: &mut AppState) -> Task<Message> {
+        if let Some(audio_player) = &mut self.audio_player {
+            audio_player.play();
+        }
+
+        Task::none()
+    }
+
+    /// Occurs when the audio player should pause audio.
+    fn on_pause(&mut self, _state: &mut AppState) -> Task<Message> {
+        if let Some(audio_player) = &mut self.audio_player {
+            audio_player.pause();
+        }
+
+        Task::none()
+    }
+
     /// Occurs when the asset manager has a new asset to preview.
-    fn on_preview_update(&mut self, _: &mut AppState, asset: AssetPreview) -> Task<Message> {
+    fn on_preview_update(&mut self, state: &mut AppState, asset: AssetPreview) -> Task<Message> {
         match asset {
             AssetPreview::NotSupported => {
                 self.raw_text = text_editor::Content::new();
                 self.raw_binary = None;
                 self.raw_name = String::new();
+                self.audio_player = None;
 
                 self.error = false;
                 self.unsupported = true;
@@ -579,6 +787,7 @@ impl Preview {
                 self.raw_text = text_editor::Content::new();
                 self.raw_binary = None;
                 self.raw_name = String::new();
+                self.audio_player = None;
 
                 self.error = true;
                 self.unsupported = false;
@@ -612,6 +821,7 @@ impl Preview {
                 self.error = false;
                 self.unsupported = false;
                 self.viewport_state.renderer_mut().clear_preview();
+                self.audio_player = None;
 
                 return scrollable::scroll_to(
                     self.scroll_id.clone(),
@@ -622,6 +832,7 @@ impl Preview {
                 self.raw_text = text_editor::Content::new();
                 self.raw_binary = None;
                 self.raw_name = String::new();
+                self.audio_player = None;
 
                 if let Err(e) = self
                     .viewport_state
@@ -646,6 +857,7 @@ impl Preview {
                 self.raw_text = text_editor::Content::new();
                 self.raw_binary = None;
                 self.raw_name = String::new();
+                self.audio_player = None;
 
                 if let Err(e) = self
                     .viewport_state
@@ -670,6 +882,7 @@ impl Preview {
                 self.raw_text = text_editor::Content::new();
                 self.raw_binary = None;
                 self.raw_name = String::new();
+                self.audio_player = None;
 
                 let srgb = cfg!(feature = "srgb-preview");
 
@@ -692,6 +905,34 @@ impl Preview {
 
                 self.tab = PreviewTab::Viewport;
             }
+            AssetPreview::Audio(name, audio) => {
+                self.raw_text = text_editor::Content::new();
+                self.raw_binary = None;
+                self.raw_name = name;
+
+                match AudioPlayer::load(audio) {
+                    Err(e) => {
+                        if matches!(e, AudioPlayerError::Unsupported) {
+                            self.unsupported = true;
+                            self.error = false;
+                        } else {
+                            self.unsupported = false;
+                            self.error = true;
+                        }
+                    }
+                    Ok(mut audio_player) => {
+                        audio_player.volume(state.settings.volume());
+                        audio_player.play();
+
+                        self.audio_player = Some(audio_player);
+
+                        self.unsupported = false;
+                        self.error = false;
+                    }
+                }
+
+                self.tab = PreviewTab::Audio;
+            }
         }
 
         Task::none()
@@ -700,6 +941,19 @@ impl Preview {
     /// Occurs when we want to request a preview asset, but need to check if the previewer is open.
     fn on_preview_request(&mut self, _: &mut AppState) -> Task<Message> {
         Task::done(Message::PreviewRequest)
+    }
+
+    /// Occurs when settings have changed and we need to sync our preview state.
+    fn on_sync_settings(&mut self, state: &mut AppState) -> Task<Message> {
+        if let Some(audio_player) = &mut self.audio_player {
+            audio_player.volume(state.settings.volume());
+        }
+
+        self.viewport_state
+            .renderer_mut()
+            .far_clip(state.settings.far_clip() as f32);
+
+        Task::none()
     }
 }
 
@@ -758,4 +1012,16 @@ fn text_editor_style(_: &Theme, _: text_editor::Status) -> text_editor::Style {
         value: palette::TEXT_COLOR_DEFAULT,
         selection: palette::PRIMARY_COLOR,
     }
+}
+
+/// Converts a position in seconds to the formatted string `hh:mm:ss`.
+#[cfg(feature = "sounds-convertible")]
+fn position_to_hh_mm_ss(position: f64) -> String {
+    let position = position as u64;
+
+    let hours = position / 3600;
+    let minutes = (position % 3600) / 60;
+    let seconds = position % 60;
+
+    format!("{hours:02}:{minutes:02}:{seconds:02}")
 }

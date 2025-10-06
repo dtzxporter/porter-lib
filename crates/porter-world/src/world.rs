@@ -1,5 +1,4 @@
 use std::fs::File;
-use std::io::BufWriter;
 use std::io::Error;
 use std::path::Path;
 
@@ -9,6 +8,8 @@ use porter_cast::CastNode;
 use porter_cast::CastPropertyId;
 
 use porter_math::Axis;
+
+use porter_utils::BufferWriteExt;
 
 use crate::Instance;
 
@@ -74,7 +75,7 @@ impl World {
             instance.save(&mut root);
         }
 
-        let writer = BufWriter::new(File::create(path.as_ref().with_extension("cast"))?);
+        let writer = File::create(path.as_ref().with_extension("cast"))?.buffer_write();
 
         let mut file = CastFile::new();
 

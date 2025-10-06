@@ -1,6 +1,7 @@
 use std::io::Cursor;
 
 use porter_utils::StructWriteExt;
+use porter_utils::VecExt;
 
 use crate::Audio;
 use crate::AudioError;
@@ -13,12 +14,10 @@ fn allocate_target_buffer(
     bytes_per_sample: usize,
     bytes_per_sample_target: usize,
 ) -> Result<Cursor<Vec<u8>>, AudioError> {
-    let data_size = (audio.data().len() / bytes_per_sample) * bytes_per_sample_target;
-    let mut data: Vec<u8> = Vec::new();
+    let data_size = audio.data().len();
+    let target_size = (data_size / bytes_per_sample) * bytes_per_sample_target;
 
-    data.try_reserve_exact(data_size)?;
-
-    Ok(Cursor::new(data))
+    Ok(Cursor::new(Vec::try_with_exact_capacity(target_size)?))
 }
 
 /// Utility method for formats that can be coerced to another format.

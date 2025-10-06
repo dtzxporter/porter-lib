@@ -184,7 +184,7 @@ impl ProcessInfoPlatform for ProcessInfo {
             }
         }
 
-        let mut result = Vec::with_capacity(256);
+        let mut result = Vec::with_capacity(if filter.is_empty() { 256 } else { filter.len() });
 
         for info in process_info_buffer.chunks_exact(size_of::<kinfo_proc>()) {
             let kinfo: kinfo_proc = Cursor::new(info).read_struct()?;
@@ -193,22 +193,17 @@ impl ProcessInfoPlatform for ProcessInfo {
                 continue;
             }
 
-            let mut name: [c_int; 3] = [CTL_KERN, KERN_PROCARGS2, kinfo.kp_proc.p_pid];
-            let mut size: size_t = 4096;
-            let mut buffer: [u8; 4096] = [0; 4096];
+            let mut buffer: [u8; 1024] = [0; 1024];
 
             let (name, path) = if unsafe {
-                sysctl(
-                    name.as_mut_ptr(),
-                    name.len() as c_uint,
-                    buffer.as_mut_ptr() as *mut c_void,
-                    &mut size as *mut size_t,
-                    std::ptr::null_mut(),
-                    0,
+                proc_pidpath(
+                    kinfo.kp_proc.p_pid,
+                    buffer.as_mut_ptr() as _,
+                    buffer.len() as _,
                 )
-            } == 0
+            } != 0
             {
-                let name_and_path = PathBuf::from((&buffer[4..]).read_null_terminated_string()?);
+                let name_and_path = PathBuf::from((&buffer[0..]).read_null_terminated_string()?);
 
                 let name = name_and_path
                     .file_stem()
@@ -228,6 +223,10 @@ impl ProcessInfoPlatform for ProcessInfo {
                 path,
                 started_at: timeval_to_systime(unsafe { &kinfo.kp_proc.p_un.p_starttime }),
             });
+
+            if !filter.is_empty() && result.len() == filter.len() {
+                break;
+            }
         }
 
         Ok(result)

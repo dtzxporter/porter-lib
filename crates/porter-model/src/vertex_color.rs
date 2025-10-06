@@ -41,3 +41,9 @@ impl From<[u8; 4]> for VertexColor {
         Self::new(value[0], value[1], value[2], value[3])
     }
 }
+
+impl Default for VertexColor {
+    fn default() -> Self {
+        Self::new(255, 255, 255, 255)
+    }
+}

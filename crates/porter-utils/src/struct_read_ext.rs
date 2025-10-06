@@ -9,6 +9,8 @@ pub trait StructReadExt: Read {
     fn read_struct<S: Copy + 'static>(&mut self) -> Result<S, io::Error>;
     /// Reads a byte length integer from the reader and advances the stream.
     fn read_sized_integer(&mut self, size: usize) -> Result<u64, io::Error>;
+    /// Reads a big endian byte length integer from the reader and advances the stream.
+    fn read_be_sized_integer(&mut self, size: usize) -> Result<u64, io::Error>;
     /// Reads a variable length integer from the reader and advances the stream.
     fn read_var_integer(&mut self) -> Result<u64, io::Error>;
 }
@@ -29,13 +31,27 @@ where
         Ok(unsafe { result.assume_init() })
     }
 
+    #[track_caller]
     fn read_sized_integer(&mut self, size: usize) -> Result<u64, io::Error> {
-        let mut result: u64 = 0;
-
         debug_assert!(size <= size_of::<u64>());
+
+        let mut result: u64 = 0;
 
         for i in 0..size {
             result |= (self.read_struct::<u8>()? as u64) << (i * size_of::<u64>());
+        }
+
+        Ok(result)
+    }
+
+    #[track_caller]
+    fn read_be_sized_integer(&mut self, size: usize) -> Result<u64, io::Error> {
+        debug_assert!(size <= size_of::<u64>());
+
+        let mut result: u64 = 0;
+
+        for _ in 0..size {
+            result = (result << 8) | (self.read_struct::<u8>()? as u64);
         }
 
         Ok(result)

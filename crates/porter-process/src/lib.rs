@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 mod error;
 mod process;
 mod process_handle;

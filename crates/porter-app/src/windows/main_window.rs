@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use iced::Theme;
 use iced::keyboard;
 use iced::keyboard::Key;
 use iced::keyboard::Modifiers;
@@ -12,6 +13,7 @@ use iced::window;
 use iced::window::Mode;
 use iced::window::Position;
 
+use iced::Background;
 use iced::Element;
 use iced::Event;
 use iced::Length;
@@ -39,6 +41,7 @@ use crate::components::SearchBarMessage;
 use crate::components::Settings;
 use crate::components::SettingsMessage;
 use crate::components::VirtualListMessage;
+use crate::palette;
 
 /// Main window handler.
 pub struct MainWindow {
@@ -132,6 +135,7 @@ impl MainWindow {
         }
 
         container(columns)
+            .style(main_background_style)
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
@@ -348,5 +352,13 @@ impl MainWindow {
             .join("\n");
 
         iced::clipboard::write(buffer)
+    }
+}
+
+/// Style for the main background and borders.
+fn main_background_style(_: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(palette::BACKGROUND_COLOR_DEFAULT)),
+        ..Default::default()
     }
 }

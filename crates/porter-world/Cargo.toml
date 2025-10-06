@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 porter-cast = { path = "../porter-cast" }
 porter-math = { path = "../porter-math" }
+porter-utils = { path = "../porter-utils" }

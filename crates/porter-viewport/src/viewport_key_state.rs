@@ -1,5 +1,5 @@
 /// The current key state of the mouse.
-pub struct PreviewKeyState {
+pub struct ViewportKeyState {
     pub maya: bool,
     pub left: bool,
     pub right: bool,

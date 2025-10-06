@@ -62,7 +62,7 @@ impl ProcessInfoPlatform for ProcessInfo {
         }
 
         let mut reader = Cursor::new(process_info_buffer);
-        let mut result = Vec::with_capacity(256);
+        let mut result = Vec::with_capacity(if filter.is_empty() { 256 } else { filter.len() });
 
         loop {
             let process_info: SYSTEM_PROCESS_INFORMATION = reader.read_struct()?;
@@ -75,7 +75,6 @@ impl ProcessInfoPlatform for ProcessInfo {
                 }
 
                 reader.seek(SeekFrom::Current(process_next))?;
-
                 continue;
             }
 
@@ -112,6 +111,10 @@ impl ProcessInfoPlatform for ProcessInfo {
             });
 
             if process_info.NextEntryOffset == 0 {
+                break;
+            }
+
+            if !filter.is_empty() && result.len() == filter.len() {
                 break;
             }
 

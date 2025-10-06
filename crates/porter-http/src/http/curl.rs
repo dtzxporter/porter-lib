@@ -8,6 +8,8 @@ use std::ops;
 use std::path::Path;
 use std::sync::Once;
 
+use porter_utils::BufferWriteExt;
+
 use curl_sys::*;
 
 use crate::HttpClient;
@@ -111,7 +113,7 @@ pub fn download_file(client: HttpClient, path: &Path) -> Result<(), io::Error> {
     let (request, progress) = create_request(client)?;
 
     let mut userdata: FileUserdata = FileUserdata {
-        file: BufWriter::new(File::create(path)?),
+        file: File::create(path)?.buffer_write(),
         error: None,
     };
 

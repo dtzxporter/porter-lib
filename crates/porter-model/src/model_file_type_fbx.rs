@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::btree_map::Entry;
 use std::fs::File;
-use std::io::BufWriter;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -14,6 +13,8 @@ use porter_fbx::FbxPropertyValue;
 
 use porter_math::Angles;
 use porter_math::Matrix4x4;
+
+use porter_utils::BufferWriteExt;
 
 use crate::MaterialTextureRef;
 use crate::MaterialTextureRefUsage;
@@ -1157,7 +1158,7 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
         }
     }
 
-    let writer = BufWriter::new(File::create(path.as_ref().with_extension("fbx"))?);
+    let writer = File::create(path.as_ref().with_extension("fbx"))?.buffer_write();
 
     root.write(writer)?;
 

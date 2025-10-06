@@ -1,7 +1,5 @@
 use std::fs::File;
 use std::io::BufRead;
-use std::io::BufReader;
-use std::io::BufWriter;
 use std::io::Seek;
 use std::io::Write;
 use std::path::Path;
@@ -9,6 +7,8 @@ use std::path::Path;
 use wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
 
 use porter_utils::AsAligned;
+use porter_utils::BufferReadExt;
+use porter_utils::BufferWriteExt;
 
 use porter_math::Rect;
 
@@ -374,10 +374,7 @@ impl Image {
 
     /// Loads the image from the given path.
     pub fn load<P: AsRef<Path>>(path: P, file_type: ImageFileType) -> Result<Self, TextureError> {
-        let input = File::open(path)?;
-        let mut buffered = BufReader::new(input);
-
-        Self::load_from(&mut buffered, file_type)
+        Self::load_from(&mut File::open(path)?.buffer_read(), file_type)
     }
 
     /// Loads the image from the given input buffer with the given file type.
@@ -399,12 +396,11 @@ impl Image {
         path: P,
         file_type: ImageFileType,
     ) -> Result<(), TextureError> {
-        let output = File::create(path)?;
-        let mut buffered = BufWriter::new(output);
+        let mut output = File::create(path)?.buffer_write();
 
-        self.save_to(&mut buffered, file_type)?;
+        self.save_to(&mut output, file_type)?;
 
-        buffered.flush()?;
+        output.flush()?;
 
         Ok(())
     }

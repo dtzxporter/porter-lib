@@ -1,5 +1,4 @@
 use std::fs::File;
-use std::io::BufWriter;
 use std::path::Path;
 
 use porter_cast::CastFile;
@@ -8,6 +7,8 @@ use porter_cast::CastNode;
 use porter_cast::CastPropertyId;
 
 use porter_math::Axis;
+
+use porter_utils::BufferWriteExt;
 
 use crate::Animation;
 use crate::AnimationError;
@@ -209,7 +210,7 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
             .push(curve_override.override_scale);
     }
 
-    let writer = BufWriter::new(File::create(path.as_ref().with_extension("cast"))?);
+    let writer = File::create(path.as_ref().with_extension("cast"))?.buffer_write();
 
     let mut file = CastFile::new();
 

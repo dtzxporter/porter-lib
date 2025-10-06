@@ -1,7 +1,8 @@
 use std::fs::File;
-use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
+
+use porter_utils::BufferWriteExt;
 
 use static_assertions::const_assert;
 
@@ -13,8 +14,8 @@ use crate::ModelError;
 pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> {
     let path = path.as_ref();
 
-    let mut obj = BufWriter::new(File::create(path.with_extension("obj"))?);
-    let mut mtl = BufWriter::new(File::create(path.with_extension("mtl"))?);
+    let mut obj = File::create(path.with_extension("obj"))?.buffer_write();
+    let mut mtl = File::create(path.with_extension("mtl"))?.buffer_write();
 
     writeln!(
         obj,

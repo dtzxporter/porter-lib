@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
 
 use porter_math::Angles;
 
-use porter_utils::HashXXH64;
+use porter_utils::BufferWriteExt;
+use porter_utils::HashExt;
 
 use crate::Model;
 use crate::ModelError;
@@ -20,9 +20,9 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         .file_stem()
         .map(|x| x.to_string_lossy().into_owned())
         .unwrap_or_else(|| String::from("porter_model"));
-    let hash = file_name.hash_xxh64() as u32;
+    let hash = file_name.hash_xxh364() as u32;
 
-    let mut maya = BufWriter::new(File::create(path.with_extension("ma"))?);
+    let mut maya = File::create(path.with_extension("ma"))?.buffer_write();
 
     writeln!(
         maya,
@@ -490,10 +490,11 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         )?;
     }
 
-    let mut bind = BufWriter::new(File::create(
+    let mut bind = File::create(
         path.with_file_name(format!("{}_BIND", file_name))
             .with_extension("mel"),
-    )?);
+    )?
+    .buffer_write();
 
     writeln!(
         bind,

@@ -1,7 +1,8 @@
 use std::fs::File;
-use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
+
+use porter_utils::BufferWriteExt;
 
 use crate::Model;
 use crate::ModelError;
@@ -16,75 +17,51 @@ macro_rules! write_face_vertex {
         }
 
         let vertex = $mesh.vertices.vertex($face as usize);
+
         let normal = vertex.normal();
 
-        if $mesh.vertices.colors() > 0 && $mesh.vertices.uv_layers() > 0 {
-            let color = vertex.color(0);
-
-            write!(
-                $xmodel,
-                "NORMAL {:.6} {:.6} {:.6}\nCOLOR {:.6} {:.6} {:.6} {:.6}\nUV {}",
-                normal.x,
-                normal.y,
-                normal.z,
-                (color.r as f32) / 255.0,
-                (color.g as f32) / 255.0,
-                (color.b as f32) / 255.0,
-                (color.a as f32) / 255.0,
-                $mesh.vertices.uv_layers()
-            )?;
-
-            for i in 0..$mesh.vertices.uv_layers() {
-                let uv = vertex.uv(i);
-
-                writeln!($xmodel, " {:.6} {:.6}", uv.x, uv.y)?;
-            }
-
-            writeln!($xmodel)?;
-        } else if $mesh.vertices.colors() > 0 {
-            let color = vertex.color(0);
-
-            writeln!(
-                $xmodel,
-                "NORMAL {:.6} {:.6} {:.6}\nCOLOR {:.6} {:.6} {:.6} {:.6}",
-                normal.x,
-                normal.y,
-                normal.z,
-                (color.r as f32) / 255.0,
-                (color.g as f32) / 255.0,
-                (color.b as f32) / 255.0,
-                (color.a as f32) / 255.0,
-            )?;
-        } else if $mesh.vertices.uv_layers() > 0 {
-            write!(
-                $xmodel,
-                "NORMAL {:.6} {:.6} {:.6}\nUV {}",
-                normal.x,
-                normal.y,
-                normal.z,
-                $mesh.vertices.uv_layers()
-            )?;
-
-            for i in 0..$mesh.vertices.uv_layers() {
-                let uv = vertex.uv(i);
-
-                writeln!($xmodel, " {:.6} {:.6}", uv.x, uv.y)?;
-            }
-
-            writeln!($xmodel)?;
+        let color = if $mesh.vertices.colors() > 0 {
+            vertex.color(0)
         } else {
-            writeln!(
-                $xmodel,
-                "NORMAL {:.6} {:.6} {:.6}",
-                normal.x, normal.y, normal.z
-            )?;
+            Default::default()
+        };
+
+        let uv_layers = $mesh.vertices.uv_layers();
+
+        write!(
+            $xmodel,
+            concat!(
+                "NORMAL {:.6} {:.6} {:.6}\n",
+                "COLOR {:.6} {:.6} {:.6} {:.6}\n",
+                "UV {}"
+            ),
+            normal.x,
+            normal.y,
+            normal.z,
+            (color.r as f32) / 255.0,
+            (color.g as f32) / 255.0,
+            (color.b as f32) / 255.0,
+            (color.a as f32) / 255.0,
+            uv_layers.max(1)
+        )?;
+
+        for i in 0..uv_layers.max(1) {
+            let uv = if i < uv_layers {
+                vertex.uv(i)
+            } else {
+                Default::default()
+            };
+
+            write!($xmodel, " {:.6} {:.6}", uv.x, uv.y)?;
         }
+
+        writeln!($xmodel)?;
     };
 }
 
 /// Writes a model in xmodel export format to the given path.
 pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> {
-    let mut xmodel = BufWriter::new(File::create(path.as_ref().with_extension("xmodel_export"))?);
+    let mut xmodel = File::create(path.as_ref().with_extension("xmodel_export"))?.buffer_write();
 
     writeln!(
         xmodel,

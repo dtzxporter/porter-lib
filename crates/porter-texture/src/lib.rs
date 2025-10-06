@@ -10,7 +10,7 @@ mod image_format;
 mod resize_algorithm;
 mod software_swizzle;
 mod software_unpack;
-mod texture_extension;
+mod texture_extensions;
 mod transform_algorithm;
 mod utilities;
 
@@ -26,7 +26,7 @@ pub use image_convert_options::*;
 pub use image_file_type::*;
 pub use image_format::*;
 pub use resize_algorithm::*;
-pub use texture_extension::*;
+pub use texture_extensions::*;
 pub use transform_algorithm::*;
 pub use utilities::*;
 

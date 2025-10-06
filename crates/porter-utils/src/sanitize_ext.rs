@@ -36,6 +36,14 @@ impl SanitizeExt for PathBuf {
     }
 }
 
+impl SanitizeExt for &str {
+    type T = String;
+
+    fn sanitized(&self) -> Self::T {
+        sanitize_str(self)
+    }
+}
+
 impl SanitizeExt for String {
     type T = String;
 

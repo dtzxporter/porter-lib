@@ -10,7 +10,7 @@ use porter_utils::AsByteSlice;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-struct PreviewCameraUniform {
+struct ViewportCameraUniform {
     target: Vector3,
     view_matrix: Matrix4x4,
     inverse_view_matrix: Matrix4x4,
@@ -21,24 +21,24 @@ struct PreviewCameraUniform {
     srgb: u32,
 }
 
-/// A 3d preview camera.
+/// A 3d viewport camera.
 #[derive(Debug)]
-pub struct PreviewCamera {
+pub struct ViewportCamera {
     theta: f32,
     phi: f32,
     radius: f32,
     up: f32,
-    uniforms: PreviewCameraUniform,
+    uniforms: ViewportCameraUniform,
     uniform_buffer: Buffer,
     uniform_bind_group_layout: BindGroupLayout,
     uniform_bind_group: BindGroup,
     orthographic: Option<(f32, f32, f32)>,
 }
 
-impl PreviewCamera {
-    /// Constructs a new preview camera instance.
+impl ViewportCamera {
+    /// Constructs a new viewport camera instance.
     pub fn new(instance: &GPUInstance, theta: f32, phi: f32, radius: f32) -> Self {
-        let uniforms = PreviewCameraUniform {
+        let uniforms = ViewportCameraUniform {
             target: Vector3::zero(),
             view_matrix: Matrix4x4::new(),
             inverse_view_matrix: Matrix4x4::new(),

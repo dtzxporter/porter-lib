@@ -1,5 +1,5 @@
 [package]
-name = "porter-preview"
+name = "porter-viewport"
 version = "0.1.0"
 edition = "2024"
 

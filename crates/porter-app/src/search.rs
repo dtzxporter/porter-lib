@@ -3,15 +3,15 @@ use std::num::ParseIntError;
 /// Ways to filter on a number range.
 #[derive(Debug, Clone, Copy)]
 struct SearchRange {
-    min: usize,
-    max: usize,
+    min: u32,
+    max: u32,
 }
 
 impl Default for SearchRange {
     fn default() -> Self {
         Self {
-            min: usize::MIN,
-            max: usize::MAX,
+            min: u32::MIN,
+            max: u32::MAX,
         }
     }
 }
@@ -24,12 +24,13 @@ enum SearchName {
 
 /// The searchable data for an asset.
 pub struct SearchAsset {
-    bone_count: usize,
-    mesh_count: usize,
-    frame_count: usize,
-    frame_rate: usize,
-    width: usize,
-    height: usize,
+    bone_count: u32,
+    mesh_count: u32,
+    frame_count: u32,
+    frame_rate: u32,
+    width: u32,
+    height: u32,
+    channels: u32,
     name: String,
 }
 
@@ -43,43 +44,50 @@ impl SearchAsset {
             frame_rate: 0,
             width: 0,
             height: 0,
+            channels: 0,
             name,
         }
     }
 
     /// Sets the count of bones this asset has.
-    pub const fn bone_count(mut self, count: usize) -> Self {
+    pub const fn bone_count(mut self, count: u32) -> Self {
         self.bone_count = count;
         self
     }
 
     /// Sets the count of meshes this asset has.
-    pub const fn mesh_count(mut self, count: usize) -> Self {
+    pub const fn mesh_count(mut self, count: u32) -> Self {
         self.mesh_count = count;
         self
     }
 
     /// Sets the count of frames this asset has.
-    pub const fn frame_count(mut self, count: usize) -> Self {
+    pub const fn frame_count(mut self, count: u32) -> Self {
         self.frame_count = count;
         self
     }
 
     /// Sets the frame rate this asset has.
-    pub const fn frame_rate(mut self, rate: usize) -> Self {
+    pub const fn frame_rate(mut self, rate: u32) -> Self {
         self.frame_rate = rate;
         self
     }
 
     /// Sets the width this asset has.
-    pub const fn width(mut self, width: usize) -> Self {
+    pub const fn width(mut self, width: u32) -> Self {
         self.width = width;
         self
     }
 
     /// Sets the height this asset has.
-    pub const fn height(mut self, height: usize) -> Self {
+    pub const fn height(mut self, height: u32) -> Self {
         self.height = height;
+        self
+    }
+
+    /// Sets the channels this asset has.
+    pub const fn channels(mut self, channels: u32) -> Self {
+        self.channels = channels;
         self
     }
 }
@@ -93,12 +101,13 @@ pub struct SearchTerm {
     frame_rate: SearchRange,
     width: SearchRange,
     height: SearchRange,
+    channels: SearchRange,
     search_names: [Option<SearchName>; 5],
 }
 
 impl SearchTerm {
     /// Compile a search command into a reusable search structure.
-    pub fn compile(search: String) -> Self {
+    pub fn compile(search: &str) -> Self {
         // Always process search terms as lowercase for case insensitivity.
         let search = search.to_lowercase();
 
@@ -111,6 +120,7 @@ impl SearchTerm {
         let mut frame_rate = SearchRange::default();
         let mut width = SearchRange::default();
         let mut height = SearchRange::default();
+        let mut channels = SearchRange::default();
 
         let mut search_names: [Option<SearchName>; 5] = [const { None }; 5];
         let mut search_names_index = 0;
@@ -128,6 +138,8 @@ impl SearchTerm {
                 let _ = parse_search_number(command, &mut width);
             } else if let Some(command) = command.strip_prefix("height:") {
                 let _ = parse_search_number(command, &mut height);
+            } else if let Some(command) = command.strip_prefix("channels:") {
+                let _ = parse_search_number(command, &mut channels);
             } else if let Some(command) = command.strip_prefix('!') {
                 let command = command.trim();
 
@@ -154,6 +166,7 @@ impl SearchTerm {
             frame_rate,
             width,
             height,
+            channels,
             search_names,
         }
     }
@@ -177,6 +190,9 @@ impl SearchTerm {
             return false;
         }
         if asset.height > self.height.max || asset.height < self.height.min {
+            return false;
+        }
+        if asset.channels > self.channels.max || asset.channels < self.channels.min {
             return false;
         }
 
@@ -215,15 +231,15 @@ fn parse_search_number(number: &str, range: &mut SearchRange) -> Result<(), Pars
     } else if let Some(number) = number.strip_prefix("<=") {
         range.max = number.parse()?;
     } else if let Some(number) = number.strip_prefix('>') {
-        let number: usize = number.parse()?;
+        let number: u32 = number.parse()?;
 
         range.min = number.saturating_add(1);
     } else if let Some(number) = number.strip_prefix('<') {
-        let number: usize = number.parse()?;
+        let number: u32 = number.parse()?;
 
         range.max = number.saturating_sub(1);
     } else {
-        let number: usize = number.parse()?;
+        let number: u32 = number.parse()?;
 
         range.min = number;
         range.max = number;

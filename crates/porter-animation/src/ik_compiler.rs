@@ -140,8 +140,6 @@ impl IkCompiler {
                 solver.set_pole_vector(pole_vector.world_position);
             }
 
-            // TODO: We should support more ways to input twist, optionally a float parameter too.
-
             if let Some(twist) = &self.twist {
                 let twist = self
                     .sampler

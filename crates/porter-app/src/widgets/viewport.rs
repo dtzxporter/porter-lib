@@ -29,8 +29,8 @@ use iced::Rectangle;
 use iced::Size;
 use iced::Vector;
 
-use porter_preview::PreviewKeyState;
-use porter_preview::PreviewRenderer;
+use porter_viewport::ViewportKeyState;
+use porter_viewport::ViewportRenderer;
 
 use crate::PreviewControlScheme;
 use crate::palette;
@@ -44,7 +44,7 @@ pub struct Viewport<'a, Message, Theme, Renderer, A> {
 
 /// Preview viewport global state.
 pub struct ViewportState {
-    renderer: PreviewRenderer,
+    renderer: ViewportRenderer,
     bounds: Rectangle<f32>,
     dirty: Option<Instant>,
     cache: Option<Handle>,
@@ -188,11 +188,12 @@ where
                 tree.state.downcast_mut::<State>().keyboard_modifiers = *modifiers;
             }
             Event::Mouse(mouse::Event::CursorMoved { position }) => {
-                if !cursor.is_over(layout.bounds()) {
+                let state = tree.state.downcast_mut::<State>();
+
+                if state.mouse_button.is_none() && !cursor.is_over(layout.bounds()) {
                     return;
                 }
 
-                let state = tree.state.downcast_mut::<State>();
                 let delta = state.mouse_position - *position;
 
                 shell.publish((self.on_action)(MouseMove(
@@ -286,7 +287,7 @@ impl ViewportState {
     /// Constructs a new viewport state with the given config values.
     pub fn new() -> Self {
         Self {
-            renderer: PreviewRenderer::new(),
+            renderer: ViewportRenderer::new(),
             bounds: Rectangle::INFINITE,
             dirty: Some(Instant::now()),
             cache: None,
@@ -348,7 +349,7 @@ impl ViewportState {
             MouseMove(delta, mouse_button, keyboard_modifiers) => {
                 self.renderer.mouse_move(
                     (delta.x, delta.y),
-                    PreviewKeyState {
+                    ViewportKeyState {
                         maya: matches!(control_scheme, PreviewControlScheme::Maya),
                         left: matches!(mouse_button, Some(mouse::Button::Left)),
                         right: matches!(mouse_button, Some(mouse::Button::Right)),
@@ -363,12 +364,12 @@ impl ViewportState {
     }
 
     /// Gets a reference to the renderer used by this viewport.
-    pub fn renderer(&self) -> &PreviewRenderer {
+    pub fn renderer(&self) -> &ViewportRenderer {
         &self.renderer
     }
 
     /// Get a mutable reference to the renderer used by this viewport.
-    pub fn renderer_mut(&mut self) -> &mut PreviewRenderer {
+    pub fn renderer_mut(&mut self) -> &mut ViewportRenderer {
         self.dirty = Some(Instant::now());
 
         &mut self.renderer

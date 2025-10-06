@@ -2,6 +2,8 @@ use std::io;
 use std::io::SeekFrom;
 use std::sync::Arc;
 
+use porter_utils::SeekExt;
+
 use crate::ProcessError;
 use crate::ProcessHandle;
 use crate::ProcessHandlePlatform;
@@ -27,6 +29,18 @@ impl ProcessReader {
     /// Gets the size of the main module in bytes.
     pub fn main_module_size(&self) -> Result<u64, ProcessError> {
         self.handle.main_module_size()
+    }
+
+    /// Creates a new copy of this process reader for reading at the given offset.
+    pub fn reader_at<P: Copy + 'static>(&self, offset: P) -> Result<Self, ProcessError>
+    where
+        u64: TryFrom<P>,
+    {
+        let mut reader = self.clone();
+
+        reader.reset_to(offset)?;
+
+        Ok(reader)
     }
 }
 

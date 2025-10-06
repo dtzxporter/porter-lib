@@ -98,6 +98,7 @@ pub struct Settings {
     far_clip: u32,
     preview_window: bool,
     custom_scale: Option<f32>,
+    volume: u32,
 }
 
 impl Settings {
@@ -460,6 +461,16 @@ impl Settings {
             .then(|| self.custom_scale().unwrap_or(default))
     }
 
+    /// Gets the volume level for audio preview.
+    pub fn volume(&self) -> u32 {
+        self.volume
+    }
+
+    /// Sets the volume level for audio preview.
+    pub fn set_volume(&mut self, volume: u32) {
+        self.volume = volume.clamp(0, 50);
+    }
+
     /// Update settings and returns a copy.
     pub fn update<F: FnOnce(&mut Self)>(&self, callback: F) -> Self {
         let mut settings = self.clone();
@@ -489,6 +500,7 @@ impl Default for Settings {
             far_clip: 10000,
             preview_window: false,
             custom_scale: None,
+            volume: 30,
         }
     }
 }

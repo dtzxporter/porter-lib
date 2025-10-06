@@ -202,7 +202,6 @@ fn splash_left_style(_: &Theme) -> container::Style {
 /// Style for the splash background and borders.
 fn splash_background_style(_: &Theme) -> container::Style {
     container::Style {
-        text_color: None,
         border: Border {
             color: palette::PRIMARY_COLOR,
             width: 1.0,

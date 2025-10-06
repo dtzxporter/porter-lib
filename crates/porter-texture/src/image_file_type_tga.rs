@@ -1,9 +1,9 @@
 use std::io::Cursor;
 use std::io::Read;
 use std::io::Seek;
-use std::io::SeekFrom;
 use std::io::Write;
 
+use porter_utils::SeekExt;
 use porter_utils::StackVec;
 use porter_utils::StructReadExt;
 use porter_utils::StructWriteExt;
@@ -158,7 +158,7 @@ pub fn to_tga<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), Text
 pub fn from_tga<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
     let header: TgaHeader = input.read_struct()?;
 
-    input.seek(SeekFrom::Current(header.id_size as i64))?;
+    input.skip(header.id_size)?;
 
     if header.color_type != 0 {
         return Err(TextureError::ContainerInvalid(ImageFileType::Tga));

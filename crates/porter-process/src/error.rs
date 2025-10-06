@@ -30,9 +30,15 @@ impl From<procfs::ProcError> for ProcessError {
 
 impl From<ProcessError> for std::io::Error {
     fn from(value: ProcessError) -> Self {
+        use std::io::*;
+
         match value {
+            ProcessError::NotFound => Error::from(ErrorKind::NotFound),
+            ProcessError::AccessDenied => Error::from(ErrorKind::PermissionDenied),
             ProcessError::IoError(error) => error,
-            _ => Self::last_os_error(),
+            ProcessError::TryReserveError(error) => Error::from(error),
+            #[cfg(target_os = "linux")]
+            ProcessError::ProcError(_) => Self::last_os_error(),
         }
     }
 }

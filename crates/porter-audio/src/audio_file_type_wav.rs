@@ -1,8 +1,8 @@
 use std::io::Read;
 use std::io::Seek;
-use std::io::SeekFrom;
 use std::io::Write;
 
+use porter_utils::SeekExt;
 use porter_utils::StructReadExt;
 use porter_utils::StructWriteExt;
 
@@ -138,10 +138,10 @@ pub fn to_wav<O: Write + Seek>(audio: &Audio, output: &mut O) -> Result<(), Audi
     let file_size: u32 =
         file_end_offset as u32 - (file_size_offset + size_of::<u32>() as u64) as u32;
 
-    output.seek(SeekFrom::Start(file_size_offset))?;
+    output.reset_to(file_size_offset)?;
     output.write_struct(file_size)?;
 
-    output.seek(SeekFrom::Start(file_end_offset))?;
+    output.reset_to(file_end_offset)?;
 
     Ok(())
 }
@@ -193,7 +193,7 @@ pub fn from_wav<I: Read + Seek>(input: &mut I) -> Result<Audio, AudioError> {
                 break;
             }
             _ => {
-                #[cfg(debug_assertions)]
+                #[cfg(all(debug_assertions, feature = "debug"))]
                 {
                     // Ignored blocks:
                     // ['cue ', 'LIST', 'smpl', 'JUNK', 'akd ']
@@ -212,7 +212,7 @@ pub fn from_wav<I: Read + Seek>(input: &mut I) -> Result<Audio, AudioError> {
                     }
                 }
 
-                input.seek(SeekFrom::Current(size as i64))?;
+                input.skip(size)?;
             }
         }
     }

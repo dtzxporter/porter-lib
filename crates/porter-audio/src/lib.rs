@@ -25,10 +25,14 @@ pub(crate) use software_decompress::*;
 
 #[cfg(feature = "ms-adpcm")]
 mod software_decompress_ms_adpcm;
+#[cfg(feature = "raw-flac")]
+mod software_decompress_raw_flac;
 #[cfg(feature = "wwise-vorbis")]
 mod software_decompress_wwise_vorbis;
 
 #[cfg(feature = "ms-adpcm")]
 pub(crate) use software_decompress_ms_adpcm::*;
+#[cfg(feature = "raw-flac")]
+pub(crate) use software_decompress_raw_flac::*;
 #[cfg(feature = "wwise-vorbis")]
 pub(crate) use software_decompress_wwise_vorbis::*;

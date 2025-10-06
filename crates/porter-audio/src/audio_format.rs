@@ -11,12 +11,14 @@ pub enum AudioFormat {
     FloatPcm,
     /// Wwise, custom vorbis: https://wiki.multimedia.cx/index.php/Vorbis
     WwiseVorbis,
+    /// Raw headerless flac: https://wiki.multimedia.cx/index.php/FLAC
+    RawFlac,
 }
 
 impl AudioFormat {
     /// Whether or not the audio format is compressed.
     pub const fn is_compressed(&self) -> bool {
-        matches!(self, Self::MsAdpcm | Self::WwiseVorbis)
+        matches!(self, Self::MsAdpcm | Self::WwiseVorbis | Self::RawFlac)
     }
 
     /// Whether or not the audio format is a coercible version of the given format.

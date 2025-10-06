@@ -11,6 +11,7 @@ use iced::Task;
 use directories::ProjectDirs;
 
 use porter_model::ModelFileType;
+
 use porter_texture::ImageFileType;
 
 use crate::AppState;
@@ -20,6 +21,8 @@ use crate::PreviewControlScheme;
 use crate::palette;
 use crate::system;
 use crate::widgets;
+
+use super::PreviewMessage;
 
 /// Settings component handler.
 pub struct Settings {
@@ -564,6 +567,7 @@ impl Settings {
                             .update(|settings| settings.set_far_clip(value)),
                     )
                 })
+                .width(400.0)
                 .step(10000u32)
                 .into(),
                 text(state.settings.far_clip().to_string())
@@ -571,9 +575,38 @@ impl Settings {
                     .color(palette::TEXT_COLOR_SECONDARY)
                     .into(),
             ])
-            .width(500.0)
+            .width(Length::Shrink)
             .spacing(8.0)
             .into(),
+        ]);
+
+        #[cfg(feature = "sounds-convertible")]
+        {
+            settings = settings.extend([
+                vertical_space().height(2.0).into(),
+                text("Set the preview audio volume (Limited for safety):")
+                    .color(palette::TEXT_COLOR_SECONDARY)
+                    .into(),
+                vertical_space().height(0.0).into(),
+                row([
+                    widgets::slider(0..=50, state.settings.volume(), move |value| {
+                        save_message(state.settings.update(|settings| settings.set_volume(value)))
+                    })
+                    .width(400.0)
+                    .step(1u32)
+                    .into(),
+                    text(format!("{}%", state.settings.volume()))
+                        .width(100.0)
+                        .color(palette::TEXT_COLOR_SECONDARY)
+                        .into(),
+                ])
+                .width(Length::Shrink)
+                .spacing(8.0)
+                .into(),
+            ]);
+        }
+
+        settings = settings.extend([
             vertical_space().height(4.0).into(),
             text("Settings - Advanced")
                 .size(20.0)
@@ -652,7 +685,7 @@ impl Settings {
 
         self.custom_scale = state.settings.custom_scale().map(format_custom_scale);
 
-        Task::none()
+        Task::done(Message::from(PreviewMessage::SyncSettings))
     }
 
     /// Allows the user to pick a new export folder.

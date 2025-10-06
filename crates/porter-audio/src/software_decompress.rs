@@ -17,6 +17,12 @@ pub fn software_decompress_audio(audio: &mut Audio) -> Result<(), AudioError> {
             #[cfg(not(feature = "wwise-vorbis"))]
             return Err(AudioError::ConversionFeatureDisabled);
         }
+        AudioFormat::RawFlac => {
+            #[cfg(feature = "raw-flac")]
+            crate::decompress_raw_flac(audio)?;
+            #[cfg(not(feature = "raw-flac"))]
+            return Err(AudioError::ConversionFeatureDisabled);
+        }
         _ => return Err(AudioError::ConversionError),
     }
 

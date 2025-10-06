@@ -9,6 +9,8 @@ pub trait StructWriteExt: Write {
     fn write_struct<S: Copy + 'static>(&mut self, value: S) -> Result<(), io::Error>;
     /// Writes a byte length integer to the writer and advances the stream.
     fn write_sized_integer(&mut self, value: u64, size: usize) -> Result<(), io::Error>;
+    /// Writes a big endian byte length integer to the writr and advances the stream.
+    fn write_be_sized_integer(&mut self, value: u64, size: usize) -> Result<(), io::Error>;
     /// Writes a variable length integer to the writer and advances the stream.
     fn write_var_integer(&mut self, value: u64) -> Result<(), io::Error>;
 }
@@ -21,10 +23,22 @@ where
         self.write_all(value.as_byte_slice())
     }
 
+    #[track_caller]
     fn write_sized_integer(&mut self, value: u64, size: usize) -> Result<(), io::Error> {
         debug_assert!(size <= size_of::<u64>());
 
         for i in 0..size {
+            self.write_struct::<u8>(((value >> (i * size_of::<u64>())) & 0xFF) as u8)?;
+        }
+
+        Ok(())
+    }
+
+    #[track_caller]
+    fn write_be_sized_integer(&mut self, value: u64, size: usize) -> Result<(), io::Error> {
+        debug_assert!(size <= size_of::<u64>());
+
+        for i in (0..size).rev() {
             self.write_struct::<u8>(((value >> (i * size_of::<u64>())) & 0xFF) as u8)?;
         }
 

@@ -8,7 +8,7 @@ porter-utils = { path = "../porter-utils" }
 porter-math = { path = "../porter-math" }
 porter-texture = { path = "../porter-texture" }
 porter-animation = { path = "../porter-animation" }
-porter-preview = { path = "../porter-preview" }
+porter-viewport = { path = "../porter-viewport" }
 porter-audio = { path = "../porter-audio" }
 porter-model = { path = "../porter-model" }
 porter-threads = { path = "../porter-threads" }

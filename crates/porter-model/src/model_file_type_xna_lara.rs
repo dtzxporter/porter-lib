@@ -1,9 +1,10 @@
 use std::fs::File;
-use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
 
 use porter_math::normalize_array_f32;
+
+use porter_utils::BufferWriteExt;
 
 use crate::Model;
 use crate::ModelError;
@@ -12,7 +13,7 @@ use crate::WeightBoneId;
 
 /// Writes a model in xna lara format to the given path.
 pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> {
-    let mut xna = BufWriter::new(File::create(path.as_ref().with_extension("mesh.ascii"))?);
+    let mut xna = File::create(path.as_ref().with_extension("mesh.ascii"))?.buffer_write();
 
     writeln!(xna, "{}", model.skeleton.bones.len())?;
 
