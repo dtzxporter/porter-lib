@@ -308,6 +308,7 @@ impl GPUConverter {
             label: None,
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: output_texture_view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(Color {
@@ -391,7 +392,7 @@ impl GPUConverter {
         let _ = self
             .instance
             .device()
-            .poll(MaintainBase::WaitForSubmissionIndex(submission));
+            .poll(PollType::WaitForSubmissionIndex(submission));
 
         if rx.recv().unwrap().is_err() {
             return Err(TextureError::ConversionError);

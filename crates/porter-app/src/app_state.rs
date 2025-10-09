@@ -29,6 +29,7 @@ use crate::Sort;
 use crate::palette;
 use crate::panic_hook;
 use crate::strings;
+use crate::system;
 
 /// Shared application state information.
 pub struct AppState {
@@ -136,6 +137,7 @@ impl AppState {
 
     /// Runs the app until the main window is closed.
     pub fn run(mut self) {
+        // Install global panic hook, as early as possible.
         panic_hook::install(self.name, self.version);
 
         // Load user settings if possible.
@@ -143,6 +145,9 @@ impl AppState {
 
         // Initialize global rayon thread pool.
         initialize_thread_pool();
+
+        // Initialize system specific workarounds.
+        system::initialize_workarounds();
 
         let settings = iced::Settings {
             id: None,

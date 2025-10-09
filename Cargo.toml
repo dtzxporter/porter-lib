@@ -13,7 +13,7 @@ members = [
     "crates/porter-fbx",
     "crates/porter-build",
     "crates/porter-gpu",
-    "crates/porter-preview",
+    "crates/porter-viewport",
     "crates/porter-app",
     "crates/porter-world",
     "crates/porter-http",
@@ -40,6 +40,8 @@ windows-sys = { version = "0.60", default-features = false, features = [
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Gdi",
+    "Win32_Media_Audio",
+    "Win32_Media_KernelStreaming",
     "Win32_System_Threading",
     "Win32_System_Console",
     "Win32_System_ProcessStatus",
@@ -81,7 +83,7 @@ static_assertions = { version = "1.1" }
 rayon = { version = "1.11", default-features = false }
 pico-args = { version = "0.5", default-features = false, features = ["eq-separator"] }
 bincode = { version = "2.0", default-features = false, features = ["std", "derive"] }
-xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3", "const_xxh3"] }
+xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3"] }
 
 # Math
 unroll = "0.1.5"
@@ -89,7 +91,7 @@ half = { version = "2.6", default-features = false, features = ["std"] }
 
 # Gpu
 pollster = "0.4"
-wgpu = { version = "25.0", default-features = false, features = ["wgsl", "metal", "vulkan"] }
+wgpu = { version = "26.0", default-features = false, features = ["wgsl", "metal", "vulkan"] }
 
 [profile.dev]
 opt-level = 2
@@ -106,5 +108,6 @@ codegen-units = 1
 # https://github.com/iced-rs/iced/pull/2828
 # https://github.com/iced-rs/iced/pull/2837
 # https://github.com/iced-rs/iced/pull/2887
+# https://github.com/iced-rs/iced/pull/3068
 [patch.crates-io]
-iced = { git = "https://github.com/dtzxporter/iced", rev = "9329aa3fd34f70cda4eef678cc024eb845918f85" }
+iced = { git = "https://github.com/dtzxporter/iced", rev = "d993b7da9809fe6c19ade6c0e776787c65d3b72e" }

@@ -635,6 +635,7 @@ impl ViewportRenderer {
             label: None,
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: &self.msaa_texture_view,
+                depth_slice: None,
                 resolve_target: Some(&self.output_texture_view),
                 ops: Operations {
                     load: LoadOp::Clear(Color {
@@ -725,7 +726,7 @@ impl ViewportRenderer {
         let _ = self
             .instance
             .device()
-            .poll(MaintainBase::WaitForSubmissionIndex(submission));
+            .poll(PollType::WaitForSubmissionIndex(submission));
 
         if rx.recv().unwrap().is_err() {
             return (0, 0, Vec::new());
