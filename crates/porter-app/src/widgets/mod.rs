@@ -338,10 +338,10 @@ where
 
     let background_default = if selected {
         palette::PRIMARY_COLOR
-    } else if item_index % 2 > 0 {
-        palette::BACKGROUND_COLOR_LIGHT_025
-    } else {
+    } else if item_index.is_multiple_of(2) {
         palette::BACKGROUND_COLOR_LIGHT_050
+    } else {
+        palette::BACKGROUND_COLOR_LIGHT_025
     };
 
     Button::new(content)

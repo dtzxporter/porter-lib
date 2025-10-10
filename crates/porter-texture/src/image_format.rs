@@ -157,6 +157,26 @@ impl ImageFormat {
         }
     }
 
+    /// Calculates the size in bytes of one row for the image format and the given width.
+    pub const fn row_size(&self, width: u32) -> u32 {
+        if self.is_compressed() {
+            let block_size = self.block_size();
+            let (block_x, _) = self.block_dimensions();
+
+            block_size * width.div_ceil(block_x)
+        } else {
+            let width = width as usize;
+            let bits_per_pixel = self.bits_per_pixel() as usize;
+
+            let bits_size = width * bits_per_pixel;
+            let byte_size = bits_size.div_ceil(8);
+
+            debug_assert!(byte_size <= u32::MAX as usize);
+
+            byte_size as u32
+        }
+    }
+
     /// Gets the bits per pixel for the image format.
     pub const fn bits_per_pixel(&self) -> u32 {
         match self {

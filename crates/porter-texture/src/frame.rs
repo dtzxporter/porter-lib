@@ -25,6 +25,11 @@ impl Frame {
         self.buffer = buffer;
     }
 
+    /// Truncates the internal buffer to the new length.
+    pub(crate) fn truncate_buffer(&mut self, length: usize) {
+        self.buffer.truncate(length);
+    }
+
     /// Returns an immutable slice of the frame buffer.
     #[inline(always)]
     pub fn buffer(&self) -> &[u8] {

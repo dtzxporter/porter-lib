@@ -362,6 +362,68 @@ impl Image {
         Ok(())
     }
 
+    /// Flips the image and it's frames vertically. This will drop any mipmaps if they exist.
+    pub fn flip_vertical(&mut self) -> Result<(), TextureError> {
+        if self.format.is_compressed() {
+            return Err(TextureError::UnsupportedImageFormat(self.format));
+        }
+
+        let row_size = self.format.row_size(self.width);
+        let buffer_size = self.format.buffer_size(self.width, self.height);
+
+        let height = self.height;
+
+        for frame in self.frames_mut() {
+            let mut rows = frame
+                .buffer_mut()
+                .chunks_exact_mut(row_size as _)
+                .take(height as _);
+
+            while let (Some(top), Some(bottom)) = (rows.next(), rows.next_back()) {
+                top.swap_with_slice(bottom);
+            }
+
+            frame.truncate_buffer(buffer_size as _);
+        }
+
+        self.mipmaps = 1;
+
+        Ok(())
+    }
+
+    /// Flips the image and it's frames horizontally. This will drop any mipmaps if they exist.
+    pub fn flip_horizontal(&mut self) -> Result<(), TextureError> {
+        if self.format.is_compressed() {
+            return Err(TextureError::UnsupportedImageFormat(self.format));
+        }
+
+        let row_size = self.format.row_size(self.width);
+        let buffer_size = self.format.buffer_size(self.width, self.height);
+        let pixel_size = self.format.bits_per_pixel() / 8;
+
+        let height = self.height;
+
+        for frame in self.frames_mut() {
+            for row in frame
+                .buffer_mut()
+                .chunks_exact_mut(row_size as _)
+                .take(height as _)
+            {
+                let mut pixels = row.chunks_exact_mut(pixel_size as _);
+
+                while let (Some(left), Some(right)) = (pixels.next(), pixels.next_back()) {
+                    left.swap_with_slice(right);
+                }
+            }
+
+            frame.truncate_buffer(buffer_size as _);
+        }
+
+        self.mipmaps = 1;
+
+        Ok(())
+    }
+
     /// Calculates the optimal image format required to save this image to the given file type.
     pub fn format_for_file_type(&self, file_type: ImageFileType) -> ImageFormat {
         match file_type {

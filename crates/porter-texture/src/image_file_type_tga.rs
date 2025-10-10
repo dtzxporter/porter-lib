@@ -170,6 +170,7 @@ pub fn from_tga<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
 
     let format = match header.bits_per_pixel {
         8 => ImageFormat::R8Unorm,
+        24 => ImageFormat::B8G8R8Unorm,
         32 => ImageFormat::B8G8R8A8Unorm,
         _ => return Err(TextureError::ContainerInvalid(ImageFileType::Tga)),
     };
@@ -191,6 +192,10 @@ pub fn from_tga<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
             read_rle_decode::<1, _>(frame.buffer_mut(), input)?;
         }
         _ => return Err(TextureError::ContainerInvalid(ImageFileType::Tga)),
+    }
+
+    if header.image_descriptor & 32 == 0 {
+        image.flip_vertical()?;
     }
 
     Ok(image)
