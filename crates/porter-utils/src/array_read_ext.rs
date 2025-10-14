@@ -4,6 +4,8 @@ use std::mem::ManuallyDrop;
 use std::mem::MaybeUninit;
 use std::slice::from_raw_parts_mut;
 
+use crate::VecExt;
+
 /// A trait that reads arrays from any `Read` type.
 pub trait ArrayReadExt: Read {
     /// Reads an array of `R` with the given length.
@@ -23,12 +25,8 @@ where
     where
         R: Copy + 'static,
     {
-        let mut result: Vec<MaybeUninit<R>> = Vec::new();
-
-        result
-            .try_reserve_exact(length)
-            .map_err(|e| io::Error::new(io::ErrorKind::OutOfMemory, e))?;
-        result.resize(length, MaybeUninit::<R>::zeroed());
+        let mut result: Vec<MaybeUninit<R>> =
+            Vec::try_new_with_value(MaybeUninit::<R>::zeroed(), length)?;
 
         let slice = result.as_mut_slice();
         let bytes = slice.len() * size_of::<R>();

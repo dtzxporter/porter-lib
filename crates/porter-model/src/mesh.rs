@@ -47,6 +47,22 @@ impl Mesh {
         }
     }
 
+    /// Constructs a new mesh instance with the given skinning method.
+    pub fn with_skinning_method(
+        faces: FaceBuffer,
+        vertices: VertexBuffer,
+        skinning_method: SkinningMethod,
+    ) -> Self {
+        Self {
+            name: None,
+            material: None,
+            faces,
+            vertices,
+            blend_shapes: Vec::new(),
+            skinning_method,
+        }
+    }
+
     /// Constructs a new mesh instance as a subdivided flat plane from the provided bounds.
     pub fn plane(bounds: Aabb, up_axis: Axis, subdivision: usize) -> Self {
         let mut vertices = VertexBuffer::builder()
@@ -106,22 +122,6 @@ impl Mesh {
         }
 
         Self::new(faces, vertices)
-    }
-
-    /// Constructs a new mesh instance with the given skinning method.
-    pub fn with_skinning_method(
-        faces: FaceBuffer,
-        vertices: VertexBuffer,
-        skinning_method: SkinningMethod,
-    ) -> Self {
-        Self {
-            name: None,
-            material: None,
-            faces,
-            vertices,
-            blend_shapes: Vec::new(),
-            skinning_method,
-        }
     }
 
     /// Sets an optional name for this mesh.

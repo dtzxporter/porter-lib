@@ -79,9 +79,7 @@ impl CastFile {
 
         let mut root_nodes = Vec::new();
 
-        root_nodes
-            .try_reserve_exact(header.root_nodes as usize)
-            .map_err(|x| Error::new(ErrorKind::OutOfMemory, x))?;
+        root_nodes.try_reserve_exact(header.root_nodes as _)?;
 
         for _ in 0..header.root_nodes {
             root_nodes.push(CastNode::read(&mut reader)?);

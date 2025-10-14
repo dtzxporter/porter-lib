@@ -172,7 +172,7 @@ pub fn from_flac<I: Read + Seek>(input: &mut I) -> Result<Audio, AudioError> {
     let sample_count = stream_info.samples.unwrap_or_default();
     let sample_count_bytes = sample_count * stream_info.channels as u64 * (bits_per_sample / 8);
 
-    data.try_reserve_exact(sample_count_bytes as usize)?;
+    data.try_reserve_exact(sample_count_bytes as _)?;
 
     let mut data = Cursor::new(data);
 

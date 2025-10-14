@@ -75,12 +75,9 @@ fn interpolate_nearest_neighbor(src: &Frame, width: u32, height: u32, x: f32, y:
         let src_index = (y0 * width as usize + x0) * 4;
         let src_buffer = src.buffer();
 
-        [
-            src_buffer[src_index],
-            src_buffer[src_index + 1],
-            src_buffer[src_index + 2],
-            src_buffer[src_index + 3],
-        ]
+        src_buffer[src_index..src_index + 4]
+            .try_into()
+            .unwrap_or_default()
     } else {
         [0, 0, 0, 0]
     }
@@ -126,12 +123,16 @@ fn interpolate_bicubic(src: &Frame, width: u32, height: u32, x: f32, y: f32) -> 
                 let src_index = (ny as usize * width as usize + nx as usize) * 4;
                 let src_buffer = src.buffer();
 
+                let src_pixel: [u8; 4] = src_buffer[src_index..src_index + 4]
+                    .try_into()
+                    .unwrap_or_default();
+
                 total_weight += weight;
 
-                result[0] += weight * src_buffer[src_index] as f32;
-                result[1] += weight * src_buffer[src_index + 1] as f32;
-                result[2] += weight * src_buffer[src_index + 2] as f32;
-                result[3] += weight * src_buffer[src_index + 3] as f32;
+                result[0] += weight * src_pixel[0] as f32;
+                result[1] += weight * src_pixel[1] as f32;
+                result[2] += weight * src_pixel[2] as f32;
+                result[3] += weight * src_pixel[3] as f32;
             }
         }
     }

@@ -158,7 +158,7 @@ impl ImageFormat {
     }
 
     /// Calculates the size in bytes of one row for the image format and the given width.
-    pub const fn row_size(&self, width: u32) -> u32 {
+    pub const fn bytes_per_row(&self, width: u32) -> u32 {
         if self.is_compressed() {
             let block_size = self.block_size();
             let (block_x, _) = self.block_dimensions();

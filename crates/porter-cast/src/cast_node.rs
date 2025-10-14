@@ -1,5 +1,4 @@
 use std::io::Error;
-use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Write;
 use std::sync::Arc;
@@ -80,6 +79,11 @@ impl CastNode {
         self.properties.get_mut(index).unwrap()
     }
 
+    /// Returns the identifier of this node.
+    pub fn identifier(&self) -> CastId {
+        self.identifier
+    }
+
     /// Finds a property by the given name.
     pub fn property<N: AsRef<str>>(&self, name: N) -> Option<&CastProperty> {
         self.properties.iter().find(|x| x.name() == name.as_ref())
@@ -102,9 +106,24 @@ impl CastNode {
             .filter(move |x| x.identifier == identifier)
     }
 
+    /// Iterates over all mutable children of the given type.
+    pub fn children_of_type_mut(
+        &mut self,
+        identifier: CastId,
+    ) -> impl Iterator<Item = &mut CastNode> {
+        self.children
+            .iter_mut()
+            .filter(move |x| x.identifier == identifier)
+    }
+
     /// Finds a child by the given hash.
     pub fn child_by_hash(&self, hash: u64) -> Option<&CastNode> {
         self.children.iter().find(|x| x.hash == hash)
+    }
+
+    /// Finds a mutable child by the given hash.
+    pub fn child_by_hash_mut(&mut self, hash: u64) -> Option<&mut CastNode> {
+        self.children.iter_mut().find(|x| x.hash == hash)
     }
 
     /// Serializes the node to the writer.
@@ -136,9 +155,7 @@ impl CastNode {
 
         let mut properties = Vec::new();
 
-        properties
-            .try_reserve_exact(header.property_count as usize)
-            .map_err(|x| Error::new(ErrorKind::OutOfMemory, x))?;
+        properties.try_reserve_exact(header.property_count as _)?;
 
         for _ in 0..header.property_count {
             properties.push(CastProperty::read(reader)?);
@@ -146,9 +163,7 @@ impl CastNode {
 
         let mut children = Vec::new();
 
-        children
-            .try_reserve_exact(header.child_count as usize)
-            .map_err(|x| Error::new(ErrorKind::OutOfMemory, x))?;
+        children.try_reserve_exact(header.child_count as _)?;
 
         for _ in 0..header.child_count {
             children.push(Self::read(reader)?);

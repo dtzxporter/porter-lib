@@ -14,6 +14,7 @@ use porter_utils::StringReadExt;
 use porter_utils::StringWriteExt;
 use porter_utils::StructReadExt;
 use porter_utils::StructWriteExt;
+use porter_utils::VecExt;
 
 use crate::CastNode;
 use crate::CastPropertyId;
@@ -85,6 +86,11 @@ impl CastProperty {
             .filter_map(|x| x.try_into().ok())
     }
 
+    /// Clears the values in this property.
+    pub fn clear(&mut self) {
+        self.property_values.clear();
+    }
+
     /// Serializes the property to the writer.
     pub(crate) fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         let header = CastPropertyHeader {
@@ -140,11 +146,7 @@ impl CastProperty {
 
         let name = reader.read_sized_string(header.name_size as usize, false)?;
 
-        let mut values = Vec::new();
-
-        values
-            .try_reserve_exact(header.array_length as usize)
-            .map_err(|x| Error::new(ErrorKind::OutOfMemory, x))?;
+        let mut values = Vec::try_with_exact_capacity(header.array_length as _)?;
 
         for _ in 0..header.array_length {
             match header.identifier {

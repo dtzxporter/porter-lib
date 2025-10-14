@@ -178,16 +178,16 @@ pub fn from_wav<I: Read + Seek>(input: &mut I) -> Result<Audio, AudioError> {
                 if header.size >= 0x12 {
                     let size: u16 = input.read_struct()?;
 
-                    extra.try_reserve_exact(size as usize)?;
-                    extra.resize(size as usize, 0);
+                    extra.try_reserve_exact(size as _)?;
+                    extra.resize(size as _, 0);
 
                     input.read_exact(&mut extra)?;
                 }
             }
             // 'data'
             0x61746164 => {
-                data.try_reserve_exact(size as usize)?;
-                data.resize(size as usize, 0);
+                data.try_reserve_exact(size as _)?;
+                data.resize(size as _, 0);
 
                 input.read_exact(&mut data)?;
                 break;

@@ -9,6 +9,7 @@ use wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
 use porter_utils::AsAligned;
 use porter_utils::BufferReadExt;
 use porter_utils::BufferWriteExt;
+use porter_utils::VecExt;
 
 use porter_math::Rect;
 
@@ -187,13 +188,8 @@ impl Image {
             let bytes_per_row = target_format.bytes_per_row(width) as usize;
             let size = target_format.buffer_size_aligned(width, height) as usize;
 
-            let mut buffer = Vec::new();
-
-            buffer
-                .try_reserve_exact(size)
+            let mut buffer = Vec::try_new_with_value(0, size)
                 .map_err(|_| TextureError::FrameAllocationFailed)?;
-
-            buffer.resize(size, 0);
 
             let mut converter = GPUConverter::new(width, height, source_format, target_format);
 
@@ -368,7 +364,7 @@ impl Image {
             return Err(TextureError::UnsupportedImageFormat(self.format));
         }
 
-        let row_size = self.format.row_size(self.width);
+        let bytes_per_row = self.format.bytes_per_row(self.width);
         let buffer_size = self.format.buffer_size(self.width, self.height);
 
         let height = self.height;
@@ -376,7 +372,7 @@ impl Image {
         for frame in self.frames_mut() {
             let mut rows = frame
                 .buffer_mut()
-                .chunks_exact_mut(row_size as _)
+                .chunks_exact_mut(bytes_per_row as _)
                 .take(height as _);
 
             while let (Some(top), Some(bottom)) = (rows.next(), rows.next_back()) {
@@ -397,16 +393,16 @@ impl Image {
             return Err(TextureError::UnsupportedImageFormat(self.format));
         }
 
-        let row_size = self.format.row_size(self.width);
+        let bytes_per_row = self.format.bytes_per_row(self.width);
         let buffer_size = self.format.buffer_size(self.width, self.height);
-        let pixel_size = self.format.bits_per_pixel() / 8;
+        let pixel_size = self.format.bits_per_pixel().div_ceil(8);
 
         let height = self.height;
 
         for frame in self.frames_mut() {
             for row in frame
                 .buffer_mut()
-                .chunks_exact_mut(row_size as _)
+                .chunks_exact_mut(bytes_per_row as _)
                 .take(height as _)
             {
                 let mut pixels = row.chunks_exact_mut(pixel_size as _);

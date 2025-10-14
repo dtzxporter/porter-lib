@@ -2,6 +2,7 @@ use std::io;
 use std::io::Read;
 
 use crate::StructReadExt;
+use crate::VecExt;
 
 /// A trait that reads different string types from any `Read` type.
 pub trait StringReadExt: Read {
@@ -37,9 +38,7 @@ where
                 break;
             }
 
-            buffer
-                .try_reserve(1)
-                .map_err(|e| io::Error::new(io::ErrorKind::OutOfMemory, e))?;
+            buffer.try_reserve(1)?;
             buffer.push(scratch[0]);
         }
 
@@ -51,17 +50,12 @@ where
         size: usize,
         null_terminator: bool,
     ) -> Result<String, io::Error> {
-        let mut buffer: Vec<u8> = Vec::new();
-
-        buffer
-            .try_reserve_exact(size)
-            .map_err(|e| io::Error::new(io::ErrorKind::OutOfMemory, e))?;
-        buffer.resize(size, 0);
+        let mut buffer: Vec<u8> = Vec::try_new_with_value(0, size)?;
 
         self.read_exact(&mut buffer)?;
 
         if null_terminator && size > 0 {
-            buffer.resize(size - 1, 0);
+            buffer.truncate(size - 1);
         }
 
         String::from_utf8(buffer).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
