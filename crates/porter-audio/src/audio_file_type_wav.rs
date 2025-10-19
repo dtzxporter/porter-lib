@@ -43,7 +43,10 @@ const fn compute_byte_rate(bits_per_sample: u32, channels: u32, sample_rate: u32
 
 /// Picks the proper format required to save the input format to a wav file type.
 pub const fn pick_format(format: AudioFormat) -> AudioFormat {
-    format
+    match format {
+        AudioFormat::RawFlac => AudioFormat::IntegerPcm,
+        _ => format,
+    }
 }
 
 /// Writes an audio stream to a wav file to the output stream.

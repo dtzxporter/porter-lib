@@ -123,11 +123,8 @@ impl Source for FlacSource<'_> {
 }
 
 /// Picks the proper format required to save the input format to a flac file type.
-pub const fn pick_format(format: AudioFormat) -> AudioFormat {
-    match format {
-        AudioFormat::FloatPcm => AudioFormat::IntegerPcm,
-        _ => AudioFormat::IntegerPcm,
-    }
+pub const fn pick_format(_: AudioFormat) -> AudioFormat {
+    AudioFormat::IntegerPcm
 }
 
 /// Writes an audio stream to a flac file to the output stream.
