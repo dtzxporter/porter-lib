@@ -246,7 +246,7 @@ fn write_rle_encode<const BYTES_PER_PIXEL: usize, O: Write + Seek>(
         for pixel in row.chunks_exact(BYTES_PER_PIXEL) {
             if let Some(prev_pixel) = prev_pixel {
                 if pixel == prev_pixel {
-                    if !packet_type_rle && counter > 2 {
+                    if !packet_type_rle && counter > 1 {
                         write_raw(
                             &scratch[0..scratch.len() - BYTES_PER_PIXEL],
                             counter as u8 - 1,
@@ -255,15 +255,18 @@ fn write_rle_encode<const BYTES_PER_PIXEL: usize, O: Write + Seek>(
 
                         counter = 1;
                         scratch.clear();
-                    }
+                        scratch.write_all(pixel)?;
 
-                    packet_type_rle = true;
-                } else if packet_type_rle && counter > 0 {
+                        packet_type_rle = true;
+                    }
+                } else if packet_type_rle && counter > 1 {
                     write_rle(prev_pixel, counter as u8, output)?;
 
                     counter = 0;
                     packet_type_rle = false;
                     scratch.clear();
+                } else {
+                    packet_type_rle = false;
                 }
             }
 
