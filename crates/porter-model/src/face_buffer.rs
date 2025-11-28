@@ -20,13 +20,23 @@ impl Face {
         Self { i1, i2, i3 }
     }
 
-    /// Swaps the winding order of the face.
+    /// Swaps the winding order of the face in place.
     #[allow(clippy::manual_swap)]
     pub fn swap_order(&mut self) {
         let tmp = self.i3;
 
         self.i3 = self.i1;
         self.i1 = tmp;
+    }
+
+    /// Swaps the winding order of the face, returning the new face.
+    #[allow(clippy::manual_swap)]
+    pub fn swapped_order(mut self) -> Self {
+        let tmp = self.i3;
+
+        self.i3 = self.i1;
+        self.i1 = tmp;
+        self
     }
 }
 

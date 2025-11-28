@@ -11,7 +11,6 @@ use porter_utils::HashExt;
 
 use crate::Model;
 use crate::ModelError;
-use crate::VertexColor;
 
 /// Writes a model in maya format to the given path.
 pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> {
@@ -30,14 +29,118 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             "//Maya ASCII 8.5 scene\n\n",
             "// Exported by PorterLib\n",
             "// Please credit DTZxPorter for use of this asset!\n\n",
-            "requires maya \"8.5\";\ncurrentUnit -l centimeter -a degree -t film;\nfileInfo \"application\" \"maya\";\nfileInfo \"product\" \"Maya Unlimited 8.5\";\nfileInfo \"version\" \"8.5\";\nfileInfo \"cutIdentifier\" \"200612162224-692032\";",
-            "createNode transform -s -n \"persp\";\n\tsetAttr \".v\" no;\n\tsetAttr \".t\" -type \"double3\" 48.186233840145825 37.816674066853686 41.0540421364379 ;\n\tsetAttr \".r\" -type \"double3\" -29.738352729603015 49.400000000000432 0 ;\ncreateNode camera -s -n \"perspShape\" -p \"persp\";\n\tsetAttr -k off \".v\" no;\n\tsetAttr \".fl\" 34.999999999999993;\n\tsetAttr \".fcp\" 10000;\n\tsetAttr \".coi\" 73.724849603665149;\n\tsetAttr \".imn\" -type \"string\" \"persp\";\n\tsetAttr \".den\" -type \"string\" \"persp_depth\";\n\tsetAttr \".man\" -type \"string\" \"persp_mask\";\n\tsetAttr \".hc\" -type \"string\" \"viewSet -p %camera\";\ncreateNode transform -s -n \"top\";\n\tsetAttr \".v\" no;\n\tsetAttr \".t\" -type \"double3\" 0 100.1 0 ;\n\tsetAttr \".r\" -type \"double3\" -89.999999999999986 0 0 ;\ncreateNode camera -s -n \"topShape\" -p \"top\";\n\tsetAttr -k off \".v\" no;\n\tsetAttr \".rnd\" no;\n\tsetAttr \".coi\" 100.1;\n\tsetAttr \".ow\" 30;\n\tsetAttr \".imn\" -type \"string\" \"top\";\n\tsetAttr \".den\" -type \"string\" \"top_depth\";\n\tsetAttr \".man\" -type \"string\" \"top_mask\";\n\tsetAttr \".hc\" -type \"string\" \"viewSet -t %camera\";\n\tsetAttr \".o\" yes;\ncreateNode transform -s -n \"front\";\n\tsetAttr \".v\" no;\n\tsetAttr \".t\" -type \"double3\" 0 0 100.1 ;\ncreateNode camera -s -n \"frontShape\" -p \"front\";\n\tsetAttr -k off \".v\" no;\n\tsetAttr \".rnd\" no;\n\tsetAttr \".coi\" 100.1;\n\tsetAttr \".ow\" 30;\n\tsetAttr \".imn\" -type \"string\" \"front\";\n\tsetAttr \".den\" -type \"string\" \"front_depth\";\n\tsetAttr \".man\" -type \"string\" \"front_mask\";\n\tsetAttr \".hc\" -type \"string\" \"viewSet -f %camera\";\n\tsetAttr \".o\" yes;\ncreateNode transform -s -n \"side\";\n\tsetAttr \".v\" no;\n\tsetAttr \".t\" -type \"double3\" 100.1 0 0 ;\n\tsetAttr \".r\" -type \"double3\" 0 89.999999999999986 0 ;\ncreateNode camera -s -n \"sideShape\" -p \"side\";\n\tsetAttr -k off \".v\" no;\n\tsetAttr \".rnd\" no;\n\tsetAttr \".coi\" 100.1;\n\tsetAttr \".ow\" 30;\n\tsetAttr \".imn\" -type \"string\" \"side\";\n\tsetAttr \".den\" -type \"string\" \"side_depth\";\n\tsetAttr \".man\" -type \"string\" \"side_mask\";\n\tsetAttr \".hc\" -type \"string\" \"viewSet -s %camera\";\n\tsetAttr \".o\" yes;\ncreateNode lightLinker -n \"lightLinker1\";\n\tsetAttr -s 9 \".lnk\";\n\tsetAttr -s 9 \".slnk\";\ncreateNode displayLayerManager -n \"layerManager\";\ncreateNode displayLayer -n \"defaultLayer\";\ncreateNode renderLayerManager -n \"renderLayerManager\";\ncreateNode renderLayer -n \"defaultRenderLayer\";\n\tsetAttr \".g\" yes;\ncreateNode script -n \"sceneConfigurationScriptNode\";\n\tsetAttr \".b\" -type \"string\" \"playbackOptions -min 1 -max 24 -ast 1 -aet 48 \";\n\tsetAttr \".st\" 6;\nselect -ne :time1;\n\tsetAttr \".o\" 1;\nselect -ne :renderPartition;\n\tsetAttr -s 2 \".st\";\nselect -ne :renderGlobalsList1;\nselect -ne :defaultShaderList1;\n\tsetAttr -s 2 \".s\";\nselect -ne :postProcessList1;\n\tsetAttr -s 2 \".p\";\nselect -ne :lightList1;\nselect -ne :initialShadingGroup;\n\tsetAttr \".ro\" yes;\nselect -ne :initialParticleSE;\n\tsetAttr \".ro\" yes;\nselect -ne :hardwareRenderGlobals;\n\tsetAttr \".ctrs\" 256;\n\tsetAttr \".btrs\" 512;\nselect -ne :defaultHardwareRenderGlobals;\n\tsetAttr \".fn\" -type \"string\" \"im\";\n\tsetAttr \".res\" -type \"string\" \"ntsc_4d 646 485 1.333\";\nselect -ne :ikSystem;\n\tsetAttr -s 4 \".sol\";\nconnectAttr \":defaultLightSet.msg\" \"lightLinker1.lnk[0].llnk\";\nconnectAttr \":initialShadingGroup.msg\" \"lightLinker1.lnk[0].olnk\";\nconnectAttr \":defaultLightSet.msg\" \"lightLinker1.lnk[1].llnk\";\nconnectAttr \":initialParticleSE.msg\" \"lightLinker1.lnk[1].olnk\";\nconnectAttr \":defaultLightSet.msg\" \"lightLinker1.slnk[0].sllk\";\nconnectAttr \":initialShadingGroup.msg\" \"lightLinker1.slnk[0].solk\";\nconnectAttr \":defaultLightSet.msg\" \"lightLinker1.slnk[1].sllk\";\nconnectAttr \":initialParticleSE.msg\" \"lightLinker1.slnk[1].solk\";\nconnectAttr \"layerManager.dli[0]\" \"defaultLayer.id\";\nconnectAttr \"renderLayerManager.rlmi[0]\" \"defaultRenderLayer.rlid\";\nconnectAttr \"lightLinker1.msg\" \":lightList1.ln\" -na;"
+            "requires maya \"8.5\";\n",
+            "currentUnit -l centimeter -a degree -t film;\n",
+            "fileInfo \"application\" \"maya\";\n",
+            "fileInfo \"product\" \"Maya Unlimited 8.5\";\n",
+            "fileInfo \"version\" \"8.5\";\n",
+            "fileInfo \"cutIdentifier\" \"200612162224-692032\";\n",
+            "createNode transform -s -n \"persp\";\n",
+            "\tsetAttr \".v\" no;\n",
+            "\tsetAttr \".t\" -type \"double3\" 48.186233840145825 37.816674066853686 41.0540421364379;\n",
+            "\tsetAttr \".r\" -type \"double3\" -29.738352729603015 49.400000000000432 0;\n",
+            "createNode camera -s -n \"perspShape\" -p \"persp\";\n",
+            "\tsetAttr -k off \".v\" no;\n\tsetAttr \".fl\" 34.999999999999993;\n",
+            "\tsetAttr \".coi\" 73.724849603665149;\n",
+            "\tsetAttr \".imn\" -type \"string\" \"persp\";\n",
+            "\tsetAttr \".fcp\" 10000;\n",
+            "\tsetAttr \".den\" -type \"string\" \"persp_depth\";\n",
+            "\tsetAttr \".man\" -type \"string\" \"persp_mask\";\n",
+            "\tsetAttr \".hc\" -type \"string\" \"viewSet -p %camera\";\n",
+            "createNode transform -s -n \"top\";\n",
+            "\tsetAttr \".v\" no;\n",
+            "\tsetAttr \".t\" -type \"double3\" 0 100.1 0;\n",
+            "\tsetAttr \".r\" -type \"double3\" -89.999999999999986 0 0;\n",
+            "createNode camera -s -n \"topShape\" -p \"top\";\n",
+            "\tsetAttr -k off \".v\" no;\n",
+            "\tsetAttr \".rnd\" no;\n",
+            "\tsetAttr \".coi\" 100.1;\n",
+            "\tsetAttr \".ow\" 30;\n",
+            "\tsetAttr \".imn\" -type \"string\" \"top\";\n",
+            "\tsetAttr \".den\" -type \"string\" \"top_depth\";\n",
+            "\tsetAttr \".man\" -type \"string\" \"top_mask\";\n",
+            "\tsetAttr \".hc\" -type \"string\" \"viewSet -t %camera\";\n",
+            "\tsetAttr \".o\" yes;\n",
+            "createNode transform -s -n \"front\";\n",
+            "\tsetAttr \".v\" no;\n",
+            "\tsetAttr \".t\" -type \"double3\" 0 0 100.1;\n",
+            "createNode camera -s -n \"frontShape\" -p \"front\";\n",
+            "\tsetAttr -k off \".v\" no;\n",
+            "\tsetAttr \".rnd\" no;\n",
+            "\tsetAttr \".coi\" 100.1;\n",
+            "\tsetAttr \".ow\" 30;\n",
+            "\tsetAttr \".imn\" -type \"string\" \"front\";\n",
+            "\tsetAttr \".den\" -type \"string\" \"front_depth\";\n",
+            "\tsetAttr \".man\" -type \"string\" \"front_mask\";\n",
+            "\tsetAttr \".hc\" -type \"string\" \"viewSet -f %camera\";\n",
+            "\tsetAttr \".o\" yes;\n",
+            "createNode transform -s -n \"side\";\n",
+            "\tsetAttr \".v\" no;\n",
+            "\tsetAttr \".t\" -type \"double3\" 100.1 0 0;\n",
+            "\tsetAttr \".r\" -type \"double3\" 0 89.999999999999986 0;\n",
+            "createNode camera -s -n \"sideShape\" -p \"side\";\n",
+            "\tsetAttr -k off \".v\" no;\n",
+            "\tsetAttr \".rnd\" no;\n",
+            "\tsetAttr \".coi\" 100.1;\n",
+            "\tsetAttr \".ow\" 30;\n",
+            "\tsetAttr \".imn\" -type \"string\" \"side\";\n",
+            "\tsetAttr \".den\" -type \"string\" \"side_depth\";\n",
+            "\tsetAttr \".man\" -type \"string\" \"side_mask\";\n",
+            "\tsetAttr \".hc\" -type \"string\" \"viewSet -s %camera\";\n",
+            "\tsetAttr \".o\" yes;\n",
+            "createNode lightLinker -n \"lightLinker1\";\n",
+            "\tsetAttr -s 9 \".lnk\";\n",
+            "\tsetAttr -s 9 \".slnk\";\n",
+            "createNode displayLayerManager -n \"layerManager\";\n",
+            "createNode displayLayer -n \"defaultLayer\";\n",
+            "createNode renderLayerManager -n \"renderLayerManager\";\n",
+            "createNode renderLayer -n \"defaultRenderLayer\";\n",
+            "\tsetAttr \".g\" yes;\n",
+            "createNode script -n \"sceneConfigurationScriptNode\";\n",
+            "\tsetAttr \".b\" -type \"string\" \"playbackOptions -min 1 -max 24 -ast 1 -aet 48 \";\n",
+            "\tsetAttr \".st\" 6;\n",
+            "select -ne :time1;\n",
+            "\tsetAttr \".o\" 1;\n",
+            "select -ne :renderPartition;\n",
+            "\tsetAttr -s 2 \".st\";\n",
+            "select -ne :renderGlobalsList1;\n",
+            "select -ne :defaultShaderList1;\n",
+            "\tsetAttr -s 2 \".s\";\n",
+            "select -ne :postProcessList1;\n",
+            "\tsetAttr -s 2 \".p\";\n",
+            "select -ne :lightList1;\n",
+            "select -ne :initialShadingGroup;\n",
+            "\tsetAttr \".ro\" yes;\n",
+            "select -ne :initialParticleSE;\n",
+            "\tsetAttr \".ro\" yes;\n",
+            "select -ne :hardwareRenderGlobals;\n",
+            "\tsetAttr \".ctrs\" 256;\n",
+            "\tsetAttr \".btrs\" 512;\n",
+            "select -ne :defaultHardwareRenderGlobals;\n",
+            "\tsetAttr \".fn\" -type \"string\" \"im\";\n",
+            "\tsetAttr \".res\" -type \"string\" \"ntsc_4d 646 485 1.333\";\n",
+            "select -ne :ikSystem;\n",
+            "\tsetAttr -s 4 \".sol\";\n",
+            "connectAttr \":defaultLightSet.msg\" \"lightLinker1.lnk[0].llnk\";\n",
+            "connectAttr \":initialShadingGroup.msg\" \"lightLinker1.lnk[0].olnk\";\n",
+            "connectAttr \":defaultLightSet.msg\" \"lightLinker1.lnk[1].llnk\";\n",
+            "connectAttr \":initialParticleSE.msg\" \"lightLinker1.lnk[1].olnk\";\n",
+            "connectAttr \":defaultLightSet.msg\" \"lightLinker1.slnk[0].sllk\";\n",
+            "connectAttr \":initialShadingGroup.msg\" \"lightLinker1.slnk[0].solk\";\n",
+            "connectAttr \":defaultLightSet.msg\" \"lightLinker1.slnk[1].sllk\";\n",
+            "connectAttr \":initialParticleSE.msg\" \"lightLinker1.slnk[1].solk\";\n",
+            "connectAttr \"layerManager.dli[0]\" \"defaultLayer.id\";\n",
+            "connectAttr \"renderLayerManager.rlmi[0]\" \"defaultRenderLayer.rlid\";\n",
+            "connectAttr \"lightLinker1.msg\" \":lightList1.ln\" -na;"
         )
     )?;
 
     writeln!(
         maya,
-        concat!("createNode transform -n \"{}\";\n", "setAttr \".ove\" yes;"),
+        concat!(
+            "createNode transform -n \"{}\";\n",
+            "\tsetAttr \".ove\" yes;"
+        ),
         file_name
     )?;
 
@@ -46,10 +149,13 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             maya,
             concat!(
                 "createNode transform -n \"PorterMesh_{:02x}_{}\" -p \"{}\";\n",
-                "setAttr \".rp\" -type \"double3\" 0.000000 0.000000 0.000000 ;\nsetAttr \".sp\" -type \"double3\" 0.000000 0.000000 0.000000 ;\n",
+                "\tsetAttr \".rp\" -type \"double3\" 0.000000 0.000000 0.000000;\n",
+                "\tsetAttr \".sp\" -type \"double3\" 0.000000 0.000000 0.000000;\n",
                 "createNode mesh -n \"MeshShape_{}\" -p \"PorterMesh_{:02x}_{}\";\n",
-                "setAttr -k off \".v\";\nsetAttr \".vir\" yes;\nsetAttr \".vif\" yes;\n",
-                "setAttr -s {} \".uvst\";",
+                "\tsetAttr -k off \".v\";\n",
+                "\tsetAttr \".vir\" yes;\n",
+                "\tsetAttr \".vif\" yes;\n",
+                "\tsetAttr -s {} \".uvst\";",
             ),
             hash,
             mesh_index,
@@ -64,33 +170,22 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             continue;
         }
 
-        for i in 1..mesh.vertices.uv_layers() + 1 {
-            if mesh.vertices.len() == 1 {
-                writeln!(
-                    maya,
-                    concat!(
-                        "setAttr \".uvst[{}].uvsn\" -type \"string\" \"map{}\";\n",
-                        "setAttr -s 1 \".uvst[0].uvsp[0]\" -type \"float2\"",
-                    ),
-                    i - 1,
-                    i
-                )?;
-            } else {
-                writeln!(
-                    maya,
-                    concat!(
-                        "setAttr \".uvst[{}].uvsn\" -type \"string\" \"map{}\";\n",
-                        "setAttr -s {} \".uvst[0].uvsp[0:{}]\" -type \"float2\"",
-                    ),
-                    i - 1,
-                    i,
-                    mesh.vertices.len(),
-                    mesh.vertices.len() - 1
-                )?;
-            }
+        for uv_layer in 0..mesh.vertices.uv_layers() {
+            write!(
+                maya,
+                concat!(
+                    "\tsetAttr \".uvst[{}].uvsn\" -type \"string\" \"map{}\";\n",
+                    "\tsetAttr -s {} \".uvst[{}].uvsp[{}]\" -type \"float2\"",
+                ),
+                uv_layer,
+                uv_layer + 1,
+                mesh.vertices.len(),
+                uv_layer,
+                maya_range(mesh.vertices.len())
+            )?;
 
             for v in 0..mesh.vertices.len() {
-                let uv = mesh.vertices.vertex(v).uv(i - 1);
+                let uv = mesh.vertices.vertex(v).uv(uv_layer);
 
                 write!(maya, " {} {}", uv.x, 1.0 - uv.y)?;
             }
@@ -98,68 +193,73 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             writeln!(maya, ";")?;
         }
 
-        write!(
+        writeln!(
             maya,
             concat!(
-                "setAttr \".cuvs\" -type \"string\" \"map1\";\nsetAttr \".dcol\" yes;\nsetAttr \".dcc\" -type \"string\" \"Ambient+Diffuse\";\nsetAttr \".ccls\" -type \"string\" \"colorSet1\";\nsetAttr \".clst[0].clsn\" -type \"string\" \"colorSet1\";\n",
-                "setAttr -s {} \".clst[0].clsp\";\n",
-                "setAttr \".clst[0].clsp[0:{}]\"",
-            ),
-            (mesh.faces.len() * 3),
-            (mesh.faces.len() * 3) - 1
+                "\tsetAttr \".cuvs\" -type \"string\" \"map1\";\n",
+                "\tsetAttr \".dcc\" -type \"string\" \"Ambient+Diffuse\";",
+            )
         )?;
 
-        for face in &mesh.faces {
-            let vertex1 = if mesh.vertices.colors() > 0 {
-                mesh.vertices.vertex(face.i3 as usize).color(0)
-            } else {
-                VertexColor::new(255, 255, 255, 255)
-            };
-
-            let vertex2 = if mesh.vertices.colors() > 0 {
-                mesh.vertices.vertex(face.i2 as usize).color(0)
-            } else {
-                VertexColor::new(255, 255, 255, 255)
-            };
-
-            let vertex3 = if mesh.vertices.colors() > 0 {
-                mesh.vertices.vertex(face.i1 as usize).color(0)
-            } else {
-                VertexColor::new(255, 255, 255, 255)
-            };
-
+        for color_layer in 0..mesh.vertices.colors() {
             write!(
                 maya,
-                " {} {} {} {} {} {} {} {} {} {} {} {}",
-                vertex1.r as f32 / 255.0,
-                vertex1.g as f32 / 255.0,
-                vertex1.b as f32 / 255.0,
-                vertex1.a as f32 / 255.0,
-                vertex2.r as f32 / 255.0,
-                vertex2.g as f32 / 255.0,
-                vertex2.b as f32 / 255.0,
-                vertex2.a as f32 / 255.0,
-                vertex3.r as f32 / 255.0,
-                vertex3.g as f32 / 255.0,
-                vertex3.b as f32 / 255.0,
-                vertex3.a as f32 / 255.0
+                concat!(
+                    "\tsetAttr \".ccls\" -type \"string\" \"colorSet{}\";\n",
+                    "\tsetAttr \".clst[{}].clsn\" -type \"string\" \"colorSet{}\";\n",
+                    "\tsetAttr -s {} \".clst[{}].clsp\";\n",
+                    "\tsetAttr \".clst[{}].clsp[{}]\"",
+                ),
+                color_layer + 1,
+                color_layer,
+                color_layer + 1,
+                mesh.faces.len() * 3,
+                color_layer,
+                color_layer,
+                maya_range(mesh.faces.len() * 3)
             )?;
+
+            for face in &mesh.faces {
+                let vertex1 = mesh.vertices.vertex(face.i3 as usize).color(color_layer);
+                let vertex2 = mesh.vertices.vertex(face.i2 as usize).color(color_layer);
+                let vertex3 = mesh.vertices.vertex(face.i1 as usize).color(color_layer);
+
+                write!(
+                    maya,
+                    " {} {} {} {} {} {} {} {} {} {} {} {}",
+                    vertex1.r as f32 / 255.0,
+                    vertex1.g as f32 / 255.0,
+                    vertex1.b as f32 / 255.0,
+                    vertex1.a as f32 / 255.0,
+                    vertex2.r as f32 / 255.0,
+                    vertex2.g as f32 / 255.0,
+                    vertex2.b as f32 / 255.0,
+                    vertex2.a as f32 / 255.0,
+                    vertex3.r as f32 / 255.0,
+                    vertex3.g as f32 / 255.0,
+                    vertex3.b as f32 / 255.0,
+                    vertex3.a as f32 / 255.0
+                )?;
+            }
+
+            writeln!(maya, ";")?;
         }
 
         writeln!(
             maya,
             concat!(
-                ";\n",
-                "setAttr \".covm[0]\"  0 1 1;\nsetAttr \".cdvm[0]\"  0 1 1;\nsetAttr -s {} \".vt\";"
+                "\tsetAttr \".covm[0]\"  0 1 1;\n",
+                "\tsetAttr \".cdvm[0]\"  0 1 1;\n",
+                "\tsetAttr -s {} \".vt\";",
             ),
             mesh.vertices.len()
         )?;
 
-        if mesh.vertices.len() == 1 {
-            write!(maya, "setAttr \".vt[0]\"")?;
-        } else {
-            write!(maya, "setAttr \".vt[0:{}]\"", mesh.vertices.len() - 1)?;
-        }
+        write!(
+            maya,
+            "\tsetAttr \".vt[{}]\"",
+            maya_range(mesh.vertices.len())
+        )?;
 
         for v in 0..mesh.vertices.len() {
             let position = mesh.vertices.vertex(v).position();
@@ -167,11 +267,13 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             write!(maya, " {} {} {}", position.x, position.y, position.z)?;
         }
 
+        writeln!(maya, ";")?;
+
         write!(
             maya,
-            concat!(";\n", "setAttr -s {} \".ed\";\n", "setAttr \".ed[0:{}]\""),
+            concat!("\tsetAttr -s {} \".ed\";\n", "\tsetAttr \".ed[{}]\""),
             mesh.faces.len() * 3,
-            (mesh.faces.len() * 3) - 1
+            maya_range(mesh.faces.len() * 3)
         )?;
 
         for face in &mesh.faces {
@@ -187,15 +289,16 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             )?;
         }
 
+        writeln!(maya, ";")?;
+
         write!(
             maya,
             concat!(
-                ";\n",
-                "setAttr -s {} \".n\";\n",
-                "setAttr \".n[0:{}]\" -type \"float3\""
+                "\tsetAttr -s {} \".n\";\n",
+                "\tsetAttr \".n[{}]\" -type \"float3\""
             ),
             mesh.faces.len() * 3,
-            (mesh.faces.len() * 3) - 1
+            maya_range(mesh.faces.len() * 3)
         )?;
 
         for face in &mesh.faces {
@@ -220,20 +323,12 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
 
         writeln!(maya, ";")?;
 
-        if mesh.faces.len() == 1 {
-            write!(
-                maya,
-                "setAttr -s {} \".fc[0]\" -type \"polyFaces\"",
-                mesh.faces.len()
-            )?;
-        } else {
-            write!(
-                maya,
-                "setAttr -s {} \".fc[0:{}]\" -type \"polyFaces\"",
-                mesh.faces.len(),
-                mesh.faces.len() - 1
-            )?;
-        }
+        write!(
+            maya,
+            "\tsetAttr -s {} \".fc[{}]\" -type \"polyFaces\"",
+            mesh.faces.len(),
+            maya_range(mesh.faces.len())
+        )?;
 
         for (face_index, face) in mesh.faces.iter().enumerate() {
             let face_indices = face_index * 3;
@@ -246,40 +341,50 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 face_indices + 2
             )?;
 
-            for u in 0..mesh.vertices.uv_layers() {
-                write!(maya, " mu {} 3 {} {} {}", u, { face.i3 }, { face.i2 }, {
-                    face.i1
-                })?;
+            for uv_layer in 0..mesh.vertices.uv_layers() {
+                write!(
+                    maya,
+                    " mu {} 3 {} {} {}",
+                    uv_layer,
+                    { face.i3 },
+                    { face.i2 },
+                    { face.i1 }
+                )?;
             }
 
-            write!(
-                maya,
-                " mc 0 3 {} {} {}",
-                face_indices,
-                face_indices + 1,
-                face_indices + 2
-            )?;
+            for color_layer in 0..mesh.vertices.colors() {
+                write!(
+                    maya,
+                    " mc {} 3 {} {} {}",
+                    color_layer,
+                    face_indices,
+                    face_indices + 1,
+                    face_indices + 2
+                )?;
+            }
         }
+
+        writeln!(maya, ";")?;
 
         writeln!(
             maya,
             concat!(
-                ";\n",
-                "setAttr \".cd\" -type \"dataPolyComponent\" Index_Data Edge 0 ;\nsetAttr \".cvd\" -type \"dataPolyComponent\" Index_Data Vertex 0 ;\nsetAttr \".hfd\" -type \"dataPolyComponent\" Index_Data Face 0 ;"
+                "\tsetAttr \".cd\" -type \"dataPolyComponent\" Index_Data Edge 0;\n",
+                "\tsetAttr \".cvd\" -type \"dataPolyComponent\" Index_Data Vertex 0;\n",
+                "\tsetAttr \".hfd\" -type \"dataPolyComponent\" Index_Data Face 0;"
             )
         )?;
     }
-
-    writeln!(maya)?;
 
     for material in &model.materials {
         writeln!(
             maya,
             concat!(
                 "createNode shadingEngine -n \"{}SG\";\n",
-                "setAttr \".ihi\" 0;\n",
-                "setAttr \".ro\" yes;\n",
-                "createNode materialInfo -n \"{}MI\";\r\ncreateNode lambert -n \"{}\";\n",
+                "\tsetAttr \".ihi\" 0;\n",
+                "\tsetAttr \".ro\" yes;\n",
+                "createNode materialInfo -n \"{}MI\";\n",
+                "createNode lambert -n \"{}\";\n",
                 "createNode place2dTexture -n \"{}P2DT\";"
             ),
             material.name, material.name, material.name, material.name
@@ -290,7 +395,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 maya,
                 concat!(
                     "createNode file -n \"{}FILE\";\n",
-                    "setAttr \".ftn\" -type \"string\" \"{}\";",
+                    "\tsetAttr \".ftn\" -type \"string\" \"{}\";",
                 ),
                 material.name,
                 diffuse.file_name.replace('\\', "\\\\")
@@ -351,7 +456,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                     "connectAttr \"{}P2DT.vt3\" \"{}FILE.vt3\";\n",
                     "connectAttr \"{}P2DT.vc1\" \"{}FILE.vc1\";\n",
                     "connectAttr \"{}P2DT.o\" \"{}FILE.uv\";\n",
-                    "connectAttr \"{}P2DT.ofs\" \"{}FILE.fs\";\n",
+                    "connectAttr \"{}P2DT.ofs\" \"{}FILE.fs\";",
                 ),
                 material.name,
                 material.name,
@@ -402,7 +507,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 "connectAttr \"{}SG.pa\" \":renderPartition.st\" -na;\n",
                 "connectAttr \"{}.msg\" \":defaultShaderList1.s\" -na;\n",
                 "connectAttr \"{}P2DT.msg\" \":defaultRenderUtilityList1.u\" -na;\n",
-                "connectAttr \"{}FILE.msg\" \":defaultTextureList1.tx\" -na;\n"
+                "connectAttr \"{}FILE.msg\" \":defaultTextureList1.tx\" -na;"
             ),
             material.name, material.name, material.name, material.name
         )?;
@@ -411,20 +516,13 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
     }
 
     for (mesh_index, mesh) in model.meshes.iter().enumerate() {
-        writeln!(
-            maya,
-            "setAttr -s {} \"MeshShape_{}.iog\";",
-            mesh.vertices.uv_layers(),
-            mesh_index
-        )?;
-
         if mesh.vertices.uv_layers() > 0
             && let Some(material_index) = mesh.material
         {
             writeln!(
                 maya,
-                "connectAttr \"MeshShape_{}.iog[{}]\" \"{}SG.dsm\" -na;",
-                mesh_index, 0, model.materials[material_index].name
+                "connectAttr \"MeshShape_{}.iog\" \"{}SG.dsm\" -na;",
+                mesh_index, model.materials[material_index].name
             )?;
         }
     }
@@ -435,7 +533,10 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
 
     writeln!(
         maya,
-        "createNode transform -n \"Joints\";\nsetAttr \".ove\" yes;\n"
+        concat!(
+            "createNode transform -n \"Joints\";\n",
+            "\tsetAttr \".ove\" yes;"
+        )
     )?;
 
     for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
@@ -468,15 +569,15 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         writeln!(
             maya,
             concat!(
-                "addAttr -ci true -sn \"liw\" -ln \"lockInfluenceWeights\" -bt \"lock\" -min 0 -max 1 -at \"bool\";\n",
-                "setAttr \".uoc\" yes;\n",
-                "setAttr \".ove\" yes;\n",
-                "setAttr \".t\" -type \"double3\" {} {} {} ;\n",
-                "setAttr \".mnrl\" -type \"double3\" -360 -360 -360 ;\n",
-                "setAttr \".mxrl\" -type \"double3\" 360 360 360 ;\n",
-                "setAttr \".radi\"   1.0;\n",
-                "setAttr \".r\" -type \"double3\" {} {} {};\n",
-                "setAttr \".scale\" -type \"double3\" {} {} {};\n"
+                "\taddAttr -ci true -sn \"liw\" -ln \"lockInfluenceWeights\" -bt \"lock\" -min 0 -max 1 -at \"bool\";\n",
+                "\tsetAttr \".uoc\" yes;\n",
+                "\tsetAttr \".ove\" yes;\n",
+                "\tsetAttr \".t\" -type \"double3\" {} {} {};\n",
+                "\tsetAttr \".mnrl\" -type \"double3\" -360 -360 -360;\n",
+                "\tsetAttr \".mxrl\" -type \"double3\" 360 360 360;\n",
+                "\tsetAttr \".radi\"   1.0;\n",
+                "\tsetAttr \".r\" -type \"double3\" {} {} {};\n",
+                "\tsetAttr \".scale\" -type \"double3\" {} {} {};"
             ),
             position.x,
             position.y,
@@ -498,15 +599,21 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
 
     writeln!(
         bind,
-        "/*\n* Autodesk Maya Bind Script\n* Exported by PorterLib\n*/\n"
+        concat!(
+            "/*\n",
+            "* Autodesk Maya Bind Script\n",
+            "* Exported by PorterLib\n",
+            "*/\n"
+        )
     )?;
 
     for (mesh_index, mesh) in model.meshes.iter().enumerate() {
         writeln!(
             bind,
             concat!(
-                "global proc PorterMesh_{:02x}_{}_BindFunc()\n{{\n",
-                "   select -r PorterMesh_{:02x}_{};",
+                "global proc PorterMesh_{:02x}_{}_BindFunc()\n",
+                "{{\n",
+                "\tselect -r PorterMesh_{:02x}_{};",
             ),
             hash, mesh_index, hash, mesh_index
         )?;
@@ -515,7 +622,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
 
         let mut bone_map_index = 0;
         let mut bone_set: HashSet<u16> = HashSet::new();
-        let mut reverse_bone_map: HashMap<u32, u32> = HashMap::new();
+        let mut reverse_bone_map: HashMap<u32, u16> = HashMap::new();
         let mut bone_names = Vec::new();
 
         for v in 0..mesh.vertices.len() {
@@ -532,7 +639,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                             .unwrap_or_else(|| format!("porter_bone_{}", { weight.bone })),
                     );
 
-                    reverse_bone_map.insert(bone_map_index, weight.bone as u32);
+                    reverse_bone_map.insert(bone_map_index, weight.bone);
 
                     bone_map_index += 1;
                 }
@@ -540,14 +647,14 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         }
 
         for bone in &bone_names {
-            writeln!(bind, "   select -add {};", bone)?;
+            writeln!(bind, "\tselect -add {};", bone)?;
         }
 
         writeln!(
             bind,
             concat!(
-                "   newSkinCluster \"-toSelectedBones -mi {} -omi true -dr 5.0 -rui false\";\n",
-                "   string $clu = findRelatedSkinCluster(\"PorterMesh_{:02x}_{}\");",
+                "\tnewSkinCluster \"-toSelectedBones -mi {} -omi true -dr 5.0 -rui false\";\n",
+                "\tstring $clu = findRelatedSkinCluster(\"PorterMesh_{:02x}_{}\");",
             ),
             maximum_influence, hash, mesh_index
         )?;
@@ -555,8 +662,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         if bone_names.len() > 1 {
             write!(
                 bind,
-                "   int $NV = {};\n   matrix $WM[{}][{}] = <<",
-                mesh.vertices.len(),
+                "\tmatrix $WM[{}][{}] = <<",
                 mesh.vertices.len(),
                 bone_names.len()
             )?;
@@ -578,7 +684,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                     for w in 0..mesh.vertices.maximum_influence() {
                         let weight = vertex.weight(w);
 
-                        if weight.bone == reverse_bone_map[&(b as u32)] as u16 {
+                        if weight.bone == reverse_bone_map[&(b as u32)] {
                             weight_value += weight.value;
                         }
                     }
@@ -588,12 +694,17 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             }
 
             writeln!(bind, ">>;")?;
-            write!(bind, "   for ($i = 0; $i < $NV; $i++) {{")?;
 
             write!(
                 bind,
-                " setAttr($clu + \".weightList[\" + $i + \"].weights[0:{}]\")",
-                bone_names.len() - 1
+                "\tfor ($i = 0; $i < {}; $i++) {{",
+                mesh.vertices.len()
+            )?;
+
+            write!(
+                bind,
+                " setAttr($clu + \".weightList[\" + $i + \"].weights[{}]\")",
+                maya_range(bone_names.len())
             )?;
 
             for b in 0..bone_names.len() {
@@ -611,15 +722,42 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
     for mesh_index in 0..model.meshes.len() {
         writeln!(
             bind,
-            "   catch(PorterMesh_{:02x}_{}_BindFunc());",
+            "\tcatch(PorterMesh_{:02x}_{}_BindFunc());",
             hash, mesh_index
         )?;
     }
 
     writeln!(
         bind,
-        "}}\n\nglobal proc NamespacePurge()\n{{\n   string $allNodes[] = `ls`;\n   for($node in $allNodes) {{\n      string $buffer[];\n      tokenize $node \":\" $buffer;\n      string $newName = $buffer[size($buffer)-1];\n       catchQuiet(`rename $node $newName`);\n   }}\n}}\n\nprint(\"Currently binding the current model, please wait...\\n\");\nNamespacePurge();\nRunAdvancedScript();\nprint(\"The model has been binded.\\n\");\n"
+        concat!(
+            "}}\n",
+            "\n",
+            "global proc NamespacePurge()\n",
+            "{{\n",
+            "\tstring $allNodes[] = `ls`;\n",
+            "\tfor($node in $allNodes) {{\n",
+            "\t\tstring $buffer[];\n",
+            "\t\ttokenize $node \":\" $buffer;\n",
+            "\t\tstring $newName = $buffer[size($buffer)-1];\n",
+            "\t\tcatchQuiet(`rename $node $newName`);\n",
+            "\t}}\n",
+            "}}\n",
+            "\n",
+            "print(\"Currently binding the current model, please wait...\\n\");\n",
+            "NamespacePurge();\n",
+            "RunAdvancedScript();\n",
+            "print(\"The model has been binded.\\n\");"
+        )
     )?;
 
     Ok(())
+}
+
+/// Utility method to format a maya range.
+fn maya_range(len: usize) -> String {
+    if len <= 1 {
+        String::from("0")
+    } else {
+        format!("0:{}", len - 1)
+    }
 }
