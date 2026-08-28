@@ -6,27 +6,29 @@ use std::slice::from_raw_parts_mut;
 
 use crate::VecExt;
 
-/// A trait that reads arrays from any `Read` type.
-pub trait ArrayReadExt: Read {
-    /// Reads an array of `R` with the given length.
-    fn read_array<R>(&mut self, length: usize) -> Result<Vec<R>, io::Error>
+/// A trait that reads vectors from any `Read` type.
+pub trait VecReadExt: Read {
+    /// Reads a vector of `R` with the given length.
+    fn read_vec<R>(&mut self, length: usize) -> Result<Vec<R>, io::Error>
     where
         R: Copy + 'static;
-
-    /// Reads an array of `u8` until EOF.
-    fn read_array_to_end(&mut self) -> Result<Vec<u8>, io::Error>;
+    /// Reads a vector of `u8` until EOF.
+    fn read_vec_to_end(&mut self) -> Result<Vec<u8>, io::Error>;
 }
 
-impl<T> ArrayReadExt for T
+impl<T> VecReadExt for T
 where
     T: Read,
 {
-    fn read_array<R>(&mut self, length: usize) -> Result<Vec<R>, io::Error>
+    fn read_vec<R>(&mut self, length: usize) -> Result<Vec<R>, io::Error>
     where
         R: Copy + 'static,
     {
-        let mut result: Vec<MaybeUninit<R>> =
-            Vec::try_new_with_value(MaybeUninit::<R>::zeroed(), length)?;
+        let mut result: Vec<MaybeUninit<R>> = Vec::try_with_exact_capacity(length)?;
+
+        // SAFETY: We ensure that the result has at least length as a capacity above.
+        // As long as read_exact upholds its contract, all elements will be initialized.
+        unsafe { result.set_len(length) };
 
         let slice = result.as_mut_slice();
         let bytes = slice.len() * size_of::<R>();
@@ -46,7 +48,7 @@ where
         Ok(unsafe { Vec::from_raw_parts(ptr as *mut R, len, cap) })
     }
 
-    fn read_array_to_end(&mut self) -> Result<Vec<u8>, io::Error> {
+    fn read_vec_to_end(&mut self) -> Result<Vec<u8>, io::Error> {
         let mut result: Vec<u8> = Vec::new();
 
         self.read_to_end(&mut result)?;

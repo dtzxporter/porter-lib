@@ -53,6 +53,7 @@ impl SanitizeExt for String {
 }
 
 /// Internal method to sanitize a string slice.
+#[inline(never)]
 fn sanitize_str(string: &str) -> String {
     let mut global: String = string
         .chars()

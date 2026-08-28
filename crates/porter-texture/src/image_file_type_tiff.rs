@@ -15,7 +15,7 @@ use tiff::encoder::compression::DeflateLevel;
 use tiff::tags::Tag;
 use tiff::tags::Type;
 
-use porter_utils::AsThisSlice;
+use porter_utils::SliceExt;
 
 use crate::Image;
 use crate::ImageFileType;
@@ -256,7 +256,7 @@ macro_rules! write_image_data {
             directory.write_tag(Tag::Unknown(0x8773), IccProfileValue)?;
         }
 
-        frame_encoder.write_data((&$frame.buffer()[..$size as usize]).as_this_slice())?;
+        frame_encoder.write_data(&$frame.buffer().as_this_slice())?;
     }};
 }
 
@@ -350,12 +350,19 @@ fn to_tiff_frames<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), 
     let mut image_frames = Image::new(width, height, image.format())?;
 
     let new_frame = image_frames.create_frame()?;
+
     let mut new_frame = Cursor::new(new_frame.buffer_mut());
 
     let size = image.frame_size_with_mipmaps(image.width(), image.height(), 1);
 
     for frame in frames.iter().take(MAXIMUM_TIFF_FRAMES) {
-        new_frame.write_all(&frame.buffer()[..size as usize])?;
+        let buffer = frame.buffer();
+
+        if buffer.len() >= size as usize {
+            new_frame.write_all(&buffer[..size as usize])?;
+        } else {
+            return Err(TextureError::ConversionError);
+        }
     }
 
     to_tiff(&image_frames, output)
@@ -370,8 +377,6 @@ pub fn to_tiff<O: Write + Seek>(image: &Image, mut output: &mut O) -> Result<(),
     }
 
     let encoder = TiffEncoder::new(&mut output)?;
-
-    let size = image.frame_size_with_mipmaps(image.width(), image.height(), 1);
 
     let Some(frame) = frames.first() else {
         return Ok(());
@@ -429,7 +434,9 @@ pub fn from_tiff<I: BufRead + Seek>(input: &mut I) -> Result<Image, TextureError
                 return Err(TextureError::ConversionError);
             }
 
-            frame.buffer_mut().copy_from_slice(&buffer);
+            frame
+                .buffer_mut()
+                .copy_from_slice(&buffer);
         }
         DecodingResult::U16(buffer) => {
             let buffer = &buffer[0..];
@@ -439,7 +446,9 @@ pub fn from_tiff<I: BufRead + Seek>(input: &mut I) -> Result<Image, TextureError
                 return Err(TextureError::ConversionError);
             }
 
-            frame.buffer_mut().copy_from_slice(buffer);
+            frame
+                .buffer_mut()
+                .copy_from_slice(buffer);
         }
         DecodingResult::F32(buffer) => {
             let buffer = &buffer[0..];
@@ -449,7 +458,9 @@ pub fn from_tiff<I: BufRead + Seek>(input: &mut I) -> Result<Image, TextureError
                 return Err(TextureError::ConversionError);
             }
 
-            frame.buffer_mut().copy_from_slice(buffer);
+            frame
+                .buffer_mut()
+                .copy_from_slice(buffer);
         }
         _ => return Err(TextureError::UnsupportedImageFormat(ImageFormat::Unknown)),
     }

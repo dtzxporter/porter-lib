@@ -15,7 +15,11 @@ pub fn windows_icon() -> HICON {
             return 0;
         };
 
-        let path: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0x0)).collect();
+        let path: Vec<u16> = path
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0x0))
+            .collect();
 
         // SAFETY:
         // Path is checked to be a valid u16cstring above. The result is checked for errors where

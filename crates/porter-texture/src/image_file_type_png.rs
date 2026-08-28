@@ -137,13 +137,21 @@ pub fn to_png<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), Text
     let size = image.frame_size_with_mipmaps(image.width(), image.height(), 1);
 
     for frame in frames.iter().take(MAXIMUM_PNG_FRAMES) {
+        let buffer = frame.buffer();
+
         // Png requires big-endian format for 16bit formats.
         if matches!(bit_depth, BitDepth::Sixteen) {
-            for pixel in frame.buffer()[..size as usize].chunks_exact(2) {
+            for pixel in buffer
+                .chunks_exact(2)
+                // Ensure we only take at most the first mipmap worth of data.
+                .take(size as usize / 2)
+            {
                 writer.write_all(&[pixel[1], pixel[0]])?;
             }
+        } else if buffer.len() >= size as usize {
+            writer.write_all(&buffer[..size as usize])?;
         } else {
-            writer.write_all(&frame.buffer()[..size as usize])?;
+            return Err(TextureError::ConversionError);
         }
     }
 
@@ -154,7 +162,11 @@ pub fn to_png<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), Text
 pub fn from_png<I: BufRead + Seek>(input: &mut I) -> Result<Image, TextureError> {
     let mut decoder = Decoder::new(input);
 
-    decoder.set_transformations(Transformations::ALPHA);
+    let info = decoder.read_header_info()?;
+
+    if !matches!(info.color_type, ColorType::Grayscale) {
+        decoder.set_transformations(Transformations::ALPHA);
+    }
 
     let mut decoder = decoder.read_info()?;
 

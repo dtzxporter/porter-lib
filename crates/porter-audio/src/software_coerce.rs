@@ -30,7 +30,10 @@ pub fn software_coerce_audio(audio: &mut Audio, target: AudioFormat) -> Result<(
             let mut data =
                 allocate_target_buffer(audio, bytes_per_sample, bytes_per_sample_target)?;
 
-            for sample in audio.data().chunks_exact(bytes_per_sample) {
+            for sample in audio
+                .data()
+                .chunks_exact(bytes_per_sample)
+            {
                 match bytes_per_sample {
                     2 => {
                         let sample = i16::from_le_bytes(sample.try_into()?);
@@ -70,7 +73,10 @@ pub fn software_coerce_audio(audio: &mut Audio, target: AudioFormat) -> Result<(
             let mut data =
                 allocate_target_buffer(audio, bytes_per_sample, bytes_per_sample_target)?;
 
-            for sample in audio.data().chunks_exact(bytes_per_sample) {
+            for sample in audio
+                .data()
+                .chunks_exact(bytes_per_sample)
+            {
                 match bytes_per_sample {
                     4 => {
                         let sample = f32::from_le_bytes(sample.try_into()?);

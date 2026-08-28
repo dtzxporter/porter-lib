@@ -4,6 +4,7 @@ use std::io::ErrorKind;
 use std::io::IoSlice;
 use std::io::Result;
 use std::io::Write;
+use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Index;
@@ -22,9 +23,15 @@ impl<T, const SIZE: usize> StackVec<T, SIZE>
 where
     T: Copy,
 {
-    /// Constructs a new stack allocated vector from the given buffer.
+    /// Constructs a new stack allocated vector.
     #[inline]
-    pub const fn new(buffer: [T; SIZE]) -> Self {
+    pub const fn new() -> Self {
+        let backing: MaybeUninit<[T; SIZE]> = MaybeUninit::uninit();
+
+        // SAFETY: Access to the backing buffer is protected by the cursor length.
+        // As elements are initialized, they become available through the vector.
+        let buffer = unsafe { backing.assume_init() };
+
         Self {
             buffer: Cursor::new(buffer),
         }
@@ -32,19 +39,31 @@ where
 
     /// Returns the number of elements that can fit in this stack vector.
     #[inline]
-    pub fn capacity(&self) -> usize {
+    pub const fn capacity(&self) -> usize {
         SIZE
     }
 
     /// Returns the number of elements in the stack vector.
     #[inline]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.buffer.position() as usize
+    }
+
+    /// Forces the length of the stack vector to `new_len`.
+    ///
+    /// # Safety
+    /// - `new_len` must be less than or equal to [`capacity()`].
+    /// - The elements at `old_len..new_len` must be initialized.
+    ///
+    /// [`capacity()`]: StackVec::capacity
+    #[inline]
+    pub const unsafe fn set_len(&mut self, new_len: usize) {
+        self.buffer.set_position(new_len as _);
     }
 
     /// Returns whether or not the stack vector is empty.
     #[inline]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
@@ -53,10 +72,11 @@ where
     /// # Panics
     /// Will panic if out of capacity.
     #[inline]
-    pub fn push(&mut self, value: T) {
+    pub const fn push(&mut self, value: T) {
         let position = self.reserve(1);
+        let buffer = self.buffer.get_mut();
 
-        self.buffer.get_mut()[position] = value;
+        buffer[position] = value;
     }
 
     /// Inserts an element at position `index` within the stack vector, shifting all,
@@ -64,6 +84,7 @@ where
     ///
     /// # Panics
     /// Panics if `index > len` or if out of capacity.
+    #[track_caller]
     pub fn insert(&mut self, index: usize, element: T) {
         let position = self.len();
 
@@ -72,12 +93,10 @@ where
         }
 
         let position = self.reserve(1);
+        let buffer = self.buffer.get_mut();
 
-        self.buffer
-            .get_mut()
-            .copy_within(index..position, index + 1);
-
-        self.buffer.get_mut()[index] = element;
+        buffer.copy_within(index..position, index + 1);
+        buffer[index] = element;
     }
 
     /// Removes and returns the element at position `index` within the stack vector,
@@ -93,13 +112,13 @@ where
             panic!("removal index (is {index}) should be < len (is {position})");
         }
 
-        let result = self.buffer.get_ref()[position];
+        let buffer = self.buffer.get_mut();
+        let result = buffer[position];
+
+        buffer.copy_within(index + 1..position, index);
 
         self.buffer
-            .get_mut()
-            .copy_within(index + 1..position, index);
-
-        self.buffer.set_position(position as u64 - 1);
+            .set_position(position as u64 - 1);
 
         result
     }
@@ -112,8 +131,9 @@ where
     pub fn extend_from_slice<S: AsRef<[T]>>(&mut self, slice: S) {
         let slice = slice.as_ref();
         let position = self.reserve(slice.len());
+        let buffer = self.buffer.get_mut();
 
-        self.buffer.get_mut()[position..position + slice.len()].copy_from_slice(slice);
+        buffer[position..position + slice.len()].copy_from_slice(slice);
     }
 
     /// Resizes the stack vector in-place so that `len` is equal to `new_len`.
@@ -126,9 +146,14 @@ where
         if new_len > position {
             let additional = new_len - position;
             let position = self.reserve(additional);
+            let buffer = self.buffer.get_mut();
 
-            for i in position..position + additional {
-                self.buffer.get_mut()[i] = value;
+            for item in buffer
+                .iter_mut()
+                .skip(position)
+                .take(additional)
+            {
+                *item = value;
             }
         } else {
             self.buffer.set_position(new_len as u64);
@@ -137,7 +162,7 @@ where
 
     /// Removes all elements from the stack vector.
     #[inline]
-    pub fn clear(&mut self) {
+    pub const fn clear(&mut self) {
         self.buffer.set_position(0);
     }
 
@@ -161,7 +186,7 @@ where
 
     /// Reserves space for additional elements.
     #[inline]
-    fn reserve(&mut self, additional: usize) -> usize {
+    const fn reserve(&mut self, additional: usize) -> usize {
         let position = self.len();
 
         if position + additional > self.capacity() {
@@ -175,13 +200,12 @@ where
     }
 }
 
-impl<T, const SIZE: usize> From<[T; SIZE]> for StackVec<T, SIZE>
+impl<T, const SIZE: usize> Default for StackVec<T, SIZE>
 where
     T: Copy,
 {
-    #[inline]
-    fn from(value: [T; SIZE]) -> Self {
-        Self::new(value)
+    fn default() -> Self {
+        Self::new()
     }
 }
 

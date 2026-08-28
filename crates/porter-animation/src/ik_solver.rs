@@ -1,7 +1,6 @@
 use porter_math::Angles;
 use porter_math::Quaternion;
 use porter_math::Vector3;
-use porter_math::degrees_to_radians;
 
 /// A 2 bone ik solver that supports pole vectors and pole twist.
 #[derive(Debug)]
@@ -16,7 +15,7 @@ pub struct IkSolver {
 
 impl IkSolver {
     /// Constructs a new ik sovler.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             start_joint: Vector3::zero(),
             mid_joint: Vector3::zero(),
@@ -28,34 +27,34 @@ impl IkSolver {
     }
 
     /// Sets the start joint position in world space.
-    pub fn set_start_joint(&mut self, position: Vector3) {
+    pub const fn set_start_joint(&mut self, position: Vector3) {
         self.start_joint = position;
     }
 
     /// Sets the mid joint position in world space.
-    pub fn set_mid_joint(&mut self, position: Vector3) {
+    pub const fn set_mid_joint(&mut self, position: Vector3) {
         self.mid_joint = position;
     }
 
     /// Sets the end joint, or end effector position in world space.
-    pub fn set_end_joint(&mut self, position: Vector3) {
+    pub const fn set_end_joint(&mut self, position: Vector3) {
         self.end_joint = position;
     }
 
     /// Sets the handle position in world space.
-    pub fn set_handle(&mut self, position: Vector3) {
+    pub const fn set_handle(&mut self, position: Vector3) {
         self.handle = position;
     }
 
     /// Sets the pole vector position in world space.
-    pub fn set_pole_vector(&mut self, position: Vector3) {
+    pub const fn set_pole_vector(&mut self, position: Vector3) {
         self.pole_vector = position;
     }
 
     /// Sets the twist angle used to rotate the joint chain.
-    pub fn set_twist(&mut self, twist: f32, measurment: Angles) {
+    pub const fn set_twist(&mut self, twist: f32, measurment: Angles) {
         match measurment {
-            Angles::Degrees => self.twist = degrees_to_radians(twist),
+            Angles::Degrees => self.twist = twist.to_radians(),
             Angles::Radians => self.twist = twist,
         }
     }
@@ -73,7 +72,9 @@ impl IkSolver {
 
         let vector0 = vector1 - vectore * (vector1.dot(vectore) / vectore.length_squared());
 
-        let vector_angle12 = vector1.normalized().angle_between(vector2.normalized());
+        let vector_angle12 = vector1
+            .normalized()
+            .angle_between(vector2.normalized());
         let vector_cross12 = vector1.cross(vector2);
 
         let lengthh_squared = lengthh * lengthh;

@@ -2,7 +2,9 @@ use std::fmt;
 
 use porter_math::Vector2;
 use porter_math::Vector3;
+use porter_utils::VecExt;
 
+use crate::ModelError;
 use crate::Vertex;
 use crate::VertexColor;
 use crate::VertexMut;
@@ -53,14 +55,23 @@ impl VertexBuffer {
         }
     }
 
-    /// Adds the given vertex to the buffer.
+    /// Creates a new vertex in the buffer.
+    #[track_caller]
     pub fn create(&mut self) -> VertexMut<'_> {
-        self.buffer.resize(
-            self.buffer.len() + compute_stride(self.uv_layers, self.maximum_influence, self.colors),
-            0,
-        );
+        self.buffer
+            .resize(self.buffer.len() + self.stride(), 0);
 
         self.vertex_mut(self.len() - 1)
+    }
+
+    /// Tries to create a new vertex in the buffer.
+    pub fn try_create(&mut self) -> Result<VertexMut<'_>, ModelError> {
+        let stride = self.stride();
+
+        self.buffer
+            .try_resize(self.buffer.len() + stride, 0)?;
+
+        Ok(self.vertex_mut(self.len() - 1))
     }
 
     /// Removes the vertex at the given index.
@@ -70,21 +81,22 @@ impl VertexBuffer {
 
         let stride = self.stride();
 
-        self.buffer.drain(index * stride..(index * stride) + stride);
+        self.buffer
+            .drain(index * stride..(index * stride) + stride);
     }
 
     /// Returns the number of uv layers.
-    pub fn uv_layers(&self) -> usize {
+    pub const fn uv_layers(&self) -> usize {
         self.uv_layers
     }
 
     /// Returns the maximum number of weights.
-    pub fn maximum_influence(&self) -> usize {
+    pub const fn maximum_influence(&self) -> usize {
         self.maximum_influence
     }
 
     /// Returns the number of color layers.
-    pub fn colors(&self) -> usize {
+    pub const fn colors(&self) -> usize {
         self.colors
     }
 
@@ -95,23 +107,23 @@ impl VertexBuffer {
     }
 
     /// Whether or not the buffer is empty.
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.buffer.is_empty()
     }
 
     /// Returns the number of vertices in the buffer.
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.buffer.len() / self.stride()
     }
 
     /// The stride in bytes of each vertex.
-    pub fn stride(&self) -> usize {
+    pub const fn stride(&self) -> usize {
         compute_stride(self.uv_layers, self.maximum_influence, self.colors)
     }
 
     /// Gets the vertex at the given index.
     #[track_caller]
-    pub fn vertex(&self, index: usize) -> Vertex<'_> {
+    pub const fn vertex(&self, index: usize) -> Vertex<'_> {
         debug_assert!(index < self.len());
 
         Vertex::new(self, index)
@@ -119,33 +131,36 @@ impl VertexBuffer {
 
     /// Gets a mutable vertex at the given index.
     #[track_caller]
-    pub fn vertex_mut(&mut self, index: usize) -> VertexMut<'_> {
+    pub const fn vertex_mut(&mut self, index: usize) -> VertexMut<'_> {
         debug_assert!(index < self.len());
 
         VertexMut::new(self, index)
     }
 
     /// Returns the internal buffer used by this vertex buffer.
-    pub fn as_slice(&self) -> &[u8] {
-        &self.buffer
+    pub const fn as_slice(&self) -> &[u8] {
+        self.buffer.as_slice()
     }
 }
 
 impl VertexBufferBuilder {
     /// Sets the maximum number of color layers per vertex.
-    pub fn colors(mut self, colors: usize) -> Self {
+    #[inline]
+    pub const fn colors(mut self, colors: usize) -> Self {
         self.colors = colors;
         self
     }
 
     /// Sets the maximum number of uv layers per vertex.
-    pub fn uv_layers(mut self, uv_layers: usize) -> Self {
+    #[inline]
+    pub const fn uv_layers(mut self, uv_layers: usize) -> Self {
         self.uv_layers = uv_layers;
         self
     }
 
     /// Sets the maximum influence per vertex (Maximum number of bones assigned to each vertex for weights).
-    pub fn maximum_influence(mut self, maximum_influence: usize) -> Self {
+    #[inline]
+    pub const fn maximum_influence(mut self, maximum_influence: usize) -> Self {
         self.maximum_influence = maximum_influence;
         self
     }
@@ -161,6 +176,20 @@ impl VertexBufferBuilder {
             uv_layers: self.uv_layers,
             maximum_influence: self.maximum_influence,
         }
+    }
+
+    /// Attempts to build the vertex buffer.
+    #[inline]
+    pub fn try_build(self) -> Result<VertexBuffer, ModelError> {
+        let stride = compute_stride(self.uv_layers, self.maximum_influence, self.colors);
+
+        Ok(VertexBuffer {
+            #[allow(unstable_name_collisions)]
+            buffer: Vec::try_with_capacity(self.capacity * stride)?,
+            colors: self.colors,
+            uv_layers: self.uv_layers,
+            maximum_influence: self.maximum_influence,
+        })
     }
 }
 

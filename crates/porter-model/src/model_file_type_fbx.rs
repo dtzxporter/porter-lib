@@ -16,8 +16,8 @@ use porter_math::Matrix4x4;
 
 use porter_utils::BufferWriteExt;
 
-use crate::MaterialTextureRef;
-use crate::MaterialTextureRefUsage;
+use crate::MaterialTexture;
+use crate::MaterialUsage;
 use crate::Model;
 use crate::ModelError;
 
@@ -70,12 +70,12 @@ fn add_object_property_connection<
 /// Creates and connects a texture node to a material.
 fn initialize_texture_node(
     root: &mut FbxDocument,
-    texture: &MaterialTextureRef,
+    texture: &MaterialTexture,
     material_hash: FbxPropertyValue,
     connection: &str,
 ) {
     let texture_node = root.objects_node().create("Texture");
-    let texture_name = PathBuf::from(texture.file_name.as_str())
+    let texture_name = PathBuf::from(texture.file_path.as_str())
         .file_stem()
         .map(|x| x.to_string_lossy().into_owned())
         .unwrap_or_else(|| String::from("not_found"));
@@ -118,7 +118,9 @@ fn initialize_texture_node(
         props
             .create_property(FbxPropertyType::String)
             .push_string("");
-        props.create_property(FbxPropertyType::Integer32).push(0u32);
+        props
+            .create_property(FbxPropertyType::Integer32)
+            .push(0u32);
     }
 
     {
@@ -156,7 +158,9 @@ fn initialize_texture_node(
         props
             .create_property(FbxPropertyType::String)
             .push_string("");
-        props.create_property(FbxPropertyType::Integer32).push(1u32);
+        props
+            .create_property(FbxPropertyType::Integer32)
+            .push(1u32);
     }
 
     texture_node
@@ -167,11 +171,11 @@ fn initialize_texture_node(
     texture_node
         .create("FileName")
         .create_property(FbxPropertyType::String)
-        .push_string(texture.file_name.replace('\\', "/"));
+        .push_string(texture.file_path.replace('\\', "/"));
     texture_node
         .create("RelativeFilename")
         .create_property(FbxPropertyType::String)
-        .push_string(texture.file_name.as_str());
+        .push_string(texture.file_path.as_str());
 
     let texture_hash = FbxPropertyValue::from(texture_node);
 
@@ -210,8 +214,12 @@ fn initialize_root_node(root_node: &mut FbxNode) {
         props
             .create_property(FbxPropertyType::Float64)
             .push(-90.0f64);
-        props.create_property(FbxPropertyType::Float64).push(0.0f64);
-        props.create_property(FbxPropertyType::Float64).push(0.0f64);
+        props
+            .create_property(FbxPropertyType::Float64)
+            .push(0.0f64);
+        props
+            .create_property(FbxPropertyType::Float64)
+            .push(0.0f64);
     }
 
     {
@@ -229,7 +237,9 @@ fn initialize_root_node(root_node: &mut FbxNode) {
         props
             .create_property(FbxPropertyType::String)
             .push_string("");
-        props.create_property(FbxPropertyType::Integer32).push(1u32);
+        props
+            .create_property(FbxPropertyType::Integer32)
+            .push(1u32);
     }
 
     {
@@ -247,7 +257,9 @@ fn initialize_root_node(root_node: &mut FbxNode) {
         props
             .create_property(FbxPropertyType::String)
             .push_string("");
-        props.create_property(FbxPropertyType::Integer32).push(1u32);
+        props
+            .create_property(FbxPropertyType::Integer32)
+            .push(1u32);
     }
 
     {
@@ -265,9 +277,15 @@ fn initialize_root_node(root_node: &mut FbxNode) {
         props
             .create_property(FbxPropertyType::String)
             .push_string("");
-        props.create_property(FbxPropertyType::Float64).push(0.0);
-        props.create_property(FbxPropertyType::Float64).push(0.0);
-        props.create_property(FbxPropertyType::Float64).push(0.0);
+        props
+            .create_property(FbxPropertyType::Float64)
+            .push(0.0);
+        props
+            .create_property(FbxPropertyType::Float64)
+            .push(0.0);
+        props
+            .create_property(FbxPropertyType::Float64)
+            .push(0.0);
     }
 
     {
@@ -285,7 +303,9 @@ fn initialize_root_node(root_node: &mut FbxNode) {
         props
             .create_property(FbxPropertyType::String)
             .push_string("");
-        props.create_property(FbxPropertyType::Integer32).push(0u32);
+        props
+            .create_property(FbxPropertyType::Integer32)
+            .push(0u32);
     }
 }
 
@@ -315,7 +335,9 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
         add_object_connection(root.connections_node(), joints_hash, root_hash);
 
         for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
-            let skeleton = root.objects_node().create("NodeAttribute");
+            let skeleton = root
+                .objects_node()
+                .create("NodeAttribute");
 
             skeleton.create_hash();
             skeleton
@@ -325,7 +347,9 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
                 .create_property(FbxPropertyType::String)
                 .push_string("LimbNode");
 
-            let properties = skeleton.create("Properties70").create("P");
+            let properties = skeleton
+                .create("Properties70")
+                .create("P");
 
             properties
                 .create_property(FbxPropertyType::String)
@@ -387,7 +411,9 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
                 props
                     .create_property(FbxPropertyType::String)
                     .push_string("");
-                props.create_property(FbxPropertyType::Integer32).push(1u32);
+                props
+                    .create_property(FbxPropertyType::Integer32)
+                    .push(1u32);
             }
 
             {
@@ -405,7 +431,9 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
                 props
                     .create_property(FbxPropertyType::String)
                     .push_string("");
-                props.create_property(FbxPropertyType::Integer32).push(1u32);
+                props
+                    .create_property(FbxPropertyType::Integer32)
+                    .push(1u32);
             }
 
             {
@@ -423,9 +451,15 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
                 props
                     .create_property(FbxPropertyType::String)
                     .push_string("");
-                props.create_property(FbxPropertyType::Float64).push(0.0f64);
-                props.create_property(FbxPropertyType::Float64).push(0.0f64);
-                props.create_property(FbxPropertyType::Float64).push(0.0f64);
+                props
+                    .create_property(FbxPropertyType::Float64)
+                    .push(0.0f64);
+                props
+                    .create_property(FbxPropertyType::Float64)
+                    .push(0.0f64);
+                props
+                    .create_property(FbxPropertyType::Float64)
+                    .push(0.0f64);
             }
 
             {
@@ -443,7 +477,9 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
                 props
                     .create_property(FbxPropertyType::String)
                     .push_string("");
-                props.create_property(FbxPropertyType::Integer32).push(0u32);
+                props
+                    .create_property(FbxPropertyType::Integer32)
+                    .push(0u32);
             }
 
             {
@@ -475,7 +511,9 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
 
             {
                 let props = properties.create("P");
-                let rotation = bone.local_rotation.to_euler(Angles::Degrees);
+                let rotation = bone
+                    .local_rotation
+                    .to_euler(Angles::Degrees);
 
                 props
                     .create_property(FbxPropertyType::String)
@@ -542,7 +580,9 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
                 props
                     .create_property(FbxPropertyType::String)
                     .push_string("A+U");
-                props.create_property(FbxPropertyType::Integer32).push(0u32);
+                props
+                    .create_property(FbxPropertyType::Integer32)
+                    .push(0u32);
             }
 
             let joint_hash = FbxPropertyValue::from(joint);
@@ -600,7 +640,7 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
         if let Some(normal) = material
             .textures
             .iter()
-            .find(|x| x.texture_usage == MaterialTextureRefUsage::Normal)
+            .find(|x| x.usage == MaterialUsage::Normal)
         {
             initialize_texture_node(&mut root, normal, material_hash, "NormalMap");
         }
@@ -661,9 +701,15 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
             props
                 .create_property(FbxPropertyType::String)
                 .push_string("A");
-            props.create_property(FbxPropertyType::Float64).push(0.0f64);
-            props.create_property(FbxPropertyType::Float64).push(0.0f64);
-            props.create_property(FbxPropertyType::Float64).push(0.0f64);
+            props
+                .create_property(FbxPropertyType::Float64)
+                .push(0.0f64);
+            props
+                .create_property(FbxPropertyType::Float64)
+                .push(0.0f64);
+            props
+                .create_property(FbxPropertyType::Float64)
+                .push(0.0f64);
         }
 
         {
@@ -681,7 +727,9 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
             props
                 .create_property(FbxPropertyType::String)
                 .push_string("");
-            props.create_property(FbxPropertyType::Integer32).push(0u32);
+            props
+                .create_property(FbxPropertyType::Integer32)
+                .push(0u32);
         }
 
         {
@@ -699,7 +747,9 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
             props
                 .create_property(FbxPropertyType::String)
                 .push_string("");
-            props.create_property(FbxPropertyType::Integer32).push(1u32);
+            props
+                .create_property(FbxPropertyType::Integer32)
+                .push(1u32);
         }
 
         mesh_node
@@ -897,7 +947,12 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
                 .push(0u32);
         }
 
-        for layer in 0..mesh.vertices.uv_layers().max(mesh.vertices.colors()).max(1) {
+        for layer in 0..mesh
+            .vertices
+            .uv_layers()
+            .max(mesh.vertices.colors())
+            .max(1)
+        {
             let layer_info = geometry.create("Layer");
 
             layer_info
@@ -1009,7 +1064,11 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
             for w in 0..mesh.vertices.maximum_influence() {
                 let weight = vertex.weight(w);
 
-                match sub_deformers.entry(weight.bone).or_default().entry(i) {
+                match sub_deformers
+                    .entry(weight.bone)
+                    .or_default()
+                    .entry(i)
+                {
                     Entry::Occupied(mut e) => {
                         e.insert(e.get() + weight.value);
                     }

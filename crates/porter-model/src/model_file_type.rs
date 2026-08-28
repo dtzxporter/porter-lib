@@ -1,10 +1,10 @@
 use std::ffi::OsStr;
 
-use bincode::Decode;
-use bincode::Encode;
+use miniserde::Deserialize;
+use miniserde::Serialize;
 
 /// Represents a supported model file type.
-#[derive(Decode, Encode, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelFileType {
     Obj,
     Smd,

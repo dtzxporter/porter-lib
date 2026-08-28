@@ -99,7 +99,10 @@ impl HttpClient {
         // The web is complicated and it turns out that trial and error powers most of the text decoding on the web.
         // We'll try and use content-type hints if they are available, fallback to utf-8, then latin1 encoding if not.
         if content_type.contains("charset=iso-8859-1") {
-            Ok(buffer.into_iter().map(|latin1| latin1 as char).collect())
+            Ok(buffer
+                .into_iter()
+                .map(|latin1| latin1 as char)
+                .collect())
         } else if content_type.contains("charset=utf-8") {
             String::from_utf8(buffer).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
         } else {

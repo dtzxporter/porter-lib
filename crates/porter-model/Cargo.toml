@@ -5,9 +5,9 @@ edition = "2024"
 
 [dependencies]
 porter-math = { path = "../porter-math" }
+porter-macros = { path = "../porter-macros" }
 porter-utils = { path = "../porter-utils" }
 porter-cast = { path = "../porter-cast" }
 porter-fbx = { path = "../porter-fbx" }
 
-static_assertions.workspace = true
-bincode.workspace = true
+miniserde.workspace = true

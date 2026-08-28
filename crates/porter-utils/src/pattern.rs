@@ -129,7 +129,7 @@ impl Pattern {
 
     /// Scans the given reader for this pattern and returns the byte offset from the current position if found.
     pub fn scan_from<R: Read>(&self, mut read: R) -> Result<Option<usize>, io::Error> {
-        let mut scratch = Vec::try_new_with_value(0, SCAN_BUFFER_SIZE)?;
+        let mut scratch = Vec::try_new_zeroed(SCAN_BUFFER_SIZE)?;
         let mut offset = 0;
         let mut overlap = 0;
 

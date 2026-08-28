@@ -7,6 +7,7 @@ mod error;
 mod software_coerce;
 mod software_compress;
 mod software_decompress;
+mod wwise_bank_info;
 
 pub(crate) mod audio_file_type_flac;
 pub(crate) mod audio_file_type_wav;
@@ -18,6 +19,7 @@ pub use audio::*;
 pub use audio_file_type::*;
 pub use audio_format::*;
 pub use error::*;
+pub use wwise_bank_info::*;
 
 pub(crate) use software_coerce::*;
 pub(crate) use software_compress::*;

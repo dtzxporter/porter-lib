@@ -5,6 +5,8 @@ pub enum AnimationError {
     TryReserveError(std::collections::TryReserveError),
     InvalidKeyframeValue,
     InvalidJointName,
+    InvalidJointIndex,
+    JointsOverflow,
 }
 
 impl From<std::io::Error> for AnimationError {

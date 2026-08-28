@@ -2,11 +2,11 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
+use porter_macros::assert_const;
+
 use porter_utils::BufferWriteExt;
 
-use static_assertions::const_assert;
-
-use crate::MaterialTextureRefUsage;
+use crate::MaterialUsage;
 use crate::Model;
 use crate::ModelError;
 
@@ -33,9 +33,18 @@ pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
 
     for mesh in &model.meshes {
         for face in &mesh.faces {
-            let vt1 = mesh.vertices.vertex(face.i1 as usize).position();
-            let vt2 = mesh.vertices.vertex(face.i2 as usize).position();
-            let vt3 = mesh.vertices.vertex(face.i3 as usize).position();
+            let vt1 = mesh
+                .vertices
+                .vertex(face.i1 as usize)
+                .position();
+            let vt2 = mesh
+                .vertices
+                .vertex(face.i2 as usize)
+                .position();
+            let vt3 = mesh
+                .vertices
+                .vertex(face.i3 as usize)
+                .position();
 
             writeln!(
                 obj,
@@ -51,9 +60,18 @@ pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
         }
 
         for face in &mesh.faces {
-            let vt1 = mesh.vertices.vertex(face.i1 as usize).uv(0);
-            let vt2 = mesh.vertices.vertex(face.i2 as usize).uv(0);
-            let vt3 = mesh.vertices.vertex(face.i3 as usize).uv(0);
+            let vt1 = mesh
+                .vertices
+                .vertex(face.i1 as usize)
+                .uv(0);
+            let vt2 = mesh
+                .vertices
+                .vertex(face.i2 as usize)
+                .uv(0);
+            let vt3 = mesh
+                .vertices
+                .vertex(face.i3 as usize)
+                .uv(0);
 
             writeln!(
                 obj,
@@ -70,9 +88,18 @@ pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
 
     for mesh in &model.meshes {
         for face in &mesh.faces {
-            let vt1 = mesh.vertices.vertex(face.i1 as usize).normal();
-            let vt2 = mesh.vertices.vertex(face.i2 as usize).normal();
-            let vt3 = mesh.vertices.vertex(face.i3 as usize).normal();
+            let vt1 = mesh
+                .vertices
+                .vertex(face.i1 as usize)
+                .normal();
+            let vt2 = mesh
+                .vertices
+                .vertex(face.i2 as usize)
+                .normal();
+            let vt3 = mesh
+                .vertices
+                .vertex(face.i3 as usize)
+                .normal();
 
             writeln!(
                 obj,
@@ -147,7 +174,7 @@ pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
         "map_Unk",   // Unknown (Custom extension)
     ];
 
-    const_assert!(MATERIAL_MAPPINGS.len() == MaterialTextureRefUsage::Count as usize);
+    assert_const!(MATERIAL_MAPPINGS.len() == MaterialUsage::Count as usize);
 
     for material in &model.materials {
         writeln!(
@@ -164,7 +191,7 @@ pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
             writeln!(
                 mtl,
                 "{} {}",
-                MATERIAL_MAPPINGS[texture.texture_usage as usize], texture.file_name
+                MATERIAL_MAPPINGS[texture.usage as usize], texture.file_path
             )?;
         }
     }

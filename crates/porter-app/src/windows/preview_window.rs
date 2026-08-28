@@ -31,9 +31,9 @@ impl PreviewWindow {
     /// Creates a new preview window.
     pub fn create() -> (Self, Task<window::Id>) {
         let (id, task) = window::open(Settings {
-            size: Size::new(920.0, 582.0),
+            size: Size::new(980.0, 625.0),
             position: Position::Centered,
-            min_size: Some(Size::new(920.0, 582.0)),
+            min_size: Some(Size::new(980.0, 625.0)),
             ..Default::default()
         });
 

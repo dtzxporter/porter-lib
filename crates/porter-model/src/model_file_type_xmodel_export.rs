@@ -61,7 +61,11 @@ macro_rules! write_face_vertex {
 
 /// Writes a model in xmodel export format to the given path.
 pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> {
-    let mut xmodel = File::create(path.as_ref().with_extension("xmodel_export"))?.buffer_write();
+    let mut xmodel = File::create(
+        path.as_ref()
+            .with_extension("xmodel_export"),
+    )?
+    .buffer_write();
 
     writeln!(
         xmodel,
@@ -206,8 +210,11 @@ pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), Mo
             material_index, material.name
         )?;
 
-        if let Some(diffuse) = material.base_color_texture() {
-            write!(xmodel, "color:{}", diffuse.file_name)?;
+        // Ensure path isn't longer than 128 characters minus the size of "color:"
+        if let Some(diffuse) = material.base_color_texture()
+            && diffuse.file_path.len() < 122
+        {
+            write!(xmodel, "color:{}", diffuse.file_path)?;
         }
 
         writeln!(

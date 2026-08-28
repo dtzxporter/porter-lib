@@ -7,6 +7,7 @@ use libc::*;
 
 use porter_utils::StringReadExt;
 use porter_utils::StructReadExt;
+use porter_utils::VecExt;
 
 use crate::ProcessError;
 use crate::ProcessInfo;
@@ -166,7 +167,7 @@ impl ProcessInfoPlatform for ProcessInfo {
                 )
             };
 
-            process_info_buffer.resize(required, 0);
+            process_info_buffer.try_resize(required, 0)?;
 
             let status = unsafe {
                 sysctl(
@@ -184,7 +185,9 @@ impl ProcessInfoPlatform for ProcessInfo {
             }
         }
 
-        let mut result = Vec::with_capacity(if filter.is_empty() { 256 } else { filter.len() });
+        #[allow(unstable_name_collisions)]
+        let mut result =
+            Vec::try_with_capacity(if filter.is_empty() { 256 } else { filter.len() })?;
 
         for info in process_info_buffer.chunks_exact(size_of::<kinfo_proc>()) {
             let kinfo: kinfo_proc = Cursor::new(info).read_struct()?;
@@ -217,12 +220,12 @@ impl ProcessInfoPlatform for ProcessInfo {
                 (format!("Process_{}", kinfo.kp_proc.p_pid), None)
             };
 
-            result.push(ProcessInfo {
+            result.try_push(ProcessInfo {
                 pid: kinfo.kp_proc.p_pid as u64,
                 name,
                 path,
                 started_at: timeval_to_systime(unsafe { &kinfo.kp_proc.p_un.p_starttime }),
-            });
+            })?;
 
             if !filter.is_empty() && result.len() == filter.len() {
                 break;

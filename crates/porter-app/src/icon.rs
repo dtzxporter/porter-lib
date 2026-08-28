@@ -26,14 +26,20 @@ impl Icon {
         let radius = if radius < 0.0 {
             0.0
         } else {
-            radius.min(width / 2.0).min(height / 2.0)
+            radius
+                .min(width / 2.0)
+                .min(height / 2.0)
         };
 
         if radius == 0.0 {
             return self;
         }
 
-        for (index, pixel) in self.buffer.chunks_exact_mut(4).enumerate() {
+        for (index, pixel) in self
+            .buffer
+            .chunks_exact_mut(4)
+            .enumerate()
+        {
             let y = index / self.width as usize;
             let x = index % self.width as usize;
 
@@ -75,7 +81,11 @@ impl Icon {
         use porter_utils::VecExt;
 
         let path = path.as_ref();
-        let path: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0x0)).collect();
+        let path: Vec<u16> = path
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0x0))
+            .collect();
 
         let extract_icon = |path: Vec<u16>| unsafe {
             let mut icon: HICON = std::ptr::null_mut();

@@ -2,16 +2,19 @@ use std::io::Read;
 use std::io::Seek;
 use std::io::Write;
 
+use porter_macros::assert_size;
+
 use porter_utils::SeekExt;
 use porter_utils::StructReadExt;
 use porter_utils::StructWriteExt;
+use porter_utils::VecReadExt;
 
 use crate::Audio;
 use crate::AudioError;
 use crate::AudioFileType;
 use crate::AudioFormat;
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Default, Clone, Copy)]
 struct WavefmtHeader {
     size: u32,
@@ -22,6 +25,8 @@ struct WavefmtHeader {
     block_align: u16,
     bits_per_sample: u16,
 }
+
+assert_size!(WavefmtHeader, 20);
 
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
@@ -35,6 +40,8 @@ struct WavefmtHeaderExtra {
     bits_per_sample: u16,
     extra_size: u16,
 }
+
+assert_size!(WavefmtHeaderExtra, 22);
 
 /// Calculates the average bytes per second.
 const fn compute_byte_rate(bits_per_sample: u32, channels: u32, sample_rate: u32) -> u32 {
@@ -81,7 +88,9 @@ pub fn to_wav<O: Write + Seek>(audio: &Audio, output: &mut O) -> Result<(), Audi
         }
         AudioFormat::MsAdpcm => {
             let extra_size = extra.len() as u16;
-            let block_align = audio.block_align().ok_or(AudioError::ConversionError)? as u16;
+            let block_align = audio
+                .block_align()
+                .ok_or(AudioError::ConversionError)? as u16;
 
             let header = WavefmtHeaderExtra {
                 size: size_of::<WavefmtHeaderExtra>() as u32 - size_of::<u32>() as u32
@@ -160,8 +169,8 @@ pub fn from_wav<I: Read + Seek>(input: &mut I) -> Result<Audio, AudioError> {
 
     let _file_size: u32 = input.read_struct()?;
 
-    let mut data = Vec::new();
-    let mut extra = Vec::new();
+    let data: Vec<u8>;
+    let mut extra: Vec<u8> = Vec::new();
     let mut header: WavefmtHeader = Default::default();
 
     loop {
@@ -181,18 +190,12 @@ pub fn from_wav<I: Read + Seek>(input: &mut I) -> Result<Audio, AudioError> {
                 if header.size >= 0x12 {
                     let size: u16 = input.read_struct()?;
 
-                    extra.try_reserve_exact(size as _)?;
-                    extra.resize(size as _, 0);
-
-                    input.read_exact(&mut extra)?;
+                    extra = input.read_vec(size as _)?;
                 }
             }
             // 'data'
             0x61746164 => {
-                data.try_reserve_exact(size as _)?;
-                data.resize(size as _, 0);
-
-                input.read_exact(&mut data)?;
+                data = input.read_vec(size as _)?;
                 break;
             }
             _ => {
@@ -232,7 +235,7 @@ pub fn from_wav<I: Read + Seek>(input: &mut I) -> Result<Audio, AudioError> {
         }
         _ => {
             #[cfg(debug_assertions)]
-            println!("Unknown wav format: {:#02x?}", { header.format });
+            println!("Unknown wav format: {:#02x?}", header.format);
             return Err(AudioError::ContainerFormatInvalid(
                 AudioFormat::Unknown,
                 AudioFileType::Wav,

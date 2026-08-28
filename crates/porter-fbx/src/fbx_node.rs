@@ -32,8 +32,10 @@ impl FbxNode {
 
     /// Gets the hash of this node, or 0 when no hash value was found.
     pub(crate) fn hash(&self) -> u64 {
-        if let Some(Some(FbxPropertyValue::Integer64(value))) =
-            self.properties.first().map(|x| x.values().first())
+        if let Some(Some(FbxPropertyValue::Integer64(value))) = self
+            .properties
+            .first()
+            .map(|x| x.values().first())
         {
             *value
         } else {
@@ -43,27 +45,24 @@ impl FbxNode {
 
     /// Creates a new child node with the given name.
     pub fn create<N: Into<String>>(&mut self, name: N) -> &mut Self {
-        self.children.push(Self::new(name, self.hash_next.clone()));
-
-        let index = self.children.len() - 1;
-
-        self.children.get_mut(index).unwrap()
+        self.children
+            .push_mut(Self::new(name, self.hash_next.clone()))
     }
 
     /// Creates a new property with the given type.
     pub fn create_property(&mut self, property_type: FbxPropertyType) -> &mut FbxProperty {
-        self.properties.push(FbxProperty::new(property_type));
-
-        let index = self.properties.len() - 1;
-
-        self.properties.get_mut(index).unwrap()
+        self.properties
+            .push_mut(FbxProperty::new(property_type))
     }
 
     /// Creates a new hash property with the next available hash.
     pub fn create_hash(&mut self) {
-        let hash = self.hash_next.fetch_add(1, Ordering::Relaxed);
+        let hash = self
+            .hash_next
+            .fetch_add(1, Ordering::Relaxed);
 
-        self.create_property(FbxPropertyType::Integer64).push(hash);
+        self.create_property(FbxPropertyType::Integer64)
+            .push(hash);
     }
 
     /// Serializes the node to the writer.

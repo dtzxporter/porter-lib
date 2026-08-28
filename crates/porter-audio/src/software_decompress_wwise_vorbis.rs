@@ -12,6 +12,8 @@ use lewton::header::read_header_setup;
 use lewton::samples::InterleavedSamples;
 use lewton::samples::Samples;
 
+use porter_macros::assert_size;
+
 use porter_utils::BitSink;
 use porter_utils::BitStream;
 use porter_utils::StructReadExt;
@@ -49,6 +51,8 @@ struct WWiseVorbisExtra {
     block_size_exp0: u8,
     block_size_exp1: u8,
 }
+
+assert_size!(WWiseVorbisExtra, 48);
 
 /// Utility to compute `log2` without panic'ing on zero.
 #[inline(always)]
@@ -640,7 +644,11 @@ pub fn decompress_wwise_vorbis(audio: &mut Audio) -> Result<(), AudioError> {
             decoded.samples.len()
         };
 
-        for sample in decoded.samples.into_iter().take(truncate) {
+        for sample in decoded
+            .samples
+            .into_iter()
+            .take(truncate)
+        {
             buffer.write_all(&sample.to_le_bytes())?;
         }
     }

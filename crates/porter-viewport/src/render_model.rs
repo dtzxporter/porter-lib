@@ -8,10 +8,10 @@ use porter_model::Model;
 
 use porter_texture::Image;
 
-use crate::PreviewError;
 use crate::RenderMaterialTexture;
 use crate::RenderMesh;
 use crate::RenderSkeleton;
+use crate::ViewportError;
 
 /// A 3d render model.
 pub struct RenderModel {
@@ -24,18 +24,74 @@ impl RenderModel {
     /// Constructs a new render model from the given model.
     pub fn from_model(
         instance: &GPUInstance,
-        bind_group_layouts: &[&BindGroupLayout],
+        bind_group_layouts: &[Option<&BindGroupLayout>],
         model: &Model,
         materials: &[Option<Image>],
-        srgb: bool,
-    ) -> Result<Self, PreviewError> {
+    ) -> Result<Self, ViewportError> {
+        let srgb = materials
+            .iter()
+            .filter_map(|x| x.as_ref())
+            .any(|x| x.format().is_srgb());
+
+        let material_sampler = instance
+            .device()
+            .create_sampler(&SamplerDescriptor {
+                address_mode_u: AddressMode::Repeat,
+                address_mode_v: AddressMode::Repeat,
+                address_mode_w: AddressMode::Repeat,
+                mag_filter: FilterMode::Linear,
+                min_filter: FilterMode::Linear,
+                ..Default::default()
+            });
+
+        let material_bind_group_layout = instance
+            .device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
         let materials: Vec<Arc<_>> = materials
             .iter()
             .map(|image| {
-                RenderMaterialTexture::from_image_default(instance, image)
-                    .or_else(|_| RenderMaterialTexture::from_image_default(instance, &None))
+                RenderMaterialTexture::from_image_default(
+                    instance,
+                    image,
+                    &material_sampler,
+                    &material_bind_group_layout,
+                )
+                .or_else(|_| {
+                    RenderMaterialTexture::from_image_default(
+                        instance,
+                        &None,
+                        &material_sampler,
+                        &material_bind_group_layout,
+                    )
+                })
             })
-            .chain([RenderMaterialTexture::from_image_default(instance, &None)])
+            .chain([RenderMaterialTexture::from_image_default(
+                instance,
+                &None,
+                &material_sampler,
+                &material_bind_group_layout,
+            )])
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .map(Arc::new)
@@ -46,7 +102,14 @@ impl RenderModel {
                 .meshes
                 .iter()
                 .map(|mesh| {
-                    RenderMesh::from_mesh(instance, bind_group_layouts, mesh, &materials, true)
+                    RenderMesh::from_mesh(
+                        instance,
+                        bind_group_layouts,
+                        mesh,
+                        &materials,
+                        &material_bind_group_layout,
+                        true,
+                    )
                 })
                 .chain(model.hairs.iter().map(|hair| {
                     RenderMesh::from_mesh(
@@ -54,6 +117,7 @@ impl RenderModel {
                         bind_group_layouts,
                         &hair.to_mesh(),
                         &materials,
+                        &material_bind_group_layout,
                         false,
                     )
                 }))
@@ -78,12 +142,18 @@ impl RenderModel {
 
     /// Returns the vertex count for this model.
     pub fn vertex_count(&self) -> usize {
-        self.meshes.iter().map(|mesh| mesh.vertex_count).sum()
+        self.meshes
+            .iter()
+            .map(|mesh| mesh.vertex_count)
+            .sum()
     }
 
     /// Returns the face count for this model.
     pub fn face_count(&self) -> usize {
-        self.meshes.iter().map(|mesh| mesh.face_count).sum()
+        self.meshes
+            .iter()
+            .map(|mesh| mesh.face_count)
+            .sum()
     }
 
     /// Returns the bone count for this model.

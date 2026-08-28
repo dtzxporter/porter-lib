@@ -2,17 +2,20 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io;
 use std::io::Cursor;
-use std::io::Read;
 use std::io::Write;
 use std::ops;
 use std::path::Path;
 
 use lz4_flex::decompress_into;
 
+use porter_macros::assert_size;
+
 use crate::StringReadExt;
+use crate::StringWriteExt;
 use crate::StructReadExt;
 use crate::StructWriteExt;
 use crate::VecExt;
+use crate::VecReadExt;
 
 /// A database of asset hash:name pairs used to link a packed asset to it's source name.
 #[repr(transparent)]
@@ -29,6 +32,8 @@ struct NameDatabaseHeader {
     compressed_size: u32,
     decompressed_size: u32,
 }
+
+assert_size!(NameDatabaseHeader, 16);
 
 impl NameDatabase {
     /// Constructs a new name database.
@@ -50,21 +55,19 @@ impl NameDatabase {
         let header: NameDatabaseHeader = file.read_struct()?;
 
         if header.magic != 0x42444E50 {
-            return Err(io::Error::from(io::ErrorKind::InvalidData));
+            return Err(io::Error::from(io::ErrorKind::InvalidInput));
         }
 
         if header.entries == 0 {
             return Ok(Self::new());
         }
 
-        let mut compressed = Vec::try_new_with_value(0, header.compressed_size as usize)?;
+        let compressed: Vec<u8> = file.read_vec(header.compressed_size as _)?;
 
-        file.read_exact(&mut compressed)?;
-
-        let mut decompressed = Vec::try_new_with_value(0, header.decompressed_size as usize)?;
+        let mut decompressed = Vec::try_new_zeroed(header.decompressed_size as usize)?;
 
         decompress_into(&compressed, &mut decompressed)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+            .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
 
         let mut keys: Vec<u64> = Vec::try_with_exact_capacity(header.entries as usize)?;
         let mut values: Vec<String> = Vec::try_with_exact_capacity(header.entries as usize)?;
@@ -94,19 +97,19 @@ impl NameDatabase {
 
         let mut keys: Vec<u64> = Vec::try_with_exact_capacity(self.inner.len())?;
 
-        let mut decompressed: Vec<u8> = Vec::new();
+        let mut decompressed: Cursor<Vec<u8>> = Cursor::new(Vec::new());
 
         for entry in self.inner.iter() {
             keys.push(*entry.0);
 
-            decompressed.extend_from_slice(entry.1.as_bytes());
-            decompressed.extend_from_slice(&[0]);
+            decompressed.write_null_terminated_string(entry.1)?;
         }
 
         for key in keys.into_iter() {
-            decompressed.extend_from_slice(&key.to_le_bytes());
+            decompressed.write_all(&key.to_le_bytes())?;
         }
 
+        let decompressed = decompressed.into_inner();
         let compressed = lz4_flex::compress(&decompressed);
 
         let header = NameDatabaseHeader {

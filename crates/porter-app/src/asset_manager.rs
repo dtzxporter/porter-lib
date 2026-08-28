@@ -46,10 +46,19 @@ pub trait AssetManager: Send + Sync + 'static {
     }
 
     /// Loads one or more given files.
-    fn load_files(&self, settings: Settings, files: Vec<PathBuf>) -> Result<(), String>;
+    fn load_files(&self, settings: Settings, files: Vec<PathBuf>) -> Result<(), String> {
+        let _ = settings;
+        let _ = files;
+
+        Ok(())
+    }
 
     /// Loads a running game instance.
-    fn load_game(&self, settings: Settings) -> Result<(), String>;
+    fn load_game(&self, settings: Settings) -> Result<(), String> {
+        let _ = settings;
+
+        Ok(())
+    }
 
     /// Optional icon to display as an indicator on the main window.
     ///
@@ -61,7 +70,7 @@ pub trait AssetManager: Send + Sync + 'static {
     }
 
     /// Request one or more assets be exported.
-    fn export(&self, settings: Settings, assets: Vec<usize>, controller: Controller);
+    fn export(&self, settings: Settings, controller: Controller, assets: Vec<usize>);
 
     /// Cancels an active export.
     fn export_cancel(&self);
@@ -70,9 +79,9 @@ pub trait AssetManager: Send + Sync + 'static {
     fn preview(
         &self,
         settings: Settings,
+        controller: Controller,
         asset: usize,
         raw: bool,
         request_id: u64,
-        controller: Controller,
     );
 }

@@ -48,6 +48,7 @@ pub struct Waveform<'a, Message, Theme, Renderer> {
     width: Length,
     height: Length,
     is_playing: bool,
+    is_loading: bool,
     seed: u64,
     on_update: Message,
     _phantom: PhantomData<&'a (Message, Theme, Renderer)>,
@@ -59,6 +60,7 @@ struct State {
     delta: f32,
     delta_last: f32,
     is_playing: bool,
+    is_loading: bool,
     seed: u64,
     values: Vec<f32>,
 }
@@ -69,11 +71,12 @@ where
     Renderer: advanced::Renderer,
 {
     /// Constructs a new isntance of [`Waveform`].
-    pub fn new(is_playing: bool, seed: u64, on_update: Message) -> Self {
+    pub fn new(is_playing: bool, is_loading: bool, seed: u64, on_update: Message) -> Self {
         Self {
             width: Length::Shrink,
             height: Length::Shrink,
             is_playing,
+            is_loading,
             seed,
             on_update,
             _phantom: PhantomData,
@@ -109,6 +112,7 @@ where
             delta: 0.0,
             delta_last: 0.0,
             is_playing: self.is_playing,
+            is_loading: self.is_loading,
             seed: self.seed,
             values: Vec::with_capacity(WAVEFORM_COUNT),
         };
@@ -122,7 +126,7 @@ where
         Size::new(self.width, self.height)
     }
 
-    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
         layout::atomic(limits, self.width, self.height)
     }
 
@@ -133,7 +137,6 @@ where
         _layout: advanced::Layout<'_>,
         _cursor: Cursor,
         _renderer: &Renderer,
-        _clipboard: &mut dyn advanced::Clipboard,
         shell: &mut advanced::Shell<'_, Message>,
         _viewport: &Rectangle,
     ) {
@@ -141,6 +144,11 @@ where
 
         if state.is_playing != self.is_playing {
             state.is_playing = self.is_playing;
+            shell.request_redraw();
+        }
+
+        if state.is_loading != self.is_loading {
+            state.is_loading = self.is_loading;
             shell.request_redraw();
         }
 
@@ -203,6 +211,12 @@ where
                 .add_stop(1.0, palette::PRIMARY_COLOR_DARK_250),
         ));
 
+        let background = if self.is_loading {
+            background.scale_alpha(0.25)
+        } else {
+            background
+        };
+
         for (i, &base) in state.values.iter().enumerate() {
             let x = start_x + i as f32 * WAVEFORM_SPACING + WAVEFORM_SPACING / 2.0;
             let anim = ((state.delta * 4.0) + i as f32 * 0.3).sin() * 0.5 + 0.5;
@@ -224,7 +238,7 @@ where
                         radius: radius(4.0),
                         ..Default::default()
                     },
-                    shadow: Default::default(),
+                    ..Default::default()
                 },
                 background,
             );

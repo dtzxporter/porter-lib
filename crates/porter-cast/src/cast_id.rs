@@ -1,3 +1,7 @@
+use porter_math::Vector2;
+use porter_math::Vector3;
+use porter_math::Vector4;
+
 /// The cast node type id.
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,7 +28,7 @@ pub enum CastId {
 
 /// The cast property type id.
 #[repr(u16)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CastPropertyId {
     Byte = b'b' as u16,
     Short = b'h' as u16,
@@ -37,4 +41,32 @@ pub enum CastPropertyId {
     Vector3 = u16::from_be_bytes(*b"v3"),
     Vector4 = u16::from_be_bytes(*b"v4"),
     Unknown = 0,
+}
+
+impl CastPropertyId {
+    /// The maximum byte stride of any property.
+    pub const MAXIMUM_STRIDE: usize = size_of::<Vector4>();
+
+    /// Returns the byte stride of this specific property type.
+    pub const fn stride(&self) -> usize {
+        match self {
+            Self::Byte => size_of::<u8>(),
+            Self::Short => size_of::<u16>(),
+            Self::Integer32 => size_of::<u32>(),
+            Self::Integer64 => size_of::<u64>(),
+            Self::Float => size_of::<f32>(),
+            Self::Double => size_of::<f64>(),
+            Self::String => {
+                // Strings are stored separately.
+                0
+            }
+            Self::Vector2 => size_of::<Vector2>(),
+            Self::Vector3 => size_of::<Vector3>(),
+            Self::Vector4 => size_of::<Vector4>(),
+            Self::Unknown => {
+                // Unknown is not used.
+                0
+            }
+        }
+    }
 }

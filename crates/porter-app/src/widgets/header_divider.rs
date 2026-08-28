@@ -28,6 +28,7 @@ use iced::mouse;
 struct DividerState {
     is_hovered: bool,
     drag_origin: Option<Point>,
+    drag_position: Point,
 }
 
 /// A virtual list header column divider.
@@ -39,6 +40,7 @@ where
     height: Length,
     class: Theme::Class<'a>,
     on_drag: D,
+    on_press: Message,
     on_release: Message,
     _phantom: PhantomData<Renderer>,
 }
@@ -50,12 +52,13 @@ where
     D: Fn(f32) -> Message,
 {
     /// Constructs a new isntance of [`HeaderDivider`].
-    pub fn new(on_drag: D, on_release: Message) -> Self {
+    pub fn new(on_drag: D, on_press: Message, on_release: Message) -> Self {
         Self {
             width: Length::Shrink,
             height: Length::Shrink,
             class: Theme::default(),
             on_drag,
+            on_press,
             on_release,
             _phantom: PhantomData,
         }
@@ -103,7 +106,7 @@ where
         Size::new(self.width, self.height)
     }
 
-    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
         layout::atomic(limits, self.width, self.height)
     }
 
@@ -114,7 +117,6 @@ where
         layout: advanced::Layout<'_>,
         cursor: Cursor,
         _renderer: &Renderer,
-        _clipboard: &mut dyn advanced::Clipboard,
         shell: &mut advanced::Shell<'_, Message>,
         _viewport: &Rectangle,
     ) {
@@ -128,8 +130,7 @@ where
             height: bounds.height,
         };
 
-        let position_over = cursor.position_over(bounds);
-        let is_hovered = position_over.is_some();
+        let is_hovered = cursor.position_over(bounds).is_some();
 
         if state.is_hovered != is_hovered {
             state.is_hovered = is_hovered;
@@ -141,8 +142,10 @@ where
         if let Event::Mouse(event) = event {
             match event {
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                    if let Some(origin) = position_over {
-                        state.drag_origin = Some(origin);
+                    if is_hovered {
+                        state.drag_origin = Some(state.drag_position);
+
+                        shell.publish(self.on_press.clone());
                         shell.capture_event();
                     }
                 }
@@ -153,6 +156,8 @@ where
                     }
                 }
                 mouse::Event::CursorMoved { position } => {
+                    state.drag_position = *position;
+
                     if let Some(origin) = &mut state.drag_origin {
                         let shift = (*position - *origin).x;
 
@@ -186,6 +191,7 @@ where
                 bounds: layout.bounds(),
                 border: style.border,
                 shadow: style.shadow,
+                ..Default::default()
             },
             style
                 .background

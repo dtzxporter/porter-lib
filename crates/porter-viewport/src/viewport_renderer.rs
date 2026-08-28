@@ -1,7 +1,7 @@
 use wgpu::util::*;
 use wgpu::*;
 
-use porter_model::MaterialTextureRefUsage;
+use porter_model::MaterialUsage;
 use porter_model::Model;
 
 use porter_gpu::GPUInstance;
@@ -15,17 +15,17 @@ use porter_math::Vector2;
 use porter_math::Vector3;
 
 use porter_utils::AsAligned;
-use porter_utils::AsThisSlice;
+use porter_utils::SliceExt;
 
+use porter_texture::GpuExt;
 use porter_texture::Image;
-use porter_texture::TextureExtensions;
 
-use crate::PreviewError;
 use crate::RenderImage;
 use crate::RenderMaterial;
 use crate::RenderModel;
 use crate::RenderType;
 use crate::ViewportCamera;
+use crate::ViewportError;
 use crate::ViewportKeyState;
 
 /// Renders 'preview' versions of models, animations, images, and materials.
@@ -59,78 +59,86 @@ const MIN_SIZE: u32 = 256;
 /// The size of the grid.
 const GRID_SIZE: f32 = 120.0;
 /// The size of each subdivision.
-const GRID_STEP: f32 = 2.0;
+const GRID_STEP: f32 = 4.0;
 
 /// Utility to create the output texture.
 fn create_output_texture(instance: &GPUInstance, width: u32, height: u32) -> Texture {
-    instance.device().create_texture(&TextureDescriptor {
-        label: None,
-        size: Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: TextureDimension::D2,
-        format: TextureFormat::Rgba8Unorm,
-        usage: TextureUsages::COPY_SRC | TextureUsages::RENDER_ATTACHMENT,
-        view_formats: &[],
-    })
+    instance
+        .device()
+        .create_texture(&TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba8Unorm,
+            usage: TextureUsages::COPY_SRC | TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        })
 }
 
 /// Utility to create the depth texture.
 fn create_depth_texture(instance: &GPUInstance, width: u32, height: u32) -> Texture {
-    instance.device().create_texture(&TextureDescriptor {
-        label: None,
-        size: Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 4,
-        dimension: TextureDimension::D2,
-        format: TextureFormat::Depth32Float,
-        usage: TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
-        view_formats: &[],
-    })
+    instance
+        .device()
+        .create_texture(&TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 4,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Depth32Float,
+            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        })
 }
 
 /// Utility to create the MSAA texture.
 fn create_msaa_texture(instance: &GPUInstance, width: u32, height: u32) -> Texture {
-    instance.device().create_texture(&TextureDescriptor {
-        label: None,
-        size: Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 4,
-        dimension: TextureDimension::D2,
-        format: TextureFormat::Rgba8Unorm,
-        usage: TextureUsages::RENDER_ATTACHMENT,
-        view_formats: &[],
-    })
+    instance
+        .device()
+        .create_texture(&TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 4,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba8Unorm,
+            usage: TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        })
 }
 
 /// Utility to create the output texture buffer.
 fn create_output_buffer(instance: &GPUInstance, width: u32, height: u32) -> Buffer {
     let output_format = TextureFormat::Rgba8Unorm;
 
-    instance.device().create_buffer(&BufferDescriptor {
-        label: None,
-        size: output_format.buffer_size_aligned(width, height),
-        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    })
+    instance
+        .device()
+        .create_buffer(&BufferDescriptor {
+            label: None,
+            size: output_format.buffer_size_aligned(width, height),
+            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        })
 }
 
 /// Utility to create the grid render resources.
 fn create_grid_render(
     instance: &GPUInstance,
-    bind_group_layouts: &[&BindGroupLayout],
+    bind_group_layouts: &[Option<&BindGroupLayout>],
 ) -> (u32, Buffer, RenderPipeline) {
     let size = GRID_SIZE;
     let min_size = -size;
@@ -160,20 +168,21 @@ fn create_grid_render(
 
     let size = (buffer.len() / 2) as u32;
 
-    let buffer = instance.device().create_buffer_init(&BufferInitDescriptor {
-        label: None,
-        contents: buffer.as_slice().as_this_slice(),
-        usage: BufferUsages::VERTEX,
-    });
+    let buffer = instance
+        .device()
+        .create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents: buffer.as_slice().as_this_slice(),
+            usage: BufferUsages::VERTEX,
+        });
 
-    let render_pipeline_layout =
-        instance
-            .device()
-            .create_pipeline_layout(&PipelineLayoutDescriptor {
-                label: None,
-                bind_group_layouts,
-                push_constant_ranges: &[],
-            });
+    let render_pipeline_layout = instance
+        .device()
+        .create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts,
+            immediate_size: 0,
+        });
 
     let render_pipeline = instance
         .device()
@@ -212,8 +221,8 @@ fn create_grid_render(
             },
             depth_stencil: Some(DepthStencilState {
                 format: TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: CompareFunction::Less,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(CompareFunction::Less),
                 stencil: StencilState::default(),
                 bias: DepthBiasState::default(),
             }),
@@ -232,7 +241,7 @@ fn create_grid_render(
                 })],
                 compilation_options: Default::default(),
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -256,7 +265,7 @@ impl ViewportRenderer {
         );
 
         let (grid_size, grid_render_buffer, grid_render_pipeline) =
-            create_grid_render(instance, &[camera.uniform_bind_group_layout()]);
+            create_grid_render(instance, &[Some(camera.uniform_bind_group_layout())]);
 
         Self {
             instance,
@@ -284,10 +293,10 @@ impl ViewportRenderer {
     }
 
     /// Sets the image asset to preview.
-    pub fn set_preview_image(&mut self, name: String, image: Image) -> Result<(), PreviewError> {
+    pub fn set_preview_image(&mut self, name: String, image: Image) -> Result<(), ViewportError> {
         let render_image = RenderImage::from_image(
             self.instance,
-            &[self.camera.uniform_bind_group_layout()],
+            &[Some(self.camera.uniform_bind_group_layout())],
             &image,
         )?;
 
@@ -313,11 +322,11 @@ impl ViewportRenderer {
     pub fn set_preview_material(
         &mut self,
         name: String,
-        material: Vec<(MaterialTextureRefUsage, Image)>,
-    ) -> Result<(), PreviewError> {
+        material: Vec<(MaterialUsage, Image)>,
+    ) -> Result<(), ViewportError> {
         let render_material = RenderMaterial::from_images(
             self.instance,
-            &[self.camera.uniform_bind_group_layout()],
+            &[Some(self.camera.uniform_bind_group_layout())],
             &material,
         )?;
 
@@ -346,14 +355,12 @@ impl ViewportRenderer {
         name: String,
         model: Model,
         materials: Vec<Option<Image>>,
-        srgb: bool,
-    ) -> Result<(), PreviewError> {
+    ) -> Result<(), ViewportError> {
         let render_model = RenderModel::from_model(
             self.instance,
-            &[self.camera.uniform_bind_group_layout()],
+            &[Some(self.camera.uniform_bind_group_layout())],
             &model,
             &materials,
-            srgb,
         )?;
 
         let model_matrix = match model.up_axis {
@@ -367,7 +374,8 @@ impl ViewportRenderer {
         };
 
         self.camera.set_orthographic(None);
-        self.camera.set_model_matrix(model_matrix);
+        self.camera
+            .set_model_matrix(model_matrix);
 
         self.render = Some(RenderType::Model(render_model));
         self.render_name = Some(name);
@@ -406,17 +414,23 @@ impl ViewportRenderer {
 
         self.output_texture =
             create_output_texture(self.instance, self.width as u32, self.height as u32);
-        self.output_texture_view = self.output_texture.create_view(&Default::default());
+        self.output_texture_view = self
+            .output_texture
+            .create_view(&Default::default());
         self.output_buffer =
             create_output_buffer(self.instance, self.width as u32, self.height as u32);
 
         self.depth_texture =
             create_depth_texture(self.instance, self.width as u32, self.height as u32);
-        self.depth_texture_view = self.depth_texture.create_view(&Default::default());
+        self.depth_texture_view = self
+            .depth_texture
+            .create_view(&Default::default());
 
         self.msaa_texture =
             create_msaa_texture(self.instance, self.width as u32, self.height as u32);
-        self.msaa_texture_view = self.msaa_texture.create_view(&Default::default());
+        self.msaa_texture_view = self
+            .msaa_texture
+            .create_view(&Default::default());
 
         self.update_camera();
     }
@@ -501,12 +515,12 @@ impl ViewportRenderer {
         self.update_camera();
     }
 
-    /// Performs a mouse move operation.
-    pub fn mouse_move<D: Into<Vector2>>(&mut self, delta: D, key_state: ViewportKeyState) {
+    /// Performs a mouse move operation, returns `true` if a change was made.
+    pub fn mouse_move<D: Into<Vector2>>(&mut self, delta: D, key_state: ViewportKeyState) -> bool {
         let delta = delta.into();
 
         if key_state.maya && !key_state.alt {
-            return;
+            return false;
         }
 
         let mut dirty = false;
@@ -554,6 +568,8 @@ impl ViewportRenderer {
         if dirty {
             self.update_camera();
         }
+
+        dirty
     }
 
     /// Returns the statistics for the current render assset.
@@ -647,8 +663,6 @@ impl ViewportRenderer {
                     store: StoreOp::Store,
                 },
             })],
-            occlusion_query_set: None,
-            timestamp_writes: None,
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                 view: &self.depth_texture_view,
                 depth_ops: Some(Operations {
@@ -657,6 +671,9 @@ impl ViewportRenderer {
                 }),
                 stencil_ops: None,
             }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         render_pass.set_bind_group(0, self.camera.uniform_bind_group(), &[]);
@@ -714,21 +731,28 @@ impl ViewportRenderer {
             )
         }
 
-        let submission = self.instance.queue().submit(Some(encoder.finish()));
-
-        let output_slice = self.output_buffer.slice(..);
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
 
-        output_slice.map_async(MapMode::Read, move |result| {
-            tx.send(result).unwrap();
+        encoder.map_buffer_on_submit(&self.output_buffer, MapMode::Read, .., move |result| {
+            let _ = tx.send(result);
         });
+
+        let submission = self
+            .instance
+            .queue()
+            .submit(Some(encoder.finish()));
+
+        let output_slice = self.output_buffer.slice(..);
 
         let _ = self
             .instance
             .device()
-            .poll(PollType::WaitForSubmissionIndex(submission));
+            .poll(PollType::Wait {
+                submission_index: Some(submission),
+                timeout: None,
+            });
 
-        if rx.recv().unwrap().is_err() {
+        if matches!(rx.recv(), Err(_) | Ok(Err(_))) {
             return (0, 0, Vec::new());
         }
 
@@ -744,7 +768,10 @@ impl ViewportRenderer {
         } else {
             let mut result = vec![0; truncated_size];
 
-            for (i, row) in result.chunks_exact_mut(bytes_per_row as usize).enumerate() {
+            for (i, row) in result
+                .chunks_exact_mut(bytes_per_row as usize)
+                .enumerate()
+            {
                 let source = i * aligned_bytes_per_row;
 
                 row.copy_from_slice(&buffer[source..source + bytes_per_row as usize]);

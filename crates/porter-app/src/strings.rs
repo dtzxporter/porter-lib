@@ -1,5 +1,5 @@
 /// Program copyright date string.
-pub const PORTER_COPYRIGHT: &str = "Copyright © 2025 DTZxPorter";
+pub const PORTER_COPYRIGHT: &str = "Copyright © 2026 DTZxPorter";
 /// Program website url.
 pub const PORTER_SITE_URL: &str = "https://dtzxporter.com";
 /// Program donate url.
@@ -13,7 +13,12 @@ pub const PORTER_THANKS: &str =
 /// Program bugs.
 pub const PORTER_BUG_REPORT: &str =
     "Please report all bugs or crashes to me on twitter/discord @DTZxPorter.";
-/// Program graphics driver message.
-pub const GRAPHICS_DRIVER_ERROR: &str = "Failed to initialize a graphics device. This could be due to outdated graphics drivers on your system. For troubleshooting steps, please see the game tools tutorial: https://dtzxporter.com/game-tools-tutorial.";
-/// Program graphics device message.
-pub const GRAPHICS_DEVICE_ERROR: &str = "Failed to find a suitable graphics device. For troubleshooting steps, please see the game tools tutorial: https://dtzxporter.com/game-tools-tutorial.";
+/// Custom scale factor message.
+pub const CUSTOM_SCALE_FACTOR_ERROR: &str =
+    "Custom scale value must be a valid floating point number!";
+/// One or more last files missing.
+pub const ONE_OR_MORE_MISSING: &str =
+    "One or more of the last loaded files were missing. Please select new game files to load.";
+/// One last file missing.
+pub const ONE_MISSING: &str =
+    "The last loaded file was missing. Please select a new game file to load.";

@@ -38,7 +38,10 @@ pub fn configure<I: Into<String>>(icon: I) -> io::Result<()> {
 
     std::fs::copy(
         icon.into(),
-        project.join("linux").join(&name).with_extension("png"),
+        project
+            .join("linux")
+            .join(&name)
+            .with_extension("png"),
     )?;
 
     std::fs::create_dir_all(project.join("releases"))?;

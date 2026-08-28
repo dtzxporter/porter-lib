@@ -224,7 +224,10 @@ mod windows {
         pub fn seek(&mut self, position: Duration) {
             self.unprepare_header();
 
-            let offset = self.audio.offset(position).unwrap_or_default();
+            let offset = self
+                .audio
+                .offset(position)
+                .unwrap_or_default();
 
             let data = self.audio.data().as_ptr();
             let length = self.audio.data().len() - offset;
@@ -256,7 +259,9 @@ mod windows {
 
         /// Returns the duration of this handle.
         pub fn duration(&self) -> Duration {
-            self.audio.duration().unwrap_or_default()
+            self.audio
+                .duration()
+                .unwrap_or_default()
         }
 
         /// Gets the byte offset for the current position of this handle.

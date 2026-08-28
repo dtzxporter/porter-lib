@@ -1,13 +1,16 @@
+use iced::border::Radius;
+
 use iced::widget::Image;
 use iced::widget::container;
-use iced::widget::horizontal_space;
 use iced::widget::image::Handle;
 use iced::widget::row;
+use iced::widget::space;
 use iced::widget::stack;
 use iced::widget::text;
 
 use iced::Alignment;
 use iced::Background;
+use iced::Border;
 use iced::ContentFit;
 use iced::Element;
 use iced::Length;
@@ -91,7 +94,7 @@ impl Header {
                     text("by").size(12.0).into(),
                     text("DTZxPorter")
                         .color(palette::TEXT_COLOR_PORTER)
-                        .size(12.0)
+                        .size(14.0)
                         .into(),
                 ])
                 .width(Length::Shrink)
@@ -109,7 +112,7 @@ impl Header {
 
         if let Some(handle) = &self.icon {
             row = row.extend([
-                horizontal_space().width(4.0).into(),
+                space().width(4.0).into(),
                 stack([
                     widgets::laser()
                         .width(36.0)
@@ -133,12 +136,17 @@ impl Header {
             ]);
         }
 
-        container(row.align_y(Alignment::Center))
-            .width(Length::Fill)
-            .height(Length::Shrink)
-            .padding([4.0, 8.0])
-            .style(header_background_style)
-            .into()
+        container(
+            container(row.align_y(Alignment::Center))
+                .width(Length::Fill)
+                .height(Length::Shrink)
+                .padding([4.0, 8.0])
+                .style(header_background_style),
+        )
+        .padding([0.0, 8.0])
+        .width(Length::Fill)
+        .height(Length::Shrink)
+        .into()
     }
 
     /// Opens the donation url.
@@ -180,6 +188,13 @@ impl Header {
 fn header_background_style(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(palette::BACKGROUND_COLOR_LIGHT_050)),
+        border: Border {
+            width: 1.0,
+            color: palette::BACKGROUND_COLOR_LIGHT_100,
+            radius: Radius::new(0.0)
+                .bottom_left(4.0)
+                .bottom_right(4.0),
+        },
         ..Default::default()
     }
 }

@@ -1,15 +1,16 @@
 use std::ffi::OsStr;
 
-use bincode::Decode;
-use bincode::Encode;
+use miniserde::Deserialize;
+use miniserde::Serialize;
 
 /// Represents a supported image file type.
-#[derive(Decode, Encode, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageFileType {
     Dds,
     Png,
     Tiff,
     Tga,
+    Pvr,
 }
 
 impl AsRef<OsStr> for ImageFileType {
@@ -19,6 +20,7 @@ impl AsRef<OsStr> for ImageFileType {
             Self::Png => OsStr::new("png"),
             Self::Tiff => OsStr::new("tiff"),
             Self::Tga => OsStr::new("tga"),
+            Self::Pvr => OsStr::new("pvr"),
         }
     }
 }

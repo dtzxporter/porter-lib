@@ -71,7 +71,9 @@ pub fn to_smd<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
     writeln!(smd, "end\nskeleton\ntime 0")?;
 
     for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
-        let local_rotation = bone.local_rotation.to_euler(Angles::Radians);
+        let local_rotation = bone
+            .local_rotation
+            .to_euler(Angles::Radians);
         let local_position = bone.local_position;
 
         writeln!(

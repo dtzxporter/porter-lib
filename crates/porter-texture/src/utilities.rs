@@ -1,6 +1,6 @@
 /// Returns the base 2 logarithm of the number.
 #[inline]
-fn log2(x: f32) -> f32 {
+const fn log2(x: f32) -> f32 {
     let vx = x.to_bits();
     let mx = f32::from_bits((vx & 0x007FFFFF_u32) | 0x3f000000);
 
@@ -12,7 +12,7 @@ fn log2(x: f32) -> f32 {
 
 /// Raises 2 to a floating point power.
 #[inline]
-fn pow2(p: f32) -> f32 {
+const fn pow2(p: f32) -> f32 {
     let offset = if p < 0.0 { 1.0_f32 } else { 0.0_f32 };
     let clipp = if p < -126.0 { -126.0_f32 } else { p };
 
@@ -27,25 +27,25 @@ fn pow2(p: f32) -> f32 {
 
 /// Raises a number to a floating point power.
 #[inline]
-fn powf(x: f32, p: f32) -> f32 {
+const fn powf(x: f32, p: f32) -> f32 {
     pow2(p * log2(x))
 }
 
 /// Unpacks a unorm u8 value.
 #[inline(always)]
-pub fn unpack_unorm8(value: u8) -> f32 {
+pub const fn unpack_unorm8(value: u8) -> f32 {
     value as f32 / 255.0
 }
 
 /// Packs a unorm u8 value.
 #[inline(always)]
-pub fn pack_unorm8(value: f32) -> u8 {
+pub const fn pack_unorm8(value: f32) -> u8 {
     ((value.clamp(0.0, 1.0) * 255.0) + 0.5) as u8
 }
 
 /// Converts a linear color value to an srgb color value.
 #[inline(always)]
-pub fn linear_to_srgb(value: f32) -> f32 {
+pub const fn linear_to_srgb(value: f32) -> f32 {
     if value <= 0.0031308 {
         value * 12.92
     } else {
@@ -55,7 +55,7 @@ pub fn linear_to_srgb(value: f32) -> f32 {
 
 /// Converts a srgb color to a linear color value.
 #[inline(always)]
-pub fn srgb_to_linear(value: f32) -> f32 {
+pub const fn srgb_to_linear(value: f32) -> f32 {
     if value <= 0.04045 {
         value / 12.92
     } else {

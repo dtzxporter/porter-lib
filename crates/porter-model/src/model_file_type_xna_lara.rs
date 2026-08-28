@@ -13,7 +13,11 @@ use crate::WeightBoneId;
 
 /// Writes a model in xna lara format to the given path.
 pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> {
-    let mut xna = File::create(path.as_ref().with_extension("mesh.ascii"))?.buffer_write();
+    let mut xna = File::create(
+        path.as_ref()
+            .with_extension("mesh.ascii"),
+    )?
+    .buffer_write();
 
     writeln!(xna, "{}", model.skeleton.bones.len())?;
 
@@ -48,7 +52,7 @@ pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelEr
             if let Some(material_index) = mesh.material
                 && let Some(diffuse) = model.materials[material_index].base_color_texture()
             {
-                writeln!(xna, "{}\n{}", diffuse.file_name, i)?;
+                writeln!(xna, "{}\n{}", diffuse.file_path, i)?;
             } else {
                 writeln!(xna, "default_material\n{}", i)?;
             }

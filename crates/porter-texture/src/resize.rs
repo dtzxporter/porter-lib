@@ -4,16 +4,16 @@ use crate::TextureError;
 
 /// The algorithm used to resize an image.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ResizeAlgorithm {
+pub enum Resize {
     // Each pixel in the new image samples 4x4 pixels around the closest pixel in the original image.
     Bicubic,
     // Each pixel in the new image takes the value of its nearest pixel in the original image.
     NearestNeighbor,
 }
 
-impl ResizeAlgorithm {
+impl Resize {
     /// Resizes the given image using the new dimensions and source image.
-    pub(crate) fn resize(
+    pub(crate) fn apply(
         &self,
         image: &mut Image,
         width: u32,
@@ -40,10 +40,10 @@ impl ResizeAlgorithm {
                 let src_y = y as f32 * scale_y;
 
                 let new_pixel = match self {
-                    ResizeAlgorithm::Bicubic => {
+                    Resize::Bicubic => {
                         interpolate_bicubic(src, image.width(), image.height(), src_x, src_y)
                     }
-                    ResizeAlgorithm::NearestNeighbor => interpolate_nearest_neighbor(
+                    Resize::NearestNeighbor => interpolate_nearest_neighbor(
                         src,
                         image.width(),
                         image.height(),

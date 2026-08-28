@@ -14,8 +14,8 @@ use crate::animation_file_type_cast;
 /// A 3d animation.
 #[derive(Debug, Clone)]
 pub struct Animation {
-    /// The framerate this animation should play at.
-    pub framerate: f32,
+    /// The frame rate this animation should play at.
+    pub frame_rate: f32,
     /// Whether or not this animation should loop.
     pub looping: bool,
     /// A collection of curves for this animation.
@@ -27,10 +27,10 @@ pub struct Animation {
 }
 
 impl Animation {
-    /// Constructs a new animation with the given framerate.
-    pub fn new(framerate: f32, looping: bool) -> Self {
+    /// Constructs a new animation with the given frame rate.
+    pub const fn new(frame_rate: f32, looping: bool) -> Self {
         Self {
-            framerate,
+            frame_rate,
             looping,
             curves: Vec::new(),
             curve_mode_overrides: Vec::new(),
@@ -51,7 +51,8 @@ impl Animation {
 
     /// Attempts to find a curve with the given name and attribute.
     pub fn find<N: AsRef<str>>(&self, name: N, attribute: CurveAttribute) -> Option<&Curve> {
-        self.curves.get(self.index(name, attribute)?)
+        self.curves
+            .get(self.index(name, attribute)?)
     }
 
     /// Attempts to find a mutable curve with the given name and attribute.

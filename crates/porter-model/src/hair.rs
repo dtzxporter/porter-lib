@@ -13,7 +13,7 @@ pub struct Hair {
     pub name: Option<String>,
     /// Number of segments in each strand.
     pub segments: Vec<u32>,
-    /// Points for each segment of every strang.
+    /// Points for each segment of every strand.
     pub particles: Vec<Vector3>,
     /// The material index for this hair.
     pub material: Option<usize>,
@@ -68,7 +68,11 @@ impl Hair {
 
     /// Converts this 3d hair into a 3d mesh.
     pub fn to_mesh(&self) -> Mesh {
-        let segments: usize = self.segments.iter().map(|segment| *segment as usize).sum();
+        let segments: usize = self
+            .segments
+            .iter()
+            .map(|segment| *segment as usize)
+            .sum();
 
         let mut face_buffer = FaceBuffer::with_capacity(segments * 2);
         let mut vertex_buffer = VertexBuffer::with_capacity(segments * 6)
@@ -134,7 +138,11 @@ impl Hair {
     /// Validates the hair has some form of valid data.
     #[cfg(debug_assertions)]
     pub fn validate(&self) {
-        let particle_count: usize = self.segments.iter().map(|x| *x as usize + 1).sum();
+        let particle_count: usize = self
+            .segments
+            .iter()
+            .map(|x| *x as usize + 1)
+            .sum();
 
         if particle_count != self.particles.len() {
             println!(

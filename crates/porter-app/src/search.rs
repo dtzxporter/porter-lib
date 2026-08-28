@@ -1,17 +1,34 @@
 use std::num::ParseIntError;
+use std::time::Duration;
 
 /// Ways to filter on a number range.
 #[derive(Debug, Clone, Copy)]
 struct SearchRange {
-    min: u32,
-    max: u32,
+    min: u16,
+    max: u16,
 }
 
 impl Default for SearchRange {
     fn default() -> Self {
         Self {
-            min: u32::MIN,
-            max: u32::MAX,
+            min: u16::MIN,
+            max: u16::MAX,
+        }
+    }
+}
+
+/// Ways to filter on a duration.
+#[derive(Debug, Clone, Copy)]
+struct SearchDuration {
+    min: Duration,
+    max: Duration,
+}
+
+impl Default for SearchDuration {
+    fn default() -> Self {
+        Self {
+            min: Duration::ZERO,
+            max: Duration::MAX,
         }
     }
 }
@@ -24,13 +41,14 @@ enum SearchName {
 
 /// The searchable data for an asset.
 pub struct SearchAsset {
-    bone_count: u32,
-    mesh_count: u32,
-    frame_count: u32,
-    frame_rate: u32,
-    width: u32,
-    height: u32,
-    channels: u32,
+    bone_count: u16,
+    mesh_count: u16,
+    frame_count: u16,
+    frame_rate: u16,
+    width: u16,
+    height: u16,
+    channels: u16,
+    duration: Duration,
     name: String,
 }
 
@@ -45,49 +63,63 @@ impl SearchAsset {
             width: 0,
             height: 0,
             channels: 0,
+            duration: Duration::ZERO,
             name,
         }
     }
 
     /// Sets the count of bones this asset has.
-    pub const fn bone_count(mut self, count: u32) -> Self {
-        self.bone_count = count;
+    #[inline]
+    pub fn bone_count<C: TryInto<u16>>(mut self, count: C) -> Self {
+        self.bone_count = count.try_into().unwrap_or_default();
         self
     }
 
     /// Sets the count of meshes this asset has.
-    pub const fn mesh_count(mut self, count: u32) -> Self {
-        self.mesh_count = count;
+    #[inline]
+    pub fn mesh_count<C: TryInto<u16>>(mut self, count: C) -> Self {
+        self.mesh_count = count.try_into().unwrap_or_default();
         self
     }
 
     /// Sets the count of frames this asset has.
-    pub const fn frame_count(mut self, count: u32) -> Self {
-        self.frame_count = count;
+    #[inline]
+    pub fn frame_count<C: TryInto<u16>>(mut self, count: C) -> Self {
+        self.frame_count = count.try_into().unwrap_or_default();
         self
     }
 
     /// Sets the frame rate this asset has.
-    pub const fn frame_rate(mut self, rate: u32) -> Self {
-        self.frame_rate = rate;
+    #[inline]
+    pub fn frame_rate<C: TryInto<u16>>(mut self, rate: C) -> Self {
+        self.frame_rate = rate.try_into().unwrap_or_default();
         self
     }
 
     /// Sets the width this asset has.
-    pub const fn width(mut self, width: u32) -> Self {
-        self.width = width;
+    #[inline]
+    pub fn width<C: TryInto<u16>>(mut self, width: C) -> Self {
+        self.width = width.try_into().unwrap_or_default();
         self
     }
 
     /// Sets the height this asset has.
-    pub const fn height(mut self, height: u32) -> Self {
-        self.height = height;
+    #[inline]
+    pub fn height<C: TryInto<u16>>(mut self, height: C) -> Self {
+        self.height = height.try_into().unwrap_or_default();
         self
     }
 
     /// Sets the channels this asset has.
-    pub const fn channels(mut self, channels: u32) -> Self {
-        self.channels = channels;
+    #[inline]
+    pub fn channels<C: TryInto<u16>>(mut self, channels: C) -> Self {
+        self.channels = channels.try_into().unwrap_or_default();
+        self
+    }
+
+    /// Sets the duration this asset has.
+    pub const fn duration(mut self, duration: Duration) -> Self {
+        self.duration = duration;
         self
     }
 }
@@ -102,6 +134,7 @@ pub struct SearchTerm {
     width: SearchRange,
     height: SearchRange,
     channels: SearchRange,
+    duration: SearchDuration,
     search_names: [Option<SearchName>; 5],
 }
 
@@ -121,6 +154,7 @@ impl SearchTerm {
         let mut width = SearchRange::default();
         let mut height = SearchRange::default();
         let mut channels = SearchRange::default();
+        let mut duration = SearchDuration::default();
 
         let mut search_names: [Option<SearchName>; 5] = [const { None }; 5];
         let mut search_names_index = 0;
@@ -140,6 +174,8 @@ impl SearchTerm {
                 let _ = parse_search_number(command, &mut height);
             } else if let Some(command) = command.strip_prefix("channels:") {
                 let _ = parse_search_number(command, &mut channels);
+            } else if let Some(command) = command.strip_prefix("duration:") {
+                let _ = parse_search_duration(command, &mut duration);
             } else if let Some(command) = command.strip_prefix('!') {
                 let command = command.trim();
 
@@ -167,6 +203,7 @@ impl SearchTerm {
             width,
             height,
             channels,
+            duration,
             search_names,
         }
     }
@@ -193,6 +230,9 @@ impl SearchTerm {
             return false;
         }
         if asset.channels > self.channels.max || asset.channels < self.channels.min {
+            return false;
+        }
+        if asset.duration > self.duration.max || asset.duration < self.duration.min {
             return false;
         }
 
@@ -231,18 +271,66 @@ fn parse_search_number(number: &str, range: &mut SearchRange) -> Result<(), Pars
     } else if let Some(number) = number.strip_prefix("<=") {
         range.max = number.parse()?;
     } else if let Some(number) = number.strip_prefix('>') {
-        let number: u32 = number.parse()?;
+        let number: u16 = number.parse()?;
 
         range.min = number.saturating_add(1);
     } else if let Some(number) = number.strip_prefix('<') {
-        let number: u32 = number.parse()?;
+        let number: u16 = number.parse()?;
 
         range.max = number.saturating_sub(1);
     } else {
-        let number: u32 = number.parse()?;
+        let number: u16 = number.parse()?;
 
         range.min = number;
         range.max = number;
+    }
+
+    Ok(())
+}
+
+/// Parses a search duration into its range.
+#[inline(always)]
+fn parse_search_duration(
+    mut duration: &str,
+    range: &mut SearchDuration,
+) -> Result<(), ParseIntError> {
+    if duration.is_empty() {
+        return Ok(());
+    }
+
+    let scale_factor = if let Some(result) = duration.strip_suffix("ms") {
+        duration = result;
+        1
+    } else if let Some(result) = duration.strip_suffix("s") {
+        duration = result;
+        1000
+    } else if let Some(result) = duration.strip_suffix("m") {
+        duration = result;
+        1000 * 60
+    } else if let Some(result) = duration.strip_suffix("h") {
+        duration = result;
+        1000 * 3600
+    } else {
+        1
+    };
+
+    if let Some(duration) = duration.strip_prefix(">=") {
+        range.min = Duration::from_millis(duration.parse::<u64>()? * scale_factor);
+    } else if let Some(duration) = duration.strip_prefix("<=") {
+        range.max = Duration::from_millis(duration.parse::<u64>()? * scale_factor);
+    } else if let Some(duration) = duration.strip_prefix(">") {
+        let duration = Duration::from_millis(duration.parse::<u64>()? * scale_factor);
+
+        range.min = duration.saturating_add(Duration::from_millis(1));
+    } else if let Some(duration) = duration.strip_prefix("<") {
+        let duration = Duration::from_millis(duration.parse::<u64>()? * scale_factor);
+
+        range.max = duration.saturating_sub(Duration::from_millis(1));
+    } else {
+        let duration = Duration::from_millis(duration.parse::<u64>()? * scale_factor);
+
+        range.min = duration;
+        range.max = duration;
     }
 
     Ok(())

@@ -15,7 +15,15 @@ mod windows;
 #[allow(unused)]
 pub fn configure_windows<I: Into<String>>(icon: I, admin: bool) -> std::io::Result<()> {
     #[cfg(target_os = "windows")]
-    windows::configure(icon, admin)?;
+    windows::configure(Some(icon.into()), admin, false)?;
+    Ok(())
+}
+
+/// Used to configure windows resources on the resulting dll.
+#[allow(unused)]
+pub fn configure_windows_dll() -> std::io::Result<()> {
+    #[cfg(target_os = "windows")]
+    windows::configure(None, false, true)?;
     Ok(())
 }
 

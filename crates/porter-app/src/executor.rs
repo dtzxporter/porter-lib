@@ -23,4 +23,8 @@ impl iced::Executor for Executor {
     fn spawn(&self, future: impl Future<Output = ()> + Send + 'static) {
         self.inner.spawn_ok(future)
     }
+
+    fn block_on<T>(&self, future: impl Future<Output = T>) -> T {
+        self.inner.block_on(future)
+    }
 }

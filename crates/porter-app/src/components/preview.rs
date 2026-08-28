@@ -5,14 +5,17 @@ use iced::border::rounded;
 
 use iced::widget::Column;
 use iced::widget::Container;
+use iced::widget::Id;
 use iced::widget::column;
 use iced::widget::container;
 use iced::widget::row;
 use iced::widget::scrollable;
+use iced::widget::space;
 use iced::widget::stack;
 use iced::widget::text;
 use iced::widget::text_editor;
-use iced::widget::vertical_space;
+
+use iced::widget::operation::scroll_to;
 
 use iced::Alignment;
 use iced::Background;
@@ -22,7 +25,7 @@ use iced::Length;
 use iced::Task;
 use iced::Theme;
 
-use porter_viewport::PreviewError;
+use porter_viewport::ViewportError;
 
 use crate::AppState;
 use crate::AssetPreview;
@@ -61,7 +64,7 @@ pub struct Preview {
     error: bool,
     unsupported: bool,
     viewport_state: widgets::ViewportState,
-    scroll_id: scrollable::Id,
+    scroll_id: Id,
 }
 
 /// Currently active preview tab.
@@ -105,7 +108,7 @@ impl Preview {
             error: false,
             unsupported: false,
             viewport_state: widgets::ViewportState::new(),
-            scroll_id: scrollable::Id::unique(),
+            scroll_id: Id::unique(),
         }
     }
 
@@ -399,7 +402,6 @@ impl Preview {
                     .chain(footer.map(Into::into))
                     .chain([Element::from(tab_row)]),
             )
-            .spacing(1.0)
         } else {
             column(
                 [Element::from(content)]
@@ -407,7 +409,6 @@ impl Preview {
                     .chain(footer.map(Into::into))
                     .chain([Element::from(tab_row)]),
             )
-            .spacing(1.0)
         };
 
         container(view)
@@ -424,13 +425,10 @@ impl Preview {
             |action| Message::from(PreviewMessage::ViewportAction(action)),
         ));
 
-        let mut columns: Column<_> = Column::with_capacity(8)
-            .width(Length::Shrink)
-            .height(Length::Shrink)
-            .spacing(2.0);
+        let mut columns: Vec<_> = Vec::with_capacity(8);
 
         if self.error || self.unsupported {
-            columns = columns.push(
+            columns.push(
                 row([
                     text("Status")
                         .size(16.0)
@@ -455,13 +453,14 @@ impl Preview {
                 ])
                 .width(Length::Shrink)
                 .padding(2.0)
-                .spacing(8.0),
+                .spacing(8.0)
+                .into(),
             );
         } else {
             let renderer = self.viewport_state.renderer();
 
             for (stat_header, stat_value) in renderer.statistics() {
-                columns = columns.push(
+                columns.push(
                     row([
                         text(stat_header)
                             .size(16.0)
@@ -482,28 +481,31 @@ impl Preview {
                     ])
                     .width(Length::Shrink)
                     .padding(2.0)
-                    .spacing(8.0),
+                    .spacing(8.0)
+                    .into(),
                 );
             }
         }
 
         let columns = container(
-            container(columns)
-                .width(Length::Shrink)
-                .padding(4.0)
-                .style(preview_overlay_style),
+            container(
+                Column::from_vec(columns)
+                    .width(Length::Shrink)
+                    .height(Length::Shrink)
+                    .spacing(2.0),
+            )
+            .width(Length::Shrink)
+            .padding(4.0)
+            .style(preview_overlay_style),
         )
         .width(Length::Fill)
         .height(Length::FillPortion(1))
         .padding(4.0);
 
-        let mut controls: Column<_> = Column::with_capacity(PREVIEW_CONTROLS.len())
-            .width(Length::Shrink)
-            .height(Length::Shrink)
-            .spacing(2.0);
+        let mut controls: Vec<_> = Vec::with_capacity(PREVIEW_CONTROLS.len());
 
         for (control_name, control) in PREVIEW_CONTROLS {
-            controls = controls.push(
+            controls.push(
                 row([
                     text(*control_name)
                         .size(16.0)
@@ -518,15 +520,21 @@ impl Preview {
                 ])
                 .width(Length::Shrink)
                 .padding(2.0)
-                .spacing(8.0),
+                .spacing(8.0)
+                .into(),
             );
         }
 
         let controls = container(
-            container(controls)
-                .width(Length::Shrink)
-                .padding(4.0)
-                .style(preview_overlay_style),
+            container(
+                Column::from_vec(controls)
+                    .width(Length::Shrink)
+                    .height(Length::Shrink)
+                    .spacing(2.0),
+            )
+            .width(Length::Shrink)
+            .padding(4.0)
+            .style(preview_overlay_style),
         )
         .align_y(Alignment::End)
         .width(Length::Fill)
@@ -536,10 +544,10 @@ impl Preview {
         let controls = if state.settings.preview_overlay() {
             controls.into()
         } else {
-            vertical_space().into()
+            space().into()
         };
 
-        let overlay = if state.asset_preview_id.is_some() {
+        let overlay = if state.asset_preview.is_some() {
             let loading = container(widgets::spinner())
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -583,17 +591,21 @@ impl Preview {
 
     /// Handles rendering the binary tab.
     fn view_binary(&self, _state: &AppState) -> Element<'_, Message> {
-        widgets::scrollable(widgets::binary(self.raw_binary.as_deref().unwrap_or(&[])))
-            .id(self.scroll_id.clone())
-            .direction(scrollable::Direction::Vertical(
-                scrollable::Scrollbar::new()
-                    .width(16.0)
-                    .scroller_width(16.0)
-                    .spacing(0.0),
-            ))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+        widgets::scrollable(widgets::binary(
+            self.raw_binary
+                .as_deref()
+                .unwrap_or(&[]),
+        ))
+        .id(self.scroll_id.clone())
+        .direction(scrollable::Direction::Vertical(
+            scrollable::Scrollbar::new()
+                .width(16.0)
+                .scroller_width(16.0)
+                .spacing(0.0),
+        ))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
     }
 
     /// Handles rendering the audio tab.
@@ -605,17 +617,21 @@ impl Preview {
             .map(|x| (x.position(), x.duration(), x.is_playing()))
             .unwrap_or_default();
 
-        let seek_position = self.audio_player_seek.unwrap_or(position.as_secs_f64());
+        let is_loading = state.asset_preview.is_some();
+
+        let seek_position = self
+            .audio_player_seek
+            .unwrap_or(position.as_secs_f64());
         let seek_duration = duration.as_secs_f64();
         let seek_seed = duration.as_secs();
 
         let waveform: Element<'_, Message> =
-            widgets::waveform(is_playing, seek_seed, Message::Noop)
+            widgets::waveform(is_playing, is_loading, seek_seed, Message::Noop)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into();
 
-        let content: Element<'_, Message> = if state.asset_preview_id.is_some() {
+        let content: Element<'_, Message> = if state.asset_preview.is_some() {
             let loading = container(widgets::spinner())
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -671,7 +687,7 @@ impl Preview {
     /// Handles rendering the audio tab when not enabled.
     #[cfg(not(feature = "sounds-convertible"))]
     fn view_audio(&self, _state: &AppState) -> Element<'_, Message> {
-        vertical_space().into()
+        space().into()
     }
 
     /// Occurs when the viewport tab is clicked.
@@ -779,7 +795,9 @@ impl Preview {
 
                 self.error = false;
                 self.unsupported = true;
-                self.viewport_state.renderer_mut().clear_preview();
+                self.viewport_state
+                    .renderer_mut()
+                    .clear_preview();
 
                 self.tab = PreviewTab::Viewport;
             }
@@ -791,7 +809,9 @@ impl Preview {
 
                 self.error = true;
                 self.unsupported = false;
-                self.viewport_state.renderer_mut().clear_preview();
+                self.viewport_state
+                    .renderer_mut()
+                    .clear_preview();
 
                 self.tab = PreviewTab::Viewport;
             }
@@ -820,10 +840,12 @@ impl Preview {
 
                 self.error = false;
                 self.unsupported = false;
-                self.viewport_state.renderer_mut().clear_preview();
+                self.viewport_state
+                    .renderer_mut()
+                    .clear_preview();
                 self.audio_player = None;
 
-                return scrollable::scroll_to(
+                return scroll_to(
                     self.scroll_id.clone(),
                     scrollable::AbsoluteOffset { x: 0.0, y: 0.0 },
                 );
@@ -839,7 +861,7 @@ impl Preview {
                     .renderer_mut()
                     .set_preview_image(name, image)
                 {
-                    if matches!(e, PreviewError::Unsupported) {
+                    if matches!(e, ViewportError::Unsupported) {
                         self.unsupported = true;
                         self.error = false;
                     } else {
@@ -864,7 +886,7 @@ impl Preview {
                     .renderer_mut()
                     .set_preview_material(name, material)
                 {
-                    if matches!(e, PreviewError::Unsupported) {
+                    if matches!(e, ViewportError::Unsupported) {
                         self.unsupported = true;
                         self.error = false;
                     } else {
@@ -884,14 +906,12 @@ impl Preview {
                 self.raw_name = String::new();
                 self.audio_player = None;
 
-                let srgb = cfg!(feature = "srgb-preview");
-
                 if let Err(e) = self
                     .viewport_state
                     .renderer_mut()
-                    .set_preview_model(name, model, images, srgb)
+                    .set_preview_model(name, model, images)
                 {
-                    if matches!(e, PreviewError::Unsupported) {
+                    if matches!(e, ViewportError::Unsupported) {
                         self.unsupported = true;
                         self.error = false;
                     } else {
@@ -964,7 +984,9 @@ fn preview_header_style(_: &Theme) -> container::Style {
         border: Border {
             width: 1.0,
             color: palette::BACKGROUND_COLOR_LIGHT_100,
-            radius: Radius::new(0.0).top_left(4.0).top_right(4.0),
+            radius: Radius::new(0.0)
+                .top_left(4.0)
+                .top_right(4.0),
         },
         ..Default::default()
     }
@@ -996,7 +1018,9 @@ fn preview_footer_style(_: &Theme) -> container::Style {
         border: Border {
             color: palette::BACKGROUND_COLOR_LIGHT_100,
             width: 1.0,
-            radius: Radius::new(0.0).top_left(4.0).top_right(4.0),
+            radius: Radius::new(0.0)
+                .top_left(4.0)
+                .top_right(4.0),
         },
         ..Default::default()
     }
@@ -1007,7 +1031,6 @@ fn text_editor_style(_: &Theme, _: text_editor::Status) -> text_editor::Style {
     text_editor::Style {
         background: Background::Color(palette::BACKGROUND_COLOR_LIGHT_050),
         border: rounded(0.0),
-        icon: palette::TEXT_COLOR_DEFAULT,
         placeholder: palette::TEXT_COLOR_DEFAULT,
         value: palette::TEXT_COLOR_DEFAULT,
         selection: palette::PRIMARY_COLOR,

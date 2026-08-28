@@ -1,7 +1,10 @@
+use iced::widget::Id;
 use iced::widget::container;
 use iced::widget::row;
 use iced::widget::text;
-use iced::widget::text_input;
+
+use iced::widget::operation::focus;
+use iced::widget::operation::select_all;
 
 use iced::Alignment;
 use iced::Element;
@@ -22,7 +25,7 @@ const SEARCH_REALTIME_MAX: usize = 500_000;
 /// Search bar component handler.
 pub struct SearchBar {
     search: String,
-    search_id: text_input::Id,
+    search_id: Id,
 }
 
 /// Messages produced by the search bar component.
@@ -39,7 +42,7 @@ impl SearchBar {
     pub fn new() -> Self {
         Self {
             search: String::new(),
-            search_id: text_input::Id::unique(),
+            search_id: Id::unique(),
         }
     }
 
@@ -158,8 +161,8 @@ impl SearchBar {
     /// Focuses and selects all search text.
     fn on_search_find(&mut self, _: &mut AppState) -> Task<Message> {
         Task::batch([
-            text_input::focus(self.search_id.clone()),
-            text_input::select_all(self.search_id.clone()),
+            focus(self.search_id.clone()),
+            select_all(self.search_id.clone()),
         ])
     }
 }

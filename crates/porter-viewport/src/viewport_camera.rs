@@ -3,6 +3,8 @@ use wgpu::*;
 
 use porter_gpu::GPUInstance;
 
+use porter_macros::assert_size;
+
 use porter_math::Matrix4x4;
 use porter_math::Vector3;
 
@@ -20,6 +22,8 @@ struct ViewportCameraUniform {
     default_shaded: u32,
     srgb: u32,
 }
+
+assert_size!(ViewportCameraUniform, 352);
 
 /// A 3d viewport camera.
 #[derive(Debug)]
@@ -49,37 +53,40 @@ impl ViewportCamera {
             srgb: 0,
         };
 
-        let uniform_buffer = instance.device().create_buffer_init(&BufferInitDescriptor {
-            label: None,
-            contents: uniforms.as_byte_slice(),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
+        let uniform_buffer = instance
+            .device()
+            .create_buffer_init(&BufferInitDescriptor {
+                label: None,
+                contents: uniforms.as_byte_slice(),
+                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            });
 
-        let uniform_bind_group_layout =
-            instance
-                .device()
-                .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                    label: None,
-                    entries: &[BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::VERTEX_FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                });
+        let uniform_bind_group_layout = instance
+            .device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
 
-        let uniform_bind_group = instance.device().create_bind_group(&BindGroupDescriptor {
-            label: None,
-            layout: &uniform_bind_group_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
-        });
+        let uniform_bind_group = instance
+            .device()
+            .create_bind_group(&BindGroupDescriptor {
+                label: None,
+                layout: &uniform_bind_group_layout,
+                entries: &[BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buffer.as_entire_binding(),
+                }],
+            });
 
         Self {
             theta,

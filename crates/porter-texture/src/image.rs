@@ -1,31 +1,34 @@
 use std::fs::File;
 use std::io::BufRead;
+use std::io::Read;
 use std::io::Seek;
 use std::io::Write;
 use std::path::Path;
 
-use wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-
-use porter_utils::AsAligned;
 use porter_utils::BufferReadExt;
 use porter_utils::BufferWriteExt;
 use porter_utils::VecExt;
+use porter_utils::VecReadExt;
 
 use porter_math::Rect;
 
+use crate::Address;
+use crate::Filter;
 use crate::Frame;
 use crate::GPUConverter;
 use crate::ImageConvertOptions;
 use crate::ImageFileType;
 use crate::ImageFormat;
-use crate::ResizeAlgorithm;
+use crate::Pixel;
+use crate::Resize;
 use crate::TextureError;
-use crate::TextureExtensions;
-use crate::TransformAlgorithm;
+use crate::Transform;
 use crate::image_file_type_dds;
 use crate::image_file_type_png;
+use crate::image_file_type_pvr;
 use crate::image_file_type_tga;
 use crate::image_file_type_tiff;
+use crate::pack_unorm8;
 use crate::software_swizzle_image;
 use crate::software_unpack_image;
 
@@ -99,45 +102,19 @@ impl Image {
             },
         )?;
 
-        image
-            .create_frame()?
-            .buffer_mut()
-            // 4x4 slice of rgba data.
-            .copy_from_slice(&[
-                r, g, b, a, r, g, b, a, r, g, b, a, r, g, b, a, r, g, b, a, r, g, b, a, r, g, b, a,
-                r, g, b, a, r, g, b, a, r, g, b, a, r, g, b, a, r, g, b, a, r, g, b, a, r, g, b, a,
-                r, g, b, a, r, g, b, a,
-            ]);
+        image.create_frame()?.fill([r, g, b, a]);
 
         Ok(image)
     }
 
     /// Creates a new 4x4 image from the given floating point color.
     pub fn from_rgba_f32(r: f32, g: f32, b: f32, a: f32, srgb: bool) -> Result<Self, TextureError> {
-        let r = ((r * 255.0) as u32).clamp(0, 255) as u8;
-        let g = ((g * 255.0) as u32).clamp(0, 255) as u8;
-        let b = ((b * 255.0) as u32).clamp(0, 255) as u8;
-        let a = ((a * 255.0) as u32).clamp(0, 255) as u8;
+        let r = pack_unorm8(r);
+        let g = pack_unorm8(g);
+        let b = pack_unorm8(b);
+        let a = pack_unorm8(a);
 
         Self::from_rgba(r, g, b, a, srgb)
-    }
-
-    /// Sets the format used by this image if the block sizes match.
-    pub(crate) fn set_format(&mut self, format: ImageFormat) -> Result<(), TextureError> {
-        let old_size = self.frame_size_with_mipmaps(self.width, self.height, self.mipmaps);
-        let old_format = self.format;
-
-        self.format = format;
-
-        let new_size = self.frame_size_with_mipmaps(self.width, self.height, self.mipmaps);
-
-        if new_size == old_size {
-            return Ok(());
-        }
-
-        self.format = old_format;
-
-        Err(TextureError::InvalidImageFormat(format))
     }
 
     /// Converts all frames of the image to the specified format.
@@ -183,38 +160,13 @@ impl Image {
         let height = self.height;
 
         for frame in self.frames_mut() {
-            let block_dims = target_format.block_dimensions();
-
-            let bytes_per_row = target_format.bytes_per_row(width) as usize;
-            let size = target_format.buffer_size_aligned(width, height) as usize;
-
-            let mut buffer = Vec::try_new_with_value(0, size)
-                .map_err(|_| TextureError::FrameAllocationFailed)?;
-
             let mut converter = GPUConverter::new(width, height, source_format, target_format);
 
             converter.set_options(options);
-            converter.convert(frame.buffer(), &mut buffer)?;
 
-            let truncated_size = target_format.buffer_size(width, height) as usize;
+            let buffer = converter.convert(frame.buffer())?;
 
-            if truncated_size != size {
-                let nbh = height.div_ceil(block_dims.1);
-
-                for y in 0..nbh {
-                    let source = y as usize
-                        * bytes_per_row.as_aligned(COPY_BYTES_PER_ROW_ALIGNMENT as usize);
-                    let dest = y as usize * bytes_per_row;
-
-                    buffer.copy_within(source..source + bytes_per_row, dest);
-                }
-
-                buffer.resize(truncated_size, 0);
-
-                frame.replace_buffer(buffer);
-            } else {
-                frame.replace_buffer(buffer);
-            }
+            frame.replace_buffer(buffer);
         }
 
         self.format = format;
@@ -223,19 +175,18 @@ impl Image {
     }
 
     /// Transforms the image using the given algorithm.
-    pub fn transform(&mut self, algorithm: TransformAlgorithm) -> Result<(), TextureError> {
-        algorithm.transform(self)?;
+    pub fn transform(&mut self, algorithm: Transform) -> Result<(), TextureError> {
+        algorithm.apply(self)?;
         Ok(())
     }
 
     /// Resizes the image to the new width/height. This will drop any mipmaps if they exist.
     /// The format must be 32bits per pixel with 4 components in any order.
-    pub fn resize(
-        &mut self,
-        width: u32,
-        height: u32,
-        algorithm: ResizeAlgorithm,
-    ) -> Result<(), TextureError> {
+    pub fn resize(&mut self, width: u32, height: u32, filter: Filter) -> Result<(), TextureError> {
+        if self.width == width && self.height == height {
+            return Ok(());
+        }
+
         if !self.format.is_resizable() {
             return Err(TextureError::UnsupportedImageFormat(self.format));
         }
@@ -244,7 +195,10 @@ impl Image {
             return Err(TextureError::InvalidOperation);
         }
 
-        algorithm.resize(self, width, height)?;
+        match filter {
+            Filter::Nearest => Resize::NearestNeighbor.apply(self, width, height)?,
+            Filter::Linear => Resize::Bicubic.apply(self, width, height)?,
+        }
 
         Ok(())
     }
@@ -365,7 +319,9 @@ impl Image {
         }
 
         let bytes_per_row = self.format.bytes_per_row(self.width);
-        let buffer_size = self.format.buffer_size(self.width, self.height);
+        let buffer_size = self
+            .format
+            .buffer_size(self.width, self.height);
 
         let height = self.height;
 
@@ -394,7 +350,9 @@ impl Image {
         }
 
         let bytes_per_row = self.format.bytes_per_row(self.width);
-        let buffer_size = self.format.buffer_size(self.width, self.height);
+        let buffer_size = self
+            .format
+            .buffer_size(self.width, self.height);
         let pixel_size = self.format.bits_per_pixel().div_ceil(8);
 
         let height = self.height;
@@ -427,6 +385,7 @@ impl Image {
             ImageFileType::Png => image_file_type_png::pick_format(self.format),
             ImageFileType::Tiff => image_file_type_tiff::pick_format(self.format),
             ImageFileType::Tga => image_file_type_tga::pick_format(self.format),
+            ImageFileType::Pvr => image_file_type_pvr::pick_format(self.format),
         }
     }
 
@@ -445,6 +404,7 @@ impl Image {
             ImageFileType::Png => image_file_type_png::from_png(input),
             ImageFileType::Tiff => image_file_type_tiff::from_tiff(input),
             ImageFileType::Tga => image_file_type_tga::from_tga(input),
+            ImageFileType::Pvr => image_file_type_pvr::from_pvr(input),
         }
     }
 
@@ -474,22 +434,25 @@ impl Image {
             ImageFileType::Png => image_file_type_png::to_png(self, output),
             ImageFileType::Tiff => image_file_type_tiff::to_tiff(self, output),
             ImageFileType::Tga => image_file_type_tga::to_tga(self, output),
+            ImageFileType::Pvr => image_file_type_pvr::to_pvr(self, output),
         }
     }
 
-    /// Returns the size of a new frame using the current image format and mipmaps.
-    pub fn frame_size(&self, width: u32, height: u32) -> u32 {
-        self.frame_size_with_mipmaps(width, height, self.mipmaps)
+    /// Returns the size of a new frame using the current image format, dimensions, and mipmaps.
+    pub fn frame_size(&self) -> u32 {
+        self.frame_size_with_mipmaps(self.width, self.height, self.mipmaps)
     }
 
-    /// Returns the size of a new frame using the current image format and overriding the mipmaps.
+    /// Returns the size of a new frame using the current image format and given `width`, `height`, and `mipmaps`.
     pub fn frame_size_with_mipmaps(&self, width: u32, height: u32, mipmaps: u32) -> u32 {
         let mut size: u32 = 0;
         let mut mip_width = width;
         let mut mip_height = height;
 
         for _ in 0..mipmaps {
-            size += self.format.buffer_size(mip_width, mip_height);
+            size += self
+                .format
+                .buffer_size(mip_width, mip_height);
 
             mip_width = if mip_width > 1 { mip_width / 2 } else { 1 };
             mip_height = if mip_height > 1 { mip_height / 2 } else { 1 };
@@ -500,19 +463,20 @@ impl Image {
 
     /// Allocates and creates a new frame, using the current image format.
     pub fn create_frame(&mut self) -> Result<&mut Frame, TextureError> {
-        let size = self.frame_size(self.width, self.height);
+        let size = self.frame_size();
 
-        let frame = Frame::new(size)?;
+        Ok(self
+            .frames
+            .try_push_mut(Frame::new(size)?)?)
+    }
 
-        self.frames
-            .try_reserve(1)
-            .map_err(|_| TextureError::FrameAllocationFailed)?;
+    /// Reads a new frame from the given reader, using the current image format.
+    pub fn read_frame<R: Read>(&mut self, read: &mut R) -> Result<&mut Frame, TextureError> {
+        let size = self.frame_size();
 
-        self.frames.push(frame);
-
-        self.frames
-            .last_mut()
-            .ok_or(TextureError::FrameAllocationFailed)
+        Ok(self
+            .frames
+            .try_push_mut(Frame::with_buffer(read.read_vec(size as _)?))?)
     }
 
     /// Returns the base width of the image, all frames must be <= this width.
@@ -537,7 +501,10 @@ impl Image {
 
     /// The size in bytes of all the frames and mipmaps in this image.
     pub fn size(&self) -> usize {
-        self.frames.iter().map(|x| x.buffer().len()).sum()
+        self.frames
+            .iter()
+            .map(|x| x.buffer().len())
+            .sum()
     }
 
     /// Returns an iterator over the frames of this image.
@@ -553,5 +520,83 @@ impl Image {
     /// Image is considered a cubemap if it has exactly 6 frames.
     pub fn is_cubemap(&self) -> bool {
         self.frames.len() == 6
+    }
+
+    /// Samples the image at the given coordinates with the provided filter.
+    pub fn sample(&self, x: f32, y: f32, z: f32, address: Address, filter: Filter) -> Pixel {
+        let (x, y) = match address {
+            Address::Clamp => (x.clamp(0.0, 1.0), y.clamp(0.0, 1.0)),
+            Address::Wrap => (x - x.floor(), y - y.floor()),
+        };
+
+        let w = self.width as f32;
+        let h = self.height as f32;
+
+        let x = x * (w - 1.0);
+        let y = y * (h - 1.0);
+
+        let bytes_per_pixel = self.format.bits_per_pixel().div_ceil(8) as usize;
+
+        let Some(frame) = self
+            .frames
+            .get(z.round() as usize)
+            .or_else(|| self.frames.first())
+            .map(|x| x.buffer())
+        else {
+            return Pixel::TRANSPARENT;
+        };
+
+        match filter {
+            Filter::Nearest => {
+                let x = x.round() as usize;
+                let y = y.round() as usize;
+
+                let index = (y * self.width as usize + x) * bytes_per_pixel;
+
+                Pixel::load(self.format, &frame[index..index + bytes_per_pixel])
+            }
+            Filter::Linear => {
+                let x0 = x.floor() as usize;
+                let y0 = y.floor() as usize;
+                let x1 = (x0 + 1).min(self.width as usize - 1);
+                let y1 = (y0 + 1).min(self.height as usize - 1);
+
+                let tx = x - x0 as f32;
+                let ty = y - y0 as f32;
+
+                let index00 = (y0 * self.width as usize + x0) * bytes_per_pixel;
+                let index10 = (y0 * self.width as usize + x1) * bytes_per_pixel;
+                let index01 = (y1 * self.width as usize + x0) * bytes_per_pixel;
+                let index11 = (y1 * self.width as usize + x1) * bytes_per_pixel;
+
+                let c00 = Pixel::load(self.format, &frame[index00..index00 + bytes_per_pixel]);
+                let c10 = Pixel::load(self.format, &frame[index10..index10 + bytes_per_pixel]);
+                let c01 = Pixel::load(self.format, &frame[index01..index01 + bytes_per_pixel]);
+                let c11 = Pixel::load(self.format, &frame[index11..index11 + bytes_per_pixel]);
+
+                let c0 = c00.lerp(c10, tx);
+                let c1 = c01.lerp(c11, tx);
+
+                c0.lerp(c1, ty)
+            }
+        }
+    }
+
+    /// Sets the format used by this image if the block sizes match.
+    pub(crate) fn set_format(&mut self, format: ImageFormat) -> Result<(), TextureError> {
+        let old_size = self.frame_size();
+        let old_format = self.format;
+
+        self.format = format;
+
+        let new_size = self.frame_size();
+
+        if new_size == old_size {
+            return Ok(());
+        }
+
+        self.format = old_format;
+
+        Err(TextureError::InvalidImageFormat(format))
     }
 }

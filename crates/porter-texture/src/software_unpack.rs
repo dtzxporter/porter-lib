@@ -35,9 +35,11 @@ fn unpack_extra_component(
 
 /// Utility method for formats that require unpacking before conversion.
 pub fn software_unpack_image(image: &mut Image) -> Result<(), TextureError> {
+    use ImageFormat::*;
+
     match image.format() {
-        ImageFormat::R1Unorm => {
-            let mut result = Image::new(image.width(), image.height(), ImageFormat::R8Unorm)?;
+        R1Unorm => {
+            let mut result = Image::new(image.width(), image.height(), R8Unorm)?;
 
             for frame in image.frames() {
                 let new_frame = result.create_frame()?;
@@ -71,43 +73,23 @@ pub fn software_unpack_image(image: &mut Image) -> Result<(), TextureError> {
 
             *image = result;
         }
-        ImageFormat::R8G8B8Unorm => {
-            unpack_extra_component(image, ImageFormat::R8G8B8A8Unorm, 3, &[0xFF])?;
+        R8G8B8Unorm => {
+            unpack_extra_component(image, R8G8B8A8Unorm, 3, &[0xFF])?;
         }
-        ImageFormat::B8G8R8Unorm => {
-            unpack_extra_component(image, ImageFormat::B8G8R8A8Unorm, 3, &[0xFF])?;
+        B8G8R8Unorm => {
+            unpack_extra_component(image, B8G8R8A8Unorm, 3, &[0xFF])?;
         }
-        ImageFormat::R32G32B32Typeless => {
-            unpack_extra_component(
-                image,
-                ImageFormat::R32G32B32A32Typeless,
-                12,
-                &[0xFF, 0xFF, 0xFF, 0xFF],
-            )?;
+        R32G32B32Typeless => {
+            unpack_extra_component(image, R32G32B32A32Typeless, 12, &[0xFF, 0xFF, 0xFF, 0xFF])?;
         }
-        ImageFormat::R32G32B32Float => {
-            unpack_extra_component(
-                image,
-                ImageFormat::R32G32B32A32Float,
-                12,
-                &[0x00, 0x00, 0x80, 0x3F],
-            )?;
+        R32G32B32Float => {
+            unpack_extra_component(image, R32G32B32A32Float, 12, &[0x00, 0x00, 0x80, 0x3F])?;
         }
-        ImageFormat::R32G32B32Uint => {
-            unpack_extra_component(
-                image,
-                ImageFormat::R32G32B32A32Uint,
-                12,
-                &[0xFF, 0xFF, 0xFF, 0xFF],
-            )?;
+        R32G32B32Uint => {
+            unpack_extra_component(image, R32G32B32A32Uint, 12, &[0xFF, 0xFF, 0xFF, 0xFF])?;
         }
-        ImageFormat::R32G32B32Sint => {
-            unpack_extra_component(
-                image,
-                ImageFormat::R32G32B32A32Sint,
-                12,
-                &[0x80, 0x80, 0x80, 0x80],
-            )?;
+        R32G32B32Sint => {
+            unpack_extra_component(image, R32G32B32A32Sint, 12, &[0x80, 0x80, 0x80, 0x80])?;
         }
         _ => return Err(TextureError::ConversionError),
     }

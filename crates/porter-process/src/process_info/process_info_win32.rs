@@ -13,6 +13,7 @@ use windows_sys::Win32::System::Threading::*;
 use windows_sys::Win32::System::WindowsProgramming::*;
 
 use porter_utils::StructReadExt;
+use porter_utils::VecExt;
 
 use crate::ProcessError;
 use crate::ProcessInfo;
@@ -55,14 +56,18 @@ impl ProcessInfoPlatform for ProcessInfo {
             };
 
             if status != STATUS_INFO_LENGTH_MISMATCH {
+                process_info_buffer.truncate(required as _);
                 break;
             }
 
-            process_info_buffer.resize(required as _, 0);
+            process_info_buffer.try_resize(required as _, 0)?;
         }
 
         let mut reader = Cursor::new(process_info_buffer);
-        let mut result = Vec::with_capacity(if filter.is_empty() { 256 } else { filter.len() });
+
+        #[allow(unstable_name_collisions)]
+        let mut result =
+            Vec::try_with_capacity(if filter.is_empty() { 256 } else { filter.len() })?;
 
         loop {
             let process_info: SYSTEM_PROCESS_INFORMATION = reader.read_struct()?;
@@ -103,12 +108,12 @@ impl ProcessInfoPlatform for ProcessInfo {
 
             let reserve: ReservedInfo = Cursor::new(process_info.Reserved1).read_struct()?;
 
-            result.push(ProcessInfo {
+            result.try_push(ProcessInfo {
                 pid: process_info.UniqueProcessId as _,
                 name,
                 path: None,
                 started_at: create_time_to_sys_time(reserve.created_at),
-            });
+            })?;
 
             if process_info.NextEntryOffset == 0 {
                 break;

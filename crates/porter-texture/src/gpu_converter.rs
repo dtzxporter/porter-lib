@@ -4,15 +4,19 @@ use wgpu::*;
 
 use std::sync::mpsc;
 
+use porter_macros::assert_size;
+
 use porter_utils::AsAligned;
 use porter_utils::AsByteSlice;
+use porter_utils::SliceExt;
+use porter_utils::VecExt;
 
 use porter_gpu::GPUInstance;
 use porter_gpu::gpu_instance;
 
+use crate::GpuExt;
 use crate::ImageConvertOptions;
 use crate::TextureError;
-use crate::TextureExtensions;
 
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy)]
@@ -25,6 +29,8 @@ struct GPUOptionsUniform {
     scale: f32,
     bias: f32,
 }
+
+assert_size!(GPUOptionsUniform, 28);
 
 /// Converts textures from one format to another (uncompressed only).
 pub struct GPUConverter {
@@ -74,7 +80,10 @@ impl GPUConverter {
     fn input_texture_data_layout(&self) -> TexelCopyBufferLayout {
         TexelCopyBufferLayout {
             offset: 0,
-            bytes_per_row: Some(self.input_format.bytes_per_row(self.width)),
+            bytes_per_row: Some(
+                self.input_format
+                    .bytes_per_row(self.width),
+            ),
             rows_per_image: None,
         }
     }
@@ -118,21 +127,25 @@ impl GPUConverter {
 
     /// Creates an input texture that matches our input format and texture size.
     fn create_input_texture(&self) -> Texture {
-        self.instance.device().create_texture(&TextureDescriptor {
-            label: None,
-            size: self.texture_size(),
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: self.input_format,
-            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
-            view_formats: &[],
-        })
+        self.instance
+            .device()
+            .create_texture(&TextureDescriptor {
+                label: None,
+                size: self.texture_size(),
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: self.input_format,
+                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+                view_formats: &[],
+            })
     }
 
     /// Creates an input sampler.
     fn create_input_sampler(&self) -> Sampler {
-        self.instance.device().create_sampler(&Default::default())
+        self.instance
+            .device()
+            .create_sampler(&Default::default())
     }
 
     /// Creates a bind group laypout for the fragment shader.
@@ -204,14 +217,14 @@ impl GPUConverter {
 
     /// Creates a render pipeline that will take the input and render to the target output.
     fn create_render_pipeline(&self, bind_group_layout: &BindGroupLayout) -> RenderPipeline {
-        let pipeline_layout =
-            self.instance
-                .device()
-                .create_pipeline_layout(&PipelineLayoutDescriptor {
-                    label: None,
-                    bind_group_layouts: &[bind_group_layout],
-                    push_constant_ranges: &[],
-                });
+        let pipeline_layout = self
+            .instance
+            .device()
+            .create_pipeline_layout(&PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[Some(bind_group_layout)],
+                immediate_size: 0,
+            });
 
         let fragment_entry = match self.options {
             ImageConvertOptions::None => "fs_main",
@@ -265,35 +278,39 @@ impl GPUConverter {
                     })],
                     compilation_options: Default::default(),
                 }),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             })
     }
 
     /// Creates an output texture that matches our output format and size.
     fn create_output_texture(&self) -> Texture {
-        self.instance.device().create_texture(&TextureDescriptor {
-            label: None,
-            size: self.texture_size(),
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: self.output_format,
-            usage: TextureUsages::COPY_SRC | TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        })
+        self.instance
+            .device()
+            .create_texture(&TextureDescriptor {
+                label: None,
+                size: self.texture_size(),
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: self.output_format,
+                usage: TextureUsages::COPY_SRC | TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            })
     }
 
     /// Creates an output buffer based on the size of the output texture.
     fn create_output_buffer(&self) -> Buffer {
-        self.instance.device().create_buffer(&BufferDescriptor {
-            label: None,
-            size: self
-                .output_format
-                .buffer_size_aligned(self.width, self.height),
-            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        })
+        self.instance
+            .device()
+            .create_buffer(&BufferDescriptor {
+                label: None,
+                size: self
+                    .output_format
+                    .buffer_size_aligned(self.width, self.height),
+                usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            })
     }
 
     /// Sets up a render pass that renders the input texture to the output texture.
@@ -320,9 +337,10 @@ impl GPUConverter {
                     store: StoreOp::Store,
                 },
             })],
-            occlusion_query_set: None,
-            timestamp_writes: None,
             depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         render_pass.set_pipeline(render_pipeline);
@@ -375,45 +393,74 @@ impl GPUConverter {
         );
     }
 
-    /// Downloads the GPU texture data to the CPU texture buffer.
-    fn download_gpu_texture_cpu<O: AsMut<[u8]>>(
+    /// Downloads the GPU texture data to a CPU texture buffer.
+    fn download_gpu_texture_cpu(
         &self,
-        submission: SubmissionIndex,
-        mut output: O,
+        encoder: CommandEncoder,
         output_buffer: &Buffer,
-    ) -> Result<(), TextureError> {
-        let output_slice = output_buffer.slice(..);
+    ) -> Result<Vec<u8>, TextureError> {
         let (tx, rx) = mpsc::sync_channel(1);
 
-        output_slice.map_async(MapMode::Read, move |result| {
-            tx.send(result).unwrap();
+        encoder.map_buffer_on_submit(output_buffer, MapMode::Read, .., move |result| {
+            let _ = tx.send(result);
         });
+
+        let submission = self
+            .instance
+            .queue()
+            .submit(Some(encoder.finish()));
+
+        let output_slice = output_buffer.slice(..);
 
         let _ = self
             .instance
             .device()
-            .poll(PollType::WaitForSubmissionIndex(submission));
+            .poll(PollType::Wait {
+                submission_index: Some(submission),
+                timeout: None,
+            });
 
-        if rx.recv().unwrap().is_err() {
+        if matches!(rx.recv(), Err(_) | Ok(Err(_))) {
             return Err(TextureError::ConversionError);
         }
 
-        let output = output.as_mut();
-        let output_len = output.len();
+        let bytes_per_row = self
+            .output_format
+            .bytes_per_row(self.width) as usize;
+        let bytes_per_row_aligned = bytes_per_row.as_aligned(COPY_BYTES_PER_ROW_ALIGNMENT as usize);
 
-        output
-            .as_mut()
-            .copy_from_slice(&output_slice.get_mapped_range()[..output_len]);
+        let size_aligned = self
+            .output_format
+            .buffer_size_aligned(self.width, self.height) as usize;
+        let size_truncated = self
+            .output_format
+            .buffer_size(self.width, self.height) as usize;
 
-        Ok(())
+        // We're using >= here to help eliminate bounds checking in the tight truncate loop below.
+        if size_truncated >= size_aligned {
+            return Ok(output_slice
+                .get_mapped_range()
+                .try_to_vec_truncated(size_truncated)?);
+        }
+
+        let mut result: Vec<u8> = Vec::try_new_zeroed(size_truncated)?;
+
+        for (dst, src) in result
+            .chunks_exact_mut(bytes_per_row)
+            .zip(
+                output_slice
+                    .get_mapped_range()
+                    .chunks_exact(bytes_per_row_aligned),
+            )
+        {
+            dst.copy_from_slice(&src[..bytes_per_row]);
+        }
+
+        Ok(result)
     }
 
     /// Converts the texture data in input to the specified format in output.
-    pub fn convert<I: AsRef<[u8]>, O: AsMut<[u8]>>(
-        &self,
-        input: I,
-        output: O,
-    ) -> Result<(), TextureError> {
+    pub fn convert<I: AsRef<[u8]>>(&self, input: I) -> Result<Vec<u8>, TextureError> {
         let input_texture = self.create_input_texture();
 
         self.upload_cpu_texture_gpu(input, &input_texture);
@@ -451,8 +498,6 @@ impl GPUConverter {
 
         self.copy_texture_to_buffer(&mut encoder, &output_texture, &output_buffer);
 
-        let submission = self.instance.queue().submit(Some(encoder.finish()));
-
-        self.download_gpu_texture_cpu(submission, output, &output_buffer)
+        self.download_gpu_texture_cpu(encoder, &output_buffer)
     }
 }

@@ -1,4 +1,5 @@
 use porter_math::Matrix4x4;
+use porter_math::Vector3;
 
 use crate::Bone;
 use crate::Constraint;
@@ -19,7 +20,7 @@ pub struct Skeleton {
 
 impl Skeleton {
     /// Constructs a new skeleton.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             bones: Vec::new(),
             ik_handles: Vec::new(),
@@ -41,7 +42,9 @@ impl Skeleton {
         for i in 0..self.bones.len() {
             if self.bones[i].parent > -1 {
                 let parent_index = self.bones[i].parent as usize;
-                let parent_rotation = self.bones[parent_index].world_rotation.conjugate();
+                let parent_rotation = self.bones[parent_index]
+                    .world_rotation
+                    .conjugate();
 
                 self.bones[i].local_position = (self.bones[i].world_position
                     - self.bones[parent_index].world_position)
@@ -49,9 +52,13 @@ impl Skeleton {
 
                 self.bones[i].local_rotation = parent_rotation * self.bones[i].world_rotation;
 
+                let parent_mask = self.bones[parent_index]
+                    .world_scale
+                    .cmpne(Vector3::zero());
+
                 self.bones[i].local_scale = (self.bones[i].world_scale
                     / self.bones[parent_index].world_scale)
-                    .nan_to_zero();
+                    .select(parent_mask, Vector3::zero());
             } else {
                 self.bones[i].local_position = self.bones[i].world_position;
                 self.bones[i].local_rotation = self.bones[i].world_rotation;
@@ -92,6 +99,18 @@ impl Skeleton {
             bone.local_position *= factor;
             bone.world_position *= factor;
         }
+
+        for handle in &mut self.ik_handles {
+            if let Some(target_offset) = &mut handle.target_offset {
+                *target_offset *= factor;
+            }
+        }
+
+        for constraint in &mut self.constraints {
+            if let ConstraintOffset::Vector3(offset) = &mut constraint.offset {
+                *offset *= factor;
+            }
+        }
     }
 
     /// Transforms the skeleton by the given matrix.
@@ -127,6 +146,7 @@ impl Skeleton {
         start_bone: S,
         end_bone: E,
         target_bone: T,
+        target_offset: Option<Vector3>,
         pole_bone: Option<P>,
         pole_vector_bone: Option<V>,
         use_target_rotation: bool,
@@ -141,6 +161,10 @@ impl Skeleton {
             let mut handle = IKHandle::new(name, start_bone, end_bone)
                 .target_bone(target_bone)
                 .use_target_rotation(use_target_rotation);
+
+            if let Some(target_offset) = target_offset {
+                handle = handle.target_offset(target_offset);
+            }
 
             let pole_bone = if let Some(pole_bone) = pole_bone {
                 self.index(pole_bone)
@@ -228,6 +252,11 @@ impl Skeleton {
                 false
             }
         })
+    }
+
+    /// Checks if a bone with the given name exists.
+    pub fn exists<N: AsRef<str>>(&self, name: N) -> bool {
+        self.index(name).is_some()
     }
 
     /// Validates the skeleton has some form of valid data.

@@ -1,7 +1,7 @@
 use std::cmp;
 use std::ops;
 
-use static_assertions::assert_eq_size;
+use porter_macros::assert_size;
 
 use crate::Angles;
 use crate::Matrix3x3;
@@ -18,18 +18,18 @@ pub struct Quaternion2 {
     pub w: f32,
 }
 
-assert_eq_size!([u8; 0x8], Quaternion2);
+assert_size!(Quaternion2, 8);
 
 impl Quaternion2 {
     /// Constructs a new quaternion with the given component values.
     #[inline]
-    pub fn new(z: f32, w: f32) -> Self {
+    pub const fn new(z: f32, w: f32) -> Self {
         Self { z, w }
     }
 
     /// Constructs a new identity quaternion.
     #[inline]
-    pub fn identity() -> Self {
+    pub const fn identity() -> Self {
         Self { z: 0.0, w: 1.0 }
     }
 
@@ -43,7 +43,7 @@ impl Quaternion2 {
     /// Calculates the length squared of this quaternion.
     /// `z * z + w * w`
     #[inline]
-    pub fn length_squared(&self) -> f32 {
+    pub const fn length_squared(&self) -> f32 {
         self.z * self.z + self.w * self.w
     }
 
@@ -69,7 +69,7 @@ impl Quaternion2 {
     /// Calculates the dot product of the two quaternions.
     /// `(z * rhs.z) + (w * rhs.w)`
     #[inline]
-    pub fn dot(&self, rhs: Self) -> f32 {
+    pub const fn dot(&self, rhs: Self) -> f32 {
         (self.z * rhs.z) + (self.w * rhs.w)
     }
 
@@ -84,17 +84,79 @@ impl Quaternion2 {
 
     /// Reverses the byte order of the quaternion.
     #[inline]
-    pub fn swap_bytes(self) -> Self {
+    pub const fn swap_bytes(self) -> Self {
         Self {
             z: f32::from_bits(self.z.to_bits().swap_bytes()),
             w: f32::from_bits(self.w.to_bits().swap_bytes()),
         }
     }
 
+    /// Creates a native endian quaternion value from its representation as a byte array in in big endian.
+    #[inline]
+    pub const fn from_be_bytes(bytes: [u8; size_of::<Self>()]) -> Self {
+        let [b1, b2, b3, b4, b5, b6, b7, b8] = bytes;
+
+        Self {
+            z: f32::from_be_bytes([b1, b2, b3, b4]),
+            w: f32::from_be_bytes([b5, b6, b7, b8]),
+        }
+    }
+
+    /// Creates a native endian quaternion value from its representation as a byte array in little endian.
+    #[inline]
+    pub const fn from_le_bytes(bytes: [u8; size_of::<Self>()]) -> Self {
+        let [b1, b2, b3, b4, b5, b6, b7, b8] = bytes;
+
+        Self {
+            z: f32::from_le_bytes([b1, b2, b3, b4]),
+            w: f32::from_le_bytes([b5, b6, b7, b8]),
+        }
+    }
+
+    /// Creates a native endian quaternion value from its representation as a byte array in native endianness.
+    #[inline]
+    pub const fn from_ne_bytes(bytes: [u8; size_of::<Self>()]) -> Self {
+        let [b1, b2, b3, b4, b5, b6, b7, b8] = bytes;
+
+        Self {
+            z: f32::from_ne_bytes([b1, b2, b3, b4]),
+            w: f32::from_ne_bytes([b5, b6, b7, b8]),
+        }
+    }
+
+    /// Returns the memory representation of this quaternion as a byte array in big-endian (network) byte order.
+    #[inline]
+    pub const fn to_be_bytes(self) -> [u8; size_of::<Self>()] {
+        let [b1, b2, b3, b4] = self.z.to_be_bytes();
+        let [b5, b6, b7, b8] = self.w.to_be_bytes();
+
+        [b1, b2, b3, b4, b5, b6, b7, b8]
+    }
+
+    /// Returns the memory representation of this quaternion as a byte array in little-endian byte order.
+    #[inline]
+    pub const fn to_le_bytes(self) -> [u8; size_of::<Self>()] {
+        let [b1, b2, b3, b4] = self.z.to_le_bytes();
+        let [b5, b6, b7, b8] = self.w.to_le_bytes();
+
+        [b1, b2, b3, b4, b5, b6, b7, b8]
+    }
+
+    /// Returns the memory representation of this quaternion as a byte array in native byte order.
+    #[inline]
+    pub const fn to_ne_bytes(self) -> [u8; size_of::<Self>()] {
+        let [b1, b2, b3, b4] = self.z.to_ne_bytes();
+        let [b5, b6, b7, b8] = self.w.to_ne_bytes();
+
+        [b1, b2, b3, b4, b5, b6, b7, b8]
+    }
+
     /// Calculates the euler angle rotation of this quaternion.
     #[inline]
     pub fn to_euler(&self, angles: Angles) -> Vector3 {
-        self.to_quat4().to_4x4().to_euler(angles)
+        self.to_quat4()
+            .to_4x4()
+            .to_euler(angles)
     }
 
     /// Converts this quaternion to a rotation matrix.
@@ -117,7 +179,7 @@ impl Quaternion2 {
 
     /// Returns `true` if the quaternion is normalized having a length of `1.0`.
     #[inline]
-    pub fn is_normalized(&self) -> bool {
+    pub const fn is_normalized(&self) -> bool {
         (self.length_squared().abs() - 1.0) <= 2e-4
     }
 }

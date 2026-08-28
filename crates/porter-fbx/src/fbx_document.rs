@@ -4,6 +4,8 @@ use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
+use porter_macros::assert_size;
+
 use porter_utils::StructWriteExt;
 
 use crate::FbxNode;
@@ -78,6 +80,8 @@ struct FbxHeader {
     version_major: u32,
 }
 
+assert_size!(FbxHeader, 27);
+
 /// A fbx document.
 #[derive(Debug)]
 pub struct FbxDocument {
@@ -115,11 +119,7 @@ impl FbxDocument {
     /// Creates a new root node with the given name.
     pub fn create<N: Into<String>>(&mut self, name: N) -> &mut FbxNode {
         self.root_nodes
-            .push(FbxNode::new(name, self.hash_next.clone()));
-
-        let index = self.root_nodes.len() - 1;
-
-        self.root_nodes.get_mut(index).unwrap()
+            .push_mut(FbxNode::new(name, self.hash_next.clone()))
     }
 
     /// Serializes the document to the writer.
@@ -226,7 +226,8 @@ impl FbxDocument {
             .push_string("Integer");
         prop.create_property(FbxPropertyType::String)
             .push_string("");
-        prop.create_property(FbxPropertyType::Integer32).push(1u32);
+        prop.create_property(FbxPropertyType::Integer32)
+            .push(1u32);
 
         let prop = properties.create("P");
 
@@ -238,7 +239,8 @@ impl FbxDocument {
             .push_string("Integer");
         prop.create_property(FbxPropertyType::String)
             .push_string("");
-        prop.create_property(FbxPropertyType::Integer32).push(2u32);
+        prop.create_property(FbxPropertyType::Integer32)
+            .push(2u32);
     }
 
     /// Initializes documents.
@@ -264,7 +266,9 @@ impl FbxDocument {
             .create_property(FbxPropertyType::String)
             .push_string("Scene");
 
-        document.create("RootNode").create_hash();
+        document
+            .create("RootNode")
+            .create_hash();
     }
 
     /// Initializes references.

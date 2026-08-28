@@ -11,15 +11,14 @@ porter-animation = { path = "../porter-animation" }
 porter-viewport = { path = "../porter-viewport" }
 porter-audio = { path = "../porter-audio" }
 porter-model = { path = "../porter-model" }
+porter-world = { path = "../porter-world" }
 porter-threads = { path = "../porter-threads" }
 
-bincode.workspace = true
-bitflags.workspace = true
+miniserde.workspace = true
 directories.workspace = true
 iced.workspace = true
 lyon_algorithms.workspace = true
 rfd.workspace = true
-unicode-segmentation.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 raw-window-handle.workspace = true
@@ -37,8 +36,6 @@ raw-files = []
 
 # Enables loading of multiple files at once.
 multi-file = []
-# Enables sRGB gamma correction for model material previews.
-srgb-preview = []
 # Enables preview to start opened with the app.
 start-preview = []
 # Enables sound conversion.
@@ -47,3 +44,5 @@ sounds-convertible = []
 normal-maps-convertible = []
 # Enables forceable raw files.
 raw-files-forcible = []
+# Enables baking animations.
+animations-bake = []

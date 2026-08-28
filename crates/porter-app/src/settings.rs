@@ -1,147 +1,168 @@
+use std::mem::transmute;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::OnceLock;
 
-use bincode::Decode;
-use bincode::Encode;
-
-use directories::ProjectDirs;
-use directories::UserDirs;
-
-use bitflags::bitflags;
+use miniserde::Deserialize;
+use miniserde::Serialize;
 
 use porter_animation::AnimationFileType;
 use porter_audio::AudioFileType;
 use porter_model::ModelFileType;
 use porter_texture::ImageFileType;
 
-#[derive(Debug, Decode, Encode, Clone, Copy)]
-struct LoadSettings(u32);
+use porter_utils::BitFlags;
+use porter_utils::bitflags;
 
-#[derive(Debug, Decode, Encode, Clone, Copy)]
-struct ModelSettings(u32);
+use crate::system;
 
-#[derive(Debug, Decode, Encode, Clone, Copy)]
-struct AnimSettings(u32);
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+struct LoadSettings(BitFlags<u32>);
 
-#[derive(Debug, Decode, Encode, Clone, Copy)]
-struct AudioSettings(u32);
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+struct ModelSettings(BitFlags<u32>);
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+struct AnimSettings(BitFlags<u32>);
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+struct AudioSettings(BitFlags<u32>);
+
+macro_rules! impl_miniserde {
+    ($type:ty) => {
+        impl Deserialize for $type {
+            fn begin(out: &mut Option<Self>) -> &mut dyn ::miniserde::de::Visitor {
+                // SAFETY: All settings are repr(transparent) so we can transmute to the base type.
+                Deserialize::begin(unsafe { transmute::<&mut Option<Self>, &mut Option<u32>>(out) })
+            }
+        }
+
+        impl Serialize for $type {
+            fn begin(&self) -> ::miniserde::ser::Fragment<'_> {
+                self.0.begin()
+            }
+        }
+    };
+}
+
+impl_miniserde!(LoadSettings);
+impl_miniserde!(ModelSettings);
+impl_miniserde!(AnimSettings);
+impl_miniserde!(AudioSettings);
 
 bitflags! {
     impl LoadSettings: u32 {
-        const LOAD_MODELS = 1 << 0;
-        const LOAD_IMAGES = 1 << 1;
-        const LOAD_MATERIALS = 1 << 2;
-        const LOAD_ANIMATIONS = 1 << 3;
-        const LOAD_SOUNDS = 1 << 4;
-        const LOAD_RAW_FILES = 1 << 5;
-        const LOAD_FORCE_RAW_FILES = 1 << 6;
+        const LOAD_MODELS: u32 = 1 << 0;
+        const LOAD_IMAGES: u32 = 1 << 1;
+        const LOAD_MATERIALS: u32 = 1 << 2;
+        const LOAD_ANIMATIONS: u32 = 1 << 3;
+        const LOAD_SOUNDS: u32 = 1 << 4;
+        const LOAD_RAW_FILES: u32 = 1 << 5;
+        const LOAD_FORCE_RAW_FILES: u32 = 1 << 6;
     }
 }
 
 bitflags! {
     impl ModelSettings: u32 {
-        const EXPORT_OBJ = 1 << 0;
-        const EXPORT_SMD = 1 << 1;
-        const EXPORT_XNA_LARA = 1 << 2;
-        const EXPORT_XMODEL_EXPORT = 1 << 3;
-        const EXPORT_SEMODEL_REMOVED = 1 << 4;
-        const EXPORT_CAST = 1 << 5;
-        const EXPORT_MAYA = 1 << 6;
-        const EXPORT_FBX = 1 << 7;
+        const EXPORT_OBJ: u32 = 1 << 0;
+        const EXPORT_SMD: u32 = 1 << 1;
+        const EXPORT_XNA_LARA: u32 = 1 << 2;
+        const EXPORT_XMODEL_EXPORT: u32 = 1 << 3;
+        #[allow(unused)]
+        const EXPORT_SEMODEL_REMOVED: u32 = 1 << 4;
+        const EXPORT_CAST: u32 = 1 << 5;
+        const EXPORT_MAYA: u32 = 1 << 6;
+        const EXPORT_FBX: u32 = 1 << 7;
     }
 }
 
 bitflags! {
     impl AnimSettings: u32 {
-        const EXPORT_SEANIM_REMOVED = 1 << 0;
-        const EXPORT_CAST = 1 << 1;
+        #[allow(unused)]
+        const EXPORT_SEANIM_REMOVED: u32 = 1 << 0;
+        const EXPORT_CAST: u32 = 1 << 1;
     }
 }
 
 bitflags! {
     impl AudioSettings: u32 {
-        const EXPORT_WAV = 1 << 0;
-        const EXPORT_FLAC = 1 << 2;
+        const EXPORT_WAV: u32 = 1 << 0;
+        const EXPORT_FLAC: u32 = 1 << 2;
     }
 }
 
 /// Options for processing normal maps through the converter.
-#[derive(Debug, Decode, Encode, Clone, Copy)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
 pub enum ImageNormalMapProcessing {
     None,
     OpenGl,
     DirectX,
 }
 
+/// Options for processing model materials.
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
+pub enum ModelMaterialProcessing {
+    Skip,
+    InModelFolder,
+    InMaterialFolder,
+}
+
 /// Control scheme for preview viewport.
-#[derive(Debug, Decode, Encode, Clone, Copy)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
 pub enum PreviewControlScheme {
     Maya,
     Blender,
 }
 
 /// Global application settings.
-#[derive(Debug, Decode, Encode, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Settings {
     version: u32,
     load_settings: LoadSettings,
     model_settings: ModelSettings,
+    model_material_processing: ModelMaterialProcessing,
     anim_settings: AnimSettings,
     audio_settings: AudioSettings,
     image_file_type: ImageFileType,
     image_normal_map_processing: ImageNormalMapProcessing,
-    output_directory: Option<PathBuf>,
+    output_directory: Option<String>,
     preview_controls: PreviewControlScheme,
     preview_overlay: bool,
     auto_scale: bool,
     far_clip: u32,
     preview_window: bool,
     custom_scale: Option<f32>,
+    last_files: Option<Vec<String>>,
     volume: u32,
+    anim_bake: bool,
 }
 
 impl Settings {
     /// Loads the settings from the disk at the given path, or returns new ones.
     pub fn load<S: Into<String>>(name: S) -> Settings {
-        let Some(project_directory) = ProjectDirs::from("com", "DTZxPorter", "GameTools") else {
-            return Default::default();
-        };
-
-        std::fs::read(
-            project_directory
-                .config_dir()
+        std::fs::read_to_string(
+            system::config_dir()
                 .join(name.into().to_lowercase())
                 .with_extension("dat"),
         )
         .map_or(Default::default(), |buffer| {
-            let config = bincode::config::standard();
-
-            bincode::decode_from_slice(&buffer, config)
-                .unwrap_or_default()
-                .0
+            miniserde::json::from_str(&buffer).unwrap_or_default()
         })
     }
 
     /// Saves the settings to the disk at the given path.
     pub fn save<S: Into<String>>(&self, name: S) {
-        let Some(project_directory) = ProjectDirs::from("com", "DTZxPorter", "GameTools") else {
-            return;
-        };
+        let result = miniserde::json::to_string(&self);
 
-        let config = bincode::config::standard();
-
-        let Ok(result) = bincode::encode_to_vec(self, config) else {
-            return;
-        };
-
-        let dirs = std::fs::create_dir_all(project_directory.config_dir());
+        let dirs = std::fs::create_dir_all(system::config_dir());
 
         debug_assert!(dirs.is_ok());
 
         let result = std::fs::write(
-            project_directory
-                .config_dir()
+            system::config_dir()
                 .join(name.into().to_lowercase())
                 .with_extension("dat"),
             result,
@@ -168,62 +189,75 @@ impl Settings {
 
     /// Whether or not to load models.
     pub fn load_models(&self) -> bool {
-        self.load_settings.contains(LoadSettings::LOAD_MODELS)
+        self.load_settings
+            .contains(LoadSettings::LOAD_MODELS)
     }
 
     /// Sets whether or not to load models.
     pub fn set_load_models(&mut self, value: bool) {
-        self.load_settings.set(LoadSettings::LOAD_MODELS, value);
+        self.load_settings
+            .set(LoadSettings::LOAD_MODELS, value);
     }
 
     /// Whether or not to load images.
     pub fn load_images(&self) -> bool {
-        self.load_settings.contains(LoadSettings::LOAD_IMAGES)
+        self.load_settings
+            .contains(LoadSettings::LOAD_IMAGES)
     }
 
     /// Sets whether or not to load images.
     pub fn set_load_images(&mut self, value: bool) {
-        self.load_settings.set(LoadSettings::LOAD_IMAGES, value)
+        self.load_settings
+            .set(LoadSettings::LOAD_IMAGES, value)
     }
 
     /// Whether or not to load materials.
     pub fn load_materials(&self) -> bool {
-        self.load_settings.contains(LoadSettings::LOAD_MATERIALS)
+        self.load_settings
+            .contains(LoadSettings::LOAD_MATERIALS)
     }
 
     /// Sets whether or not to load materials.
     pub fn set_load_materials(&mut self, value: bool) {
-        self.load_settings.set(LoadSettings::LOAD_MATERIALS, value)
+        self.load_settings
+            .set(LoadSettings::LOAD_MATERIALS, value)
     }
 
     /// Whether or not to load animations.
     pub fn load_animations(&self) -> bool {
-        self.load_settings.contains(LoadSettings::LOAD_ANIMATIONS)
+        self.load_settings
+            .contains(LoadSettings::LOAD_ANIMATIONS)
     }
 
     /// Sets whether or not to load animations.
     pub fn set_load_animations(&mut self, value: bool) {
-        self.load_settings.set(LoadSettings::LOAD_ANIMATIONS, value)
+        self.load_settings
+            .set(LoadSettings::LOAD_ANIMATIONS, value)
     }
 
     /// Whether or not to load sounds.
     pub fn load_sounds(&self) -> bool {
-        self.load_settings.contains(LoadSettings::LOAD_SOUNDS)
+        self.load_settings
+            .contains(LoadSettings::LOAD_SOUNDS)
     }
 
     /// Sets whether or not to load sounds.
     pub fn set_load_sounds(&mut self, value: bool) {
-        self.load_settings.set(LoadSettings::LOAD_SOUNDS, value)
+        self.load_settings
+            .set(LoadSettings::LOAD_SOUNDS, value)
     }
 
     /// Whether or not to load raw files.
     pub fn load_raw_files(&self) -> bool {
-        self.load_settings.contains(LoadSettings::LOAD_RAW_FILES)
+        self.load_settings
+            .contains(LoadSettings::LOAD_RAW_FILES)
+            || (cfg!(feature = "raw-files-forcible") && self.force_raw_files())
     }
 
     /// Sets whether or not to load raw files.
     pub fn set_load_raw_files(&mut self, value: bool) {
-        self.load_settings.set(LoadSettings::LOAD_RAW_FILES, value)
+        self.load_settings
+            .set(LoadSettings::LOAD_RAW_FILES, value)
     }
 
     /// Whether or not to force all assets as raw files.
@@ -242,15 +276,24 @@ impl Settings {
     pub fn model_file_types(&self) -> Vec<ModelFileType> {
         let mut result = Vec::with_capacity(8);
 
-        if self.model_settings.contains(ModelSettings::EXPORT_OBJ) {
+        if self
+            .model_settings
+            .contains(ModelSettings::EXPORT_OBJ)
+        {
             result.push(ModelFileType::Obj);
         }
 
-        if self.model_settings.contains(ModelSettings::EXPORT_SMD) {
+        if self
+            .model_settings
+            .contains(ModelSettings::EXPORT_SMD)
+        {
             result.push(ModelFileType::Smd);
         }
 
-        if self.model_settings.contains(ModelSettings::EXPORT_XNA_LARA) {
+        if self
+            .model_settings
+            .contains(ModelSettings::EXPORT_XNA_LARA)
+        {
             result.push(ModelFileType::XnaLara);
         }
 
@@ -261,15 +304,24 @@ impl Settings {
             result.push(ModelFileType::XModelExport);
         }
 
-        if self.model_settings.contains(ModelSettings::EXPORT_CAST) {
+        if self
+            .model_settings
+            .contains(ModelSettings::EXPORT_CAST)
+        {
             result.push(ModelFileType::Cast);
         }
 
-        if self.model_settings.contains(ModelSettings::EXPORT_MAYA) {
+        if self
+            .model_settings
+            .contains(ModelSettings::EXPORT_MAYA)
+        {
             result.push(ModelFileType::Maya);
         }
 
-        if self.model_settings.contains(ModelSettings::EXPORT_FBX) {
+        if self
+            .model_settings
+            .contains(ModelSettings::EXPORT_FBX)
+        {
             result.push(ModelFileType::Fbx);
         }
 
@@ -291,11 +343,24 @@ impl Settings {
         self.model_settings.set(flag, value);
     }
 
+    /// The model material processing technique.
+    pub fn model_material_processing(&self) -> ModelMaterialProcessing {
+        self.model_material_processing
+    }
+
+    /// Sets the model material processing.
+    pub fn set_model_material_processing(&mut self, processing: ModelMaterialProcessing) {
+        self.model_material_processing = processing;
+    }
+
     /// The animation file types to export to.
     pub fn anim_file_types(&self) -> Vec<AnimationFileType> {
         let mut result = Vec::with_capacity(1);
 
-        if self.anim_settings.contains(AnimSettings::EXPORT_CAST) {
+        if self
+            .anim_settings
+            .contains(AnimSettings::EXPORT_CAST)
+        {
             result.push(AnimationFileType::Cast);
         }
 
@@ -315,11 +380,17 @@ impl Settings {
     pub fn audio_file_types(&self) -> Vec<AudioFileType> {
         let mut result = Vec::with_capacity(3);
 
-        if self.audio_settings.contains(AudioSettings::EXPORT_WAV) {
+        if self
+            .audio_settings
+            .contains(AudioSettings::EXPORT_WAV)
+        {
             result.push(AudioFileType::Wav);
         }
 
-        if self.audio_settings.contains(AudioSettings::EXPORT_FLAC) {
+        if self
+            .audio_settings
+            .contains(AudioSettings::EXPORT_FLAC)
+        {
             result.push(AudioFileType::Flac);
         }
 
@@ -361,38 +432,17 @@ impl Settings {
     }
 
     /// An output directory used to save assets.
-    pub fn output_directory(&self) -> PathBuf {
-        if let Some(output_directory) = self.output_directory.clone() {
-            return output_directory;
+    pub fn output_directory(&self) -> &Path {
+        if let Some(output_directory) = &self.output_directory {
+            return Path::new(output_directory);
         }
 
-        // We need to make sure that we combine with the exe path.
-        // Otherwise we'll have such a bad time, because people are dumb.
-        if cfg!(target_os = "windows") {
-            if cfg!(debug_assertions) {
-                PathBuf::from("./exported_files")
-            } else {
-                static CURRENT_PATH: OnceLock<PathBuf> = OnceLock::new();
-
-                CURRENT_PATH
-                    .get_or_init(|| std::env::current_exe().unwrap_or_default())
-                    .parent()
-                    .unwrap_or(Path::new("./"))
-                    .join("exported_files")
-            }
-        } else if let Some(user_dirs) = UserDirs::new() {
-            match user_dirs.document_dir() {
-                Some(path) => path.join("exported_files"),
-                None => PathBuf::from("~/Documents/exported_files"),
-            }
-        } else {
-            PathBuf::from("~/Documents/exported_files")
-        }
+        system::output_dir()
     }
 
     /// Sets a new output directory.
     pub fn set_output_directory(&mut self, path: PathBuf) {
-        self.output_directory = Some(path);
+        self.output_directory = Some(path.to_string_lossy().into_owned());
     }
 
     /// Gets the preview control scheme.
@@ -461,6 +511,33 @@ impl Settings {
             .then(|| self.custom_scale().unwrap_or(default))
     }
 
+    /// Gets the last successfully loaded files.
+    pub fn last_files(&self) -> Option<Vec<PathBuf>> {
+        self.last_files
+            .as_ref()
+            .map(|last_files| {
+                last_files
+                    .iter()
+                    .map(PathBuf::from)
+                    .collect()
+            })
+    }
+
+    /// Whether or not we have last files stored.
+    pub fn has_last_files(&self) -> bool {
+        self.last_files.is_some()
+    }
+
+    /// Sets the last successfully loaded files.
+    pub fn set_last_files(&mut self, files: Option<Vec<PathBuf>>) {
+        self.last_files = files.map(|files| {
+            files
+                .into_iter()
+                .map(|file| file.to_string_lossy().into_owned())
+                .collect()
+        });
+    }
+
     /// Gets the volume level for audio preview.
     pub fn volume(&self) -> u32 {
         self.volume
@@ -469,6 +546,16 @@ impl Settings {
     /// Sets the volume level for audio preview.
     pub fn set_volume(&mut self, volume: u32) {
         self.volume = volume.clamp(0, 50);
+    }
+
+    /// Gets whether or not to bake animations.
+    pub fn anim_bake(&self) -> bool {
+        self.anim_bake
+    }
+
+    /// Sets whether or not to bake animations.
+    pub fn set_anim_bake(&mut self, value: bool) {
+        self.anim_bake = value;
     }
 
     /// Update settings and returns a copy.
@@ -485,12 +572,17 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             version: 1,
-            load_settings: LoadSettings::all()
-                & !LoadSettings::LOAD_RAW_FILES
-                & !LoadSettings::LOAD_FORCE_RAW_FILES,
-            model_settings: ModelSettings::EXPORT_CAST,
-            anim_settings: AnimSettings::EXPORT_CAST,
-            audio_settings: AudioSettings::EXPORT_WAV,
+            load_settings: LoadSettings::from(
+                LoadSettings::LOAD_MODELS
+                    | LoadSettings::LOAD_IMAGES
+                    | LoadSettings::LOAD_MATERIALS
+                    | LoadSettings::LOAD_ANIMATIONS
+                    | LoadSettings::LOAD_SOUNDS,
+            ),
+            model_settings: ModelSettings::from(ModelSettings::EXPORT_CAST),
+            model_material_processing: ModelMaterialProcessing::InModelFolder,
+            anim_settings: AnimSettings::from(AnimSettings::EXPORT_CAST),
+            audio_settings: AudioSettings::from(AudioSettings::EXPORT_WAV),
             image_file_type: ImageFileType::Png,
             image_normal_map_processing: ImageNormalMapProcessing::OpenGl,
             output_directory: None,
@@ -500,7 +592,9 @@ impl Default for Settings {
             far_clip: 10000,
             preview_window: false,
             custom_scale: None,
+            last_files: None,
             volume: 30,
+            anim_bake: false,
         }
     }
 }

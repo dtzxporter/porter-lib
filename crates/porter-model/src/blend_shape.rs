@@ -13,7 +13,7 @@ pub struct BlendShape {
 
 impl BlendShape {
     /// Constructs a new instance of blend shape.
-    pub fn new(name: String) -> Self {
+    pub const fn new(name: String) -> Self {
         Self {
             name,
             vertex_deltas: BTreeMap::new(),
@@ -38,7 +38,7 @@ impl BlendShape {
     }
 
     /// Sets the target scale value.
-    pub fn target_scale(mut self, target_scale: f32) -> Self {
+    pub const fn target_scale(mut self, target_scale: f32) -> Self {
         self.target_scale = target_scale;
         self
     }

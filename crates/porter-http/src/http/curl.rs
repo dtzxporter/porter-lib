@@ -327,7 +327,7 @@ extern "C" fn write_data_callback(
         return 0;
     }
 
-    userdata.buffer.extend_from_slice(slice);
+    userdata.buffer.extend(slice);
 
     total_size
 }

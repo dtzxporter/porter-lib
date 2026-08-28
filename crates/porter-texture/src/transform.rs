@@ -11,7 +11,7 @@ use crate::unpack_unorm8;
 
 /// The algorithm used to transform an image.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum TransformAlgorithm {
+pub enum Transform {
     /// Reconstruct the Z channel of the image.
     /// (Requires R8G8B8A8_UNORM format)
     ReconstructZ,
@@ -22,15 +22,13 @@ pub enum TransformAlgorithm {
     UniformScaleBias(f32, f32),
 }
 
-impl TransformAlgorithm {
+impl Transform {
     /// Transforms the given image using the provided algorithm.
-    pub(crate) fn transform(&self, image: &mut Image) -> Result<(), TextureError> {
+    pub(crate) fn apply(&self, image: &mut Image) -> Result<(), TextureError> {
         match self {
-            TransformAlgorithm::ReconstructZ => reconstruct_z(image, false)?,
-            TransformAlgorithm::ReconstructZInvertY => reconstruct_z(image, true)?,
-            TransformAlgorithm::UniformScaleBias(scale, bias) => {
-                uniform_scale_bias(image, *scale, *bias)?
-            }
+            Transform::ReconstructZ => reconstruct_z(image, false)?,
+            Transform::ReconstructZInvertY => reconstruct_z(image, true)?,
+            Transform::UniformScaleBias(scale, bias) => uniform_scale_bias(image, *scale, *bias)?,
         }
 
         Ok(())

@@ -115,7 +115,7 @@ impl ProcessHandlePlatform for ProcessHandle {
             }
         }
 
-        let mut module_info: MODULEINFO = unsafe { std::mem::zeroed() };
+        let mut module_info: MODULEINFO = Default::default();
 
         let result = unsafe {
             GetModuleInformation(

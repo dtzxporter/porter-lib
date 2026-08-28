@@ -1,46 +1,14 @@
 use std::collections::HashSet;
-use std::fmt;
 
 use porter_utils::SanitizeExt;
 
-/// A material texture usage.
-#[repr(u32)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum MaterialTextureRefUsage {
-    Albedo,
-    Diffuse,
-    Specular,
-    Normal,
-    Emissive,
-    EmissiveMask,
-    EmissiveStrength,
-    Gloss,
-    Roughness,
-    AmbientOcclusion,
-    Anisotropy,
-    Cavity,
-    Metalness,
-    Unknown,
-    Count,
-}
-
-/// A texture reference for a material.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
-pub struct MaterialTextureRef {
-    /// The file name for this texture, a relative path.
-    pub file_name: String,
-    /// The usage that this texture provides.
-    pub texture_usage: MaterialTextureRefUsage,
-    /// Tool specific alias that is unique to this texture.
-    pub texture_alias: String,
-    /// Tool specific hash that is unique to this texture.
-    pub texture_hash: u64,
-}
+use crate::MaterialTexture;
+use crate::MaterialUsage;
 
 /// The parameter type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MaterialParameterType {
-    Usage(MaterialTextureRefUsage),
+    Usage(MaterialUsage),
 }
 
 /// A parameter for a material.
@@ -64,14 +32,14 @@ pub enum MaterialParameterValue {
 }
 
 /// A material which has a name, and is a collection of textures.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Material {
     /// The sanitized name for this material.
     pub name: String,
     /// Used to differentiate between materials when remapping models.
     pub source_name: String,
     /// A collection of texture references for this material.
-    pub textures: Vec<MaterialTextureRef>,
+    pub textures: Vec<MaterialTexture>,
     /// A collection of parameters for this material.
     pub parameters: Vec<MaterialParameter>,
 }
@@ -111,14 +79,14 @@ impl Material {
     }
 
     /// Adds a texture to the material.
-    pub fn push(&mut self, texture_ref: MaterialTextureRef) {
+    pub fn push(&mut self, texture: MaterialTexture) {
         let indices = self
             .textures
-            .binary_search_by_key(&texture_ref.texture_usage, |entry| entry.texture_usage);
+            .binary_search_by_key(&texture.usage, |entry| entry.usage);
 
         match indices {
-            Ok(index) => self.textures.insert(index + 1, texture_ref),
-            Err(index) => self.textures.insert(index, texture_ref),
+            Ok(index) => self.textures.insert(index + 1, texture),
+            Err(index) => self.textures.insert(index, texture),
         }
     }
 
@@ -146,106 +114,45 @@ impl Material {
     }
 
     /// Removes the texture at the given index.
-    pub fn remove(&mut self, index: usize) -> MaterialTextureRef {
+    pub fn remove(&mut self, index: usize) -> MaterialTexture {
         self.textures.remove(index)
     }
 
+    /// Extend this material with the contents of another.
+    pub fn extend(&mut self, other: Self) {
+        for texture in other.textures {
+            self.push(texture);
+        }
+
+        for parameter in other.parameters {
+            self.push_parameter(parameter.param, parameter.value);
+        }
+    }
+
     /// Returns a collection of unique textures that belong to this material.
-    pub fn unique_textures(&self) -> HashSet<MaterialTextureRef> {
+    pub fn unique_textures(&self) -> HashSet<MaterialTexture> {
         self.textures
             .iter()
-            .take(self.textures.len())
             .filter(|x| !x.is_empty())
             .cloned()
-            .collect::<HashSet<MaterialTextureRef>>()
+            .collect::<HashSet<MaterialTexture>>()
     }
 
     /// Attempts to find the 'base' color texture in this material.
-    pub fn base_color_texture(&self) -> Option<&MaterialTextureRef> {
+    pub fn base_color_texture(&self) -> Option<&MaterialTexture> {
         self.textures
             .iter()
-            .find(|x| x.texture_usage == MaterialTextureRefUsage::Albedo)
+            .find(|x| x.usage == MaterialUsage::Albedo)
             .or_else(|| {
                 self.textures
                     .iter()
-                    .find(|x| x.texture_usage == MaterialTextureRefUsage::Diffuse)
+                    .find(|x| x.usage == MaterialUsage::Diffuse)
             })
     }
 }
 
-impl MaterialTextureRef {
-    /// Creates a new texture reference with an alias.
-    #[inline]
-    pub fn new<F: Into<String>, A: Into<String>>(
-        file_name: F,
-        usage: MaterialTextureRefUsage,
-        alias: A,
-    ) -> Self {
-        debug_assert!(!matches!(usage, MaterialTextureRefUsage::Count));
-
-        Self {
-            file_name: file_name.into(),
-            texture_usage: usage,
-            texture_alias: alias.into(),
-            texture_hash: 0,
-        }
-    }
-
-    /// Creates a new texture reference with a hash.
-    #[inline]
-    pub fn with_hash<F: Into<String>>(
-        file_name: F,
-        usage: MaterialTextureRefUsage,
-        hash: u64,
-    ) -> Self {
-        debug_assert!(!matches!(usage, MaterialTextureRefUsage::Count));
-
-        Self {
-            file_name: file_name.into(),
-            texture_usage: usage,
-            texture_alias: String::new(),
-            texture_hash: hash,
-        }
-    }
-
-    /// Whether or not the texture is empty or (default).
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.texture_alias.is_empty() && self.texture_hash == 0
-    }
-}
-
-impl Default for MaterialTextureRefUsage {
-    #[inline]
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
-
-impl fmt::Display for MaterialTextureRefUsage {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            MaterialTextureRefUsage::Unknown => write!(f, "Unknown"),
-            MaterialTextureRefUsage::Albedo => write!(f, "Albedo"),
-            MaterialTextureRefUsage::Diffuse => write!(f, "Diffuse"),
-            MaterialTextureRefUsage::Specular => write!(f, "Specular"),
-            MaterialTextureRefUsage::Normal => write!(f, "Normal"),
-            MaterialTextureRefUsage::Emissive => write!(f, "Emissive"),
-            MaterialTextureRefUsage::EmissiveMask => write!(f, "Emissive Mask"),
-            MaterialTextureRefUsage::EmissiveStrength => write!(f, "Emissive Strength"),
-            MaterialTextureRefUsage::Gloss => write!(f, "Gloss"),
-            MaterialTextureRefUsage::Roughness => write!(f, "Roughness"),
-            MaterialTextureRefUsage::AmbientOcclusion => write!(f, "Ambient Occlusion"),
-            MaterialTextureRefUsage::Anisotropy => write!(f, "Anisotropy"),
-            MaterialTextureRefUsage::Cavity => write!(f, "Cavity"),
-            MaterialTextureRefUsage::Metalness => write!(f, "Metalness"),
-            MaterialTextureRefUsage::Count => write!(f, "Count"),
-        }
-    }
-}
-
-impl From<MaterialTextureRefUsage> for MaterialParameterType {
-    fn from(value: MaterialTextureRefUsage) -> Self {
+impl From<MaterialUsage> for MaterialParameterType {
+    fn from(value: MaterialUsage) -> Self {
         Self::Usage(value)
     }
 }

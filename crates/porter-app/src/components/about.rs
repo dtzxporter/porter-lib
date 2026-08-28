@@ -1,7 +1,7 @@
 use iced::widget::column;
 use iced::widget::container;
+use iced::widget::space;
 use iced::widget::text;
-use iced::widget::vertical_space;
 
 use iced::Alignment;
 use iced::Element;
@@ -29,12 +29,12 @@ impl About {
                     .size(20.0)
                     .color(palette::TEXT_COLOR_WARN)
                     .into(),
-                vertical_space().height(20.0).into(),
+                space().height(20.0).into(),
                 text(strings::PORTER_BUG_REPORT)
                     .size(18.0)
                     .color(palette::TEXT_COLOR_SECONDARY)
                     .into(),
-                vertical_space().height(20.0).into(),
+                space().height(20.0).into(),
                 text(strings::PORTER_DISCLAIMER)
                     .color(palette::TEXT_COLOR_MUTED)
                     .into(),

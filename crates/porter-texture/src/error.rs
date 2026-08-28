@@ -18,6 +18,7 @@ pub enum TextureError {
     IoError(std::io::Error),
     PngEncodingError(png::EncodingError),
     PngDecodingError(png::DecodingError),
+    TryReserveError(std::collections::TryReserveError),
     TiffError(tiff::TiffError),
 }
 
@@ -36,6 +37,12 @@ impl From<png::DecodingError> for TextureError {
 impl From<std::io::Error> for TextureError {
     fn from(value: std::io::Error) -> Self {
         Self::IoError(value)
+    }
+}
+
+impl From<std::collections::TryReserveError> for TextureError {
+    fn from(value: std::collections::TryReserveError) -> Self {
+        Self::TryReserveError(value)
     }
 }
 

@@ -220,9 +220,18 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             )?;
 
             for face in &mesh.faces {
-                let vertex1 = mesh.vertices.vertex(face.i3 as usize).color(color_layer);
-                let vertex2 = mesh.vertices.vertex(face.i2 as usize).color(color_layer);
-                let vertex3 = mesh.vertices.vertex(face.i1 as usize).color(color_layer);
+                let vertex1 = mesh
+                    .vertices
+                    .vertex(face.i3 as usize)
+                    .color(color_layer);
+                let vertex2 = mesh
+                    .vertices
+                    .vertex(face.i2 as usize)
+                    .color(color_layer);
+                let vertex3 = mesh
+                    .vertices
+                    .vertex(face.i1 as usize)
+                    .color(color_layer);
 
                 write!(
                     maya,
@@ -302,9 +311,18 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
         )?;
 
         for face in &mesh.faces {
-            let vertex1 = mesh.vertices.vertex(face.i3 as usize).normal();
-            let vertex2 = mesh.vertices.vertex(face.i2 as usize).normal();
-            let vertex3 = mesh.vertices.vertex(face.i1 as usize).normal();
+            let vertex1 = mesh
+                .vertices
+                .vertex(face.i3 as usize)
+                .normal();
+            let vertex2 = mesh
+                .vertices
+                .vertex(face.i2 as usize)
+                .normal();
+            let vertex3 = mesh
+                .vertices
+                .vertex(face.i1 as usize)
+                .normal();
 
             write!(
                 maya,
@@ -398,14 +416,12 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                     "\tsetAttr \".ftn\" -type \"string\" \"{}\";",
                 ),
                 material.name,
-                diffuse.file_name.replace('\\', "\\\\")
+                diffuse.file_path.replace('\\', "\\\\")
             )?;
         }
     }
 
-    let mut light_connection_index = 2;
-
-    for material in &model.materials {
+    for (light_connection_index, material) in (2..).zip(&model.materials) {
         writeln!(
             maya,
             concat!(
@@ -511,8 +527,6 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             ),
             material.name, material.name, material.name, material.name
         )?;
-
-        light_connection_index += 1;
     }
 
     for (mesh_index, mesh) in model.meshes.iter().enumerate() {
@@ -562,7 +576,9 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             )?;
         }
 
-        let rotation = bone.local_rotation.to_euler(Angles::Degrees);
+        let rotation = bone
+            .local_rotation
+            .to_euler(Angles::Degrees);
         let position = bone.local_position;
         let scale = bone.local_scale;
 

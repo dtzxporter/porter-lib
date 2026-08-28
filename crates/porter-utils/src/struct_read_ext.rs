@@ -20,7 +20,7 @@ where
     T: Read,
 {
     fn read_struct<S: Copy + 'static>(&mut self) -> Result<S, io::Error> {
-        let mut result = MaybeUninit::<S>::zeroed();
+        let mut result = MaybeUninit::<S>::uninit();
 
         // SAFETY: This slice has the same length as T, and T is always Copy.
         let slice = unsafe { from_raw_parts_mut(result.as_mut_ptr() as *mut u8, size_of::<S>()) };

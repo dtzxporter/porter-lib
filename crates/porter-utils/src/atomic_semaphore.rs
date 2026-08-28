@@ -4,6 +4,7 @@ use std::sync::atomic::Ordering;
 
 struct AtomicSemaphoreInner {
     count: AtomicUsize,
+    total: usize,
 }
 
 /// An atomic semaphore.
@@ -21,7 +22,7 @@ impl AtomicSemaphore {
     /// Constructs a new semaphore with the default thread count.
     pub fn new() -> Self {
         let threads = std::thread::available_parallelism()
-            .map(|threads| threads.get())
+            .map(|threads| threads.get() / 2)
             .unwrap_or_default()
             .max(4);
 
@@ -33,6 +34,7 @@ impl AtomicSemaphore {
         Self {
             inner: Arc::new(AtomicSemaphoreInner {
                 count: AtomicUsize::new(max),
+                total: max,
             }),
         }
     }
@@ -63,11 +65,18 @@ impl AtomicSemaphore {
             }
         }
     }
+
+    /// Checks if the semaphore is idle, and no locks are given out.
+    pub fn is_idle(&self) -> bool {
+        self.inner.count.load(Ordering::Relaxed) == self.inner.total
+    }
 }
 
 impl Drop for AtomicSemaphoreGuard {
     fn drop(&mut self) {
-        self.inner.count.fetch_add(1, Ordering::Relaxed);
+        self.inner
+            .count
+            .fetch_add(1, Ordering::Relaxed);
     }
 }
 

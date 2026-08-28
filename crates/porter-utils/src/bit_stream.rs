@@ -64,7 +64,7 @@ where
     pub const fn new_lsb(source: T) -> Self {
         Self {
             source,
-            buffer: StackVec::new([0; 8]),
+            buffer: StackVec::new(),
             buffer_offset: 0,
             msb: false,
         }
@@ -75,7 +75,7 @@ where
     pub const fn new_msb(source: T) -> Self {
         Self {
             source,
-            buffer: StackVec::new([0; 8]),
+            buffer: StackVec::new(),
             buffer_offset: 0,
             msb: true,
         }
@@ -194,7 +194,7 @@ where
     fn read_u64_msb(&mut self, bits: u64) -> Result<u64> {
         let mut result = 0;
 
-        for _ in 0..bits {
+        for i in 0..bits {
             if self.buffer_offset >= self.buffer.len() * 8 {
                 self.fill_buffer()?;
             }
@@ -203,11 +203,9 @@ where
                 return Err(Error::from(ErrorKind::UnexpectedEof));
             }
 
-            result <<= 1;
-
             if ((self.buffer[self.buffer_offset / 8] >> (7 - (self.buffer_offset % 8))) & 0x1) != 0
             {
-                result |= 1;
+                result |= 1 << i;
             }
 
             self.buffer_offset += 1;
@@ -314,10 +312,14 @@ where
     pub fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
         match pos {
             SeekFrom::Current(current) => {
-                let mut byte_position = self.source.seek(SeekFrom::Current(current / 8))?;
+                let mut byte_position = self
+                    .source
+                    .seek(SeekFrom::Current(current / 8))?;
 
                 if current < 0 && (current % 8) > 0 {
-                    byte_position = self.source.seek(SeekFrom::Current(-1))?;
+                    byte_position = self
+                        .source
+                        .seek(SeekFrom::Current(-1))?;
 
                     self.fill_buffer()?;
                     self.buffer_offset = (current % 8) as usize;
@@ -329,10 +331,14 @@ where
                 Ok(byte_position * 8 + self.buffer_offset as u64)
             }
             SeekFrom::End(end) => {
-                let mut byte_position = self.source.seek(SeekFrom::End(end / 8))?;
+                let mut byte_position = self
+                    .source
+                    .seek(SeekFrom::End(end / 8))?;
 
                 if end < 0 && (end % 8) > 0 {
-                    byte_position = self.source.seek(SeekFrom::Current(-1))?;
+                    byte_position = self
+                        .source
+                        .seek(SeekFrom::Current(-1))?;
 
                     self.fill_buffer()?;
                     self.buffer_offset = (end % 8) as usize;
@@ -344,12 +350,33 @@ where
                 Ok(byte_position * 8 + self.buffer_offset as u64)
             }
             SeekFrom::Start(start) => {
-                self.source.seek(SeekFrom::Start(start / 8))?;
+                self.source
+                    .seek(SeekFrom::Start(start / 8))?;
                 self.fill_buffer()?;
                 self.buffer_offset = (start % 8) as usize;
 
                 Ok(start)
             }
         }
+    }
+
+    /// Skips over the given number of bits from the current position.
+    pub fn skip<P: Copy + 'static>(&mut self, size: P) -> Result<u64>
+    where
+        u64: TryFrom<P>,
+    {
+        let size = u64::try_from(size).map_err(|_| Error::from(ErrorKind::InvalidData))?;
+
+        self.seek(SeekFrom::Current(size as i64))
+    }
+
+    /// Resets a stream back to the start, then jumps to the given offset in bits.
+    pub fn reset_to<P: Copy + 'static>(&mut self, offset: P) -> Result<u64>
+    where
+        u64: TryFrom<P>,
+    {
+        let offset = u64::try_from(offset).map_err(|_| Error::from(ErrorKind::InvalidData))?;
+
+        self.seek(SeekFrom::Start(offset))
     }
 }

@@ -8,6 +8,7 @@ use rayon::Scope;
 pub use rayon::iter::IndexedParallelIterator;
 pub use rayon::iter::IntoParallelIterator;
 pub use rayon::iter::IntoParallelRefIterator;
+pub use rayon::iter::IntoParallelRefMutIterator;
 pub use rayon::iter::ParallelIterator;
 pub use rayon::slice::ParallelSlice;
 pub use rayon::slice::ParallelSliceMut;
@@ -115,11 +116,11 @@ pub fn initialize_thread_pool() {
         let result = rayon::ThreadPoolBuilder::new()
             .num_threads(
                 std::thread::available_parallelism()
-                    .map(|threads| threads.get())
+                    .map(|threads| threads.get() / 2)
                     .unwrap_or_default()
                     .max(4),
             )
-            .thread_name(|index| format!("porter-thread[{}]", index))
+            .thread_name(|index| format!("porter-thread[{index}]"))
             .build_global();
 
         debug_assert!(result.is_ok());

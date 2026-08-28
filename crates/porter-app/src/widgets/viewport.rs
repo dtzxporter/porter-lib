@@ -4,6 +4,9 @@ use std::time::Instant;
 use iced::advanced;
 use iced::advanced::Layout;
 use iced::advanced::Widget;
+
+use iced::advanced::image::Allocation;
+use iced::advanced::image::FilterMethod;
 use iced::advanced::layout;
 use iced::advanced::layout::Limits;
 use iced::advanced::layout::Node;
@@ -47,14 +50,14 @@ pub struct ViewportState {
     renderer: ViewportRenderer,
     bounds: Rectangle<f32>,
     dirty: Option<Instant>,
-    cache: Option<Handle>,
+    cache: Option<Allocation>,
 }
 
 /// Actions performed on the viewport state.
 #[derive(Debug, Clone)]
 pub enum ViewportAction {
     Resized(Rectangle<f32>),
-    Cached(Handle, Instant),
+    Cached(Allocation, Instant),
     ResetView,
     ToggleGrid,
     ToggleBones,
@@ -111,7 +114,7 @@ where
         Size::new(Length::Fill, Length::Fill)
     }
 
-    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
         layout::atomic(limits, Length::Fill, Length::Fill)
     }
 
@@ -121,8 +124,7 @@ where
         event: &Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
-        _renderer: &Renderer,
-        _clipboard: &mut dyn advanced::Clipboard,
+        renderer: &Renderer,
         shell: &mut advanced::Shell<'_, Message>,
         _viewport: &Rectangle,
     ) {
@@ -147,37 +149,37 @@ where
                         shell.publish((self.on_action)(ResetView));
                         shell.capture_event();
 
-                        shell.redraw_request();
+                        shell.request_redraw();
                     }
                     Key::Character("g") => {
                         shell.publish((self.on_action)(ToggleGrid));
                         shell.capture_event();
 
-                        shell.redraw_request();
+                        shell.request_redraw();
                     }
                     Key::Character("b") => {
                         shell.publish((self.on_action)(ToggleBones));
                         shell.capture_event();
 
-                        shell.redraw_request();
+                        shell.request_redraw();
                     }
                     Key::Character("w") => {
                         shell.publish((self.on_action)(ToggleWireframe));
                         shell.capture_event();
 
-                        shell.redraw_request();
+                        shell.request_redraw();
                     }
                     Key::Character("m") => {
                         shell.publish((self.on_action)(ToggleShaded));
                         shell.capture_event();
 
-                        shell.redraw_request();
+                        shell.request_redraw();
                     }
                     Key::Character("n") => {
                         shell.publish((self.on_action)(CycleMaterial));
                         shell.capture_event();
 
-                        shell.redraw_request();
+                        shell.request_redraw();
                     }
                     _ => {
                         // Not used key.
@@ -185,7 +187,9 @@ where
                 }
             }
             Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
-                tree.state.downcast_mut::<State>().keyboard_modifiers = *modifiers;
+                tree.state
+                    .downcast_mut::<State>()
+                    .keyboard_modifiers = *modifiers;
             }
             Event::Mouse(mouse::Event::CursorMoved { position }) => {
                 let state = tree.state.downcast_mut::<State>();
@@ -204,17 +208,21 @@ where
 
                 shell.capture_event();
 
-                shell.redraw_request();
+                shell.request_redraw();
 
                 state.mouse_position = *position;
             }
             Event::Mouse(mouse::Event::ButtonPressed(button)) => {
                 if cursor.is_over(layout.bounds()) {
-                    tree.state.downcast_mut::<State>().mouse_button = Some(*button);
+                    tree.state
+                        .downcast_mut::<State>()
+                        .mouse_button = Some(*button);
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(_)) => {
-                tree.state.downcast_mut::<State>().mouse_button = None;
+                tree.state
+                    .downcast_mut::<State>()
+                    .mouse_button = None;
             }
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
                 if cursor.is_over(layout.bounds()) {
@@ -226,7 +234,7 @@ where
                     shell.publish((self.on_action)(ScrollDelta(*delta)));
                     shell.capture_event();
 
-                    shell.redraw_request();
+                    shell.request_redraw();
                 }
             }
             Event::Window(window::Event::RedrawRequested(now)) => {
@@ -235,9 +243,12 @@ where
                 }
 
                 let (width, height, pixels) = self.state.renderer.render();
-                let cache = Handle::from_rgba(width, height, pixels);
 
-                shell.publish((self.on_action)(Cached(cache, *now)));
+                let handle = Handle::from_rgba(width, height, pixels);
+
+                if let Ok(cache) = renderer.load_image(&handle) {
+                    shell.publish((self.on_action)(Cached(cache, *now)));
+                }
             }
             _ => {
                 // Not handled event.
@@ -267,7 +278,16 @@ where
             return;
         };
 
-        renderer.draw_image(Image::new(cache.clone()), layout.bounds());
+        let bounds = layout.bounds();
+
+        renderer.draw_image(
+            Image::new(cache.handle())
+                // Because the image is always sized to the container width we
+                // should not perform any complex filtering to waste cycles.
+                .filter_method(FilterMethod::Nearest),
+            bounds,
+            bounds,
+        );
     }
 }
 
@@ -305,7 +325,8 @@ impl ViewportState {
 
         match action {
             Resized(bounds) => {
-                self.renderer.resize(bounds.width, bounds.height, far_clip);
+                self.renderer
+                    .resize(bounds.width, bounds.height, far_clip);
 
                 self.bounds = bounds;
                 self.dirty = Some(Instant::now());
@@ -347,7 +368,7 @@ impl ViewportState {
                 self.dirty = Some(Instant::now());
             }
             MouseMove(delta, mouse_button, keyboard_modifiers) => {
-                self.renderer.mouse_move(
+                let dirty = self.renderer.mouse_move(
                     (delta.x, delta.y),
                     ViewportKeyState {
                         maya: matches!(control_scheme, PreviewControlScheme::Maya),
@@ -358,7 +379,10 @@ impl ViewportState {
                         shift: keyboard_modifiers.shift(),
                     },
                 );
-                self.dirty = Some(Instant::now());
+
+                if dirty {
+                    self.dirty = Some(Instant::now());
+                }
             }
         }
     }

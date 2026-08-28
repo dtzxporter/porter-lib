@@ -1,4 +1,48 @@
 use std::path::Path;
+use std::path::PathBuf;
+use std::sync::LazyLock;
+
+use directories::ProjectDirs;
+use directories::UserDirs;
+
+/// System specific configuration directory.
+static CONFIG_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+    ProjectDirs::from("com", "DTZxPorter", "GameTools")
+        .map(|x| x.config_dir().to_owned())
+        .unwrap_or_else(|| PathBuf::from("./"))
+});
+
+/// System specific output directory.
+static OUTPUT_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+    if cfg!(target_os = "windows") {
+        if cfg!(debug_assertions) {
+            PathBuf::from("./exported_files")
+        } else {
+            std::env::current_exe()
+                .unwrap_or_default()
+                .parent()
+                .unwrap_or(Path::new("./"))
+                .join("exported_files")
+        }
+    } else if let Some(user_dirs) = UserDirs::new() {
+        match user_dirs.document_dir() {
+            Some(path) => path.join("exported_files"),
+            None => PathBuf::from("~/Documents/exported_files"),
+        }
+    } else {
+        PathBuf::from("~/Documents/exported_files")
+    }
+});
+
+/// Gets the system specific configuration directory.
+pub fn config_dir() -> &'static Path {
+    &CONFIG_DIR
+}
+
+/// Gets the system specific output directory.
+pub fn output_dir() -> &'static Path {
+    &OUTPUT_DIR
+}
 
 /// System specific workarounds for various issues.
 pub fn initialize_workarounds() {
@@ -20,7 +64,10 @@ pub fn open_url<U: AsRef<str>>(url: U) {
         use windows_sys::Win32::UI::Shell::*;
         use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
-        let url: Vec<u16> = OsStr::new(url).encode_wide().chain(Some(0x0)).collect();
+        let url: Vec<u16> = OsStr::new(url)
+            .encode_wide()
+            .chain(Some(0x0))
+            .collect();
 
         // SAFETY: The pointer to url lives as long as the call does, and is checked that it's a valid string,
         // in this case we do not care whether or not the call succeeds or fails.
@@ -49,7 +96,9 @@ pub fn open_url<U: AsRef<str>>(url: U) {
     {
         use std::process::Command;
 
-        let result = Command::new("xdg-open").arg(url).output();
+        let result = Command::new("xdg-open")
+            .arg(url)
+            .output();
 
         debug_assert!(result.is_ok());
     }

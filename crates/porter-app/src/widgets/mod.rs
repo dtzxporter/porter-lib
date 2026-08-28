@@ -1,9 +1,9 @@
 mod binary;
+mod context;
 mod header_divider;
 mod laser;
 mod resizable;
 mod spinner;
-mod text_wrap;
 mod viewport;
 mod waveform;
 
@@ -11,7 +11,6 @@ pub use viewport::ViewportAction;
 pub use viewport::ViewportState;
 
 use std::borrow::Borrow;
-use std::borrow::Cow;
 use std::ops::RangeInclusive;
 use std::time::Duration;
 
@@ -24,6 +23,7 @@ use iced::widget::Checkbox;
 use iced::widget::Container;
 use iced::widget::PickList;
 use iced::widget::ProgressBar;
+use iced::widget::Rule;
 use iced::widget::Scrollable;
 use iced::widget::Slider;
 use iced::widget::TextInput;
@@ -38,33 +38,26 @@ use iced::Color;
 use iced::Element;
 use iced::Length;
 use iced::Rectangle;
-use iced::Shadow;
-use iced::Vector;
 
 use crate::fonts;
 use crate::palette;
 
 /// Styled button widget.
-pub fn button<'a, Message, Theme, Renderer>(
-    content: impl Into<Element<'a, Message, Theme, Renderer>>,
-) -> Button<'a, Message, Theme, Renderer>
-where
-    Theme: widget::button::Catalog + 'a,
-    Theme::Class<'a>: From<widget::button::StyleFn<'a, Theme>>,
-    Renderer: iced::advanced::Renderer,
-{
+pub fn button<'a, Message>(content: impl Into<Element<'a, Message>>) -> Button<'a, Message> {
     use widget::button;
 
     Button::new(content).style(|_, status| {
         let active = button::Style {
-            background: None,
+            background: Some(Background::Color(
+                palette::BACKGROUND_COLOR_SEMI_TRANSPARENT,
+            )),
             border: Border {
                 width: 1.0,
                 color: palette::PRIMARY_COLOR,
                 ..rounded(4.0)
             },
-            shadow: Default::default(),
             text_color: palette::TEXT_COLOR_DEFAULT,
+            ..Default::default()
         };
 
         match status {
@@ -84,58 +77,128 @@ where
                 ..active
             },
             button::Status::Disabled => button::Style {
-                text_color: palette::TEXT_COLOR_DISABLED,
+                background: None,
                 border: Border {
                     color: palette::PRIMARY_COLOR.scale_alpha(0.3),
                     ..active.border
                 },
+                text_color: palette::TEXT_COLOR_DISABLED,
                 ..active
             },
         }
     })
 }
 
-/// Styled icon button.
-pub fn icon_button<'a, Message, Theme, Renderer>(
-    content: impl Into<Element<'a, Message, Theme, Renderer>>,
-) -> Button<'a, Message, Theme, Renderer>
+/// Styled settings button widget.
+pub fn settings_button<'a, Message>(
+    content: impl Into<Element<'a, Message>>,
+    selected: bool,
+) -> Button<'a, Message>
 where
-    Theme: widget::button::Catalog + 'a,
-    Theme::Class<'a>: From<widget::button::StyleFn<'a, Theme>>,
-    Renderer: iced::advanced::Renderer,
+    Message: 'a,
 {
     use widget::button;
 
-    Button::new(content).padding(0.0).style(|_, status| {
-        let active = button::Style {
-            text_color: palette::TEXT_COLOR_MUTED,
-            ..Default::default()
+    Button::new(
+        container(content)
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center)
+            .width(Length::Fill)
+            .height(48.0),
+    )
+    .style(move |_, status| {
+        let active = if selected {
+            button::Style {
+                background: Some(Background::Color(palette::BACKGROUND_COLOR_LIGHT_100)),
+                border: Border {
+                    width: 1.0,
+                    color: palette::PRIMARY_COLOR,
+                    ..rounded(4.0)
+                },
+                text_color: palette::TEXT_COLOR_DEFAULT,
+                ..Default::default()
+            }
+        } else {
+            button::Style {
+                background: Some(Background::Color(palette::BACKGROUND_COLOR_LIGHT_050)),
+                border: Border {
+                    width: 1.0,
+                    color: palette::BACKGROUND_COLOR_LIGHT_050,
+                    ..rounded(4.0)
+                },
+                text_color: palette::TEXT_COLOR_DEFAULT,
+                ..Default::default()
+            }
         };
 
         match status {
             button::Status::Active => active,
-            button::Status::Hovered | button::Status::Pressed => button::Style {
-                text_color: palette::TEXT_COLOR_DEFAULT,
+            button::Status::Hovered => button::Style {
+                border: Border {
+                    color: palette::PRIMARY_COLOR_LIGHT_250,
+                    ..active.border
+                },
                 ..active
             },
-            _ => active,
+            button::Status::Pressed => button::Style {
+                border: Border {
+                    color: palette::PRIMARY_COLOR_DARK_250,
+                    ..active.border
+                },
+                ..active
+            },
+            button::Status::Disabled => active,
         }
+    })
+    .padding(0.0)
+    .width(Length::Fill)
+    .height(Length::Shrink)
+}
+
+/// Styled icon button.
+pub fn icon_button<'a, Message>(content: impl Into<Element<'a, Message>>) -> Button<'a, Message> {
+    use widget::button;
+
+    Button::new(content)
+        .padding(0.0)
+        .style(|_, status| {
+            let active = button::Style {
+                text_color: palette::TEXT_COLOR_MUTED,
+                ..Default::default()
+            };
+
+            match status {
+                button::Status::Active => active,
+                button::Status::Hovered | button::Status::Pressed => button::Style {
+                    text_color: palette::TEXT_COLOR_DEFAULT,
+                    ..active
+                },
+                _ => active,
+            }
+        })
+}
+
+/// Styled horizontal rule widget.
+pub fn horizontal_rule<'a>() -> Rule<'a> {
+    use widget::rule;
+
+    rule::horizontal(1.0).style(|theme| rule::Style {
+        color: palette::BACKGROUND_COLOR_LIGHT_150,
+        radius: Radius::new(0.0),
+        fill_mode: rule::FillMode::Full,
+        ..rule::default(theme)
     })
 }
 
 /// Styled checkbox widget.
-pub fn checkbox<'a, Message, Theme, Renderer>(
-    label: impl Into<String>,
+pub fn checkbox<'a, Message>(
+    label: impl text::IntoFragment<'a>,
     is_checked: bool,
-) -> Checkbox<'a, Message, Theme, Renderer>
-where
-    Theme: widget::checkbox::Catalog + 'a,
-    Theme::Class<'a>: From<widget::checkbox::StyleFn<'a, Theme>>,
-    Renderer: iced::advanced::Renderer + iced::advanced::text::Renderer,
-{
+) -> Checkbox<'a, Message> {
     use widget::checkbox;
 
-    Checkbox::new(label, is_checked)
+    Checkbox::new(is_checked)
+        .label(label)
         .size(20.0)
         .style(|_, status| {
             let active = checkbox::Style {
@@ -162,16 +225,11 @@ where
 
 /// Styled tooltip widget.
 #[allow(dead_code)]
-pub fn tooltip<'a, Message, Theme, Renderer>(
-    content: impl Into<Element<'a, Message, Theme, Renderer>>,
-    tooltip: impl Into<Element<'a, Message, Theme, Renderer>>,
+pub fn tooltip<'a, Message>(
+    content: impl Into<Element<'a, Message>>,
+    tooltip: impl Into<Element<'a, Message>>,
     position: widget::tooltip::Position,
-) -> Tooltip<'a, Message, Theme, Renderer>
-where
-    Theme: widget::container::Catalog,
-    Theme::Class<'a>: From<widget::container::StyleFn<'a, Theme>>,
-    Renderer: iced::advanced::Renderer + iced::advanced::text::Renderer,
-{
+) -> Tooltip<'a, Message> {
     use widget::container;
 
     Tooltip::new(content, tooltip, position)
@@ -182,45 +240,37 @@ where
             background: Some(Background::Color(palette::BACKGROUND_COLOR_LIGHT_100)),
             border: Border {
                 width: 1.0,
-                color: palette::BACKGROUND_COLOR_LIGHT_100,
+                color: palette::BACKGROUND_COLOR_LIGHT_150,
                 ..rounded(4.0)
             },
-            shadow: Shadow {
-                color: palette::BACKGROUND_COLOR_LIGHT_025,
-                offset: Vector::new(0.0, 0.0),
-                blur_radius: 6.0,
-            },
+            shadow: Default::default(),
+            ..Default::default()
         })
 }
 
 /// Styled pick list widget.
-pub fn pick_list<'a, T, L, V, Message, Theme, Renderer>(
+pub fn pick_list<'a, T, L, V, Message>(
     options: L,
     selected: Option<V>,
     on_select: impl Fn(T) -> Message + 'a,
-) -> PickList<'a, T, L, V, Message, Theme, Renderer>
+) -> PickList<'a, T, L, V, Message>
 where
     T: ToString + PartialEq + Clone + 'a,
     L: Borrow<[T]> + 'a,
     V: Borrow<T> + 'a,
     Message: Clone,
-    Theme: widget::pick_list::Catalog + widget::overlay::menu::Catalog,
-    <Theme as iced::widget::pick_list::Catalog>::Class<'a>:
-        From<widget::pick_list::StyleFn<'a, Theme>>,
-    <Theme as widget::overlay::menu::Catalog>::Class<'a>:
-        From<widget::overlay::menu::StyleFn<'a, Theme>>,
-    Renderer: iced::advanced::Renderer + iced::advanced::text::Renderer,
 {
     use widget::overlay::menu;
     use widget::pick_list;
 
-    PickList::new(options, selected, on_select)
+    PickList::new(selected, options, |x| x.to_string())
+        .on_select(on_select)
         .style(|_, status| {
             let active = pick_list::Style {
                 text_color: palette::TEXT_COLOR_DEFAULT,
                 placeholder_color: palette::TEXT_COLOR_SECONDARY,
                 handle_color: palette::PRIMARY_COLOR,
-                background: Background::Color(palette::BACKGROUND_COLOR_DEFAULT),
+                background: Background::Color(palette::BACKGROUND_COLOR_SEMI_TRANSPARENT),
                 border: Border {
                     width: 1.0,
                     color: palette::PRIMARY_COLOR,
@@ -230,6 +280,7 @@ where
 
             match status {
                 pick_list::Status::Active => active,
+                pick_list::Status::Disabled => active,
                 pick_list::Status::Hovered => pick_list::Style {
                     handle_color: palette::PRIMARY_COLOR_LIGHT_250,
                     border: Border {
@@ -248,7 +299,7 @@ where
                 },
             }
         })
-        .menu_style(|_| menu::Style {
+        .menu_style(|theme| menu::Style {
             background: Background::Color(palette::BACKGROUND_COLOR_LIGHT_050),
             border: Border {
                 width: 1.0,
@@ -258,20 +309,19 @@ where
             text_color: palette::TEXT_COLOR_SECONDARY,
             selected_text_color: palette::TEXT_COLOR_DEFAULT,
             selected_background: Background::Color(palette::PRIMARY_COLOR),
+            ..menu::default(theme)
         })
 }
 
 /// Styled slider widget.
-pub fn slider<'a, T, Message, Theme, F>(
+pub fn slider<'a, T, Message, F>(
     range: RangeInclusive<T>,
     value: T,
     on_change: F,
-) -> Slider<'a, T, Message, Theme>
+) -> Slider<'a, T, Message>
 where
     T: Copy + From<u8> + PartialOrd,
     Message: Clone,
-    Theme: widget::slider::Catalog + 'a,
-    Theme::Class<'a>: From<widget::slider::StyleFn<'a, Theme>>,
     F: Fn(T) -> Message + 'a,
 {
     use widget::slider;
@@ -324,16 +374,11 @@ where
 }
 
 /// Styled list item widget.
-pub fn list_item<'a, Message, Theme, Renderer>(
-    content: impl Into<Element<'a, Message, Theme, Renderer>>,
+pub fn list_item<'a, Message>(
+    content: impl Into<Element<'a, Message>>,
     item_index: usize,
     selected: bool,
-) -> Button<'a, Message, Theme, Renderer>
-where
-    Theme: widget::button::Catalog + 'a,
-    Theme::Class<'a>: From<widget::button::StyleFn<'a, Theme>>,
-    Renderer: iced::advanced::Renderer,
-{
+) -> Button<'a, Message> {
     use widget::button;
 
     let background_default = if selected {
@@ -353,8 +398,8 @@ where
                     color: background_default,
                     ..rounded(4.0)
                 },
-                shadow: Default::default(),
                 text_color: palette::TEXT_COLOR_DEFAULT,
+                ..Default::default()
             };
 
             match status {
@@ -382,22 +427,15 @@ where
 }
 
 /// Styled text input widget.
-pub fn text_input<'a, Message, Theme, Renderer>(
-    placeholder: &str,
-    value: &str,
-) -> TextInput<'a, Message, Theme, Renderer>
+pub fn text_input<'a, Message>(placeholder: &str, value: &str) -> TextInput<'a, Message>
 where
     Message: Clone + 'a,
-    Theme: widget::text_input::Catalog + 'a,
-    <Theme as iced::widget::text_input::Catalog>::Class<'a>:
-        From<widget::text_input::StyleFn<'a, Theme>>,
-    Renderer: iced::advanced::Renderer + iced::advanced::text::Renderer + 'a,
 {
     use widget::text_input;
 
     TextInput::new(placeholder, value).style(|_, status| {
         let active = text_input::Style {
-            background: Background::Color(palette::BACKGROUND_COLOR_DEFAULT),
+            background: Background::Color(palette::BACKGROUND_COLOR_SEMI_TRANSPARENT),
             border: Border {
                 width: 1.0,
                 color: palette::PRIMARY_COLOR,
@@ -433,21 +471,16 @@ where
 }
 
 /// Styled options as a switch button.
-pub fn switch_button<'a, Message, Theme, Renderer>(
+pub fn switch_button<'a, Message>(
     options: impl IntoIterator<Item = (&'a str, Option<Message>, bool)>,
-) -> Container<'a, Message, Theme, Renderer>
+) -> Container<'a, Message>
 where
     Message: Clone + 'a,
-    Theme: widget::container::Catalog + widget::button::Catalog + widget::text::Catalog + 'a,
-    <Theme as iced::widget::container::Catalog>::Class<'a>:
-        From<widget::container::StyleFn<'a, Theme>>,
-    <Theme as iced::widget::button::Catalog>::Class<'a>: From<widget::button::StyleFn<'a, Theme>>,
-    Renderer: iced::advanced::Renderer + iced::advanced::text::Renderer + 'a,
 {
     use widget::button;
     use widget::container;
-    use widget::horizontal_space;
     use widget::row;
+    use widget::space;
 
     let mut options: Vec<_> = options
         .into_iter()
@@ -460,7 +493,9 @@ where
                             background: if selected {
                                 Some(Background::Color(palette::PRIMARY_COLOR))
                             } else {
-                                None
+                                Some(Background::Color(
+                                    palette::BACKGROUND_COLOR_SEMI_TRANSPARENT,
+                                ))
                             },
                             border: Border {
                                 width: 1.0,
@@ -493,7 +528,7 @@ where
             i + 1,
             Element::from(
                 container(
-                    horizontal_space()
+                    space()
                         // Ideally, this should be padded to the height of the parent container.
                         .width(1.0)
                         .height(20.0),
@@ -507,7 +542,7 @@ where
     }
 
     container(row(options).align_y(Alignment::Center))
-        .style(|_: &Theme| container::Style {
+        .style(|_| container::Style {
             background: None,
             border: Border {
                 width: 1.0,
@@ -522,14 +557,7 @@ where
 }
 
 /// Styled button as a link widget.
-pub fn link<'a, Message, Theme, Renderer>(
-    content: impl Into<Element<'a, Message, Theme, Renderer>>,
-) -> Button<'a, Message, Theme, Renderer>
-where
-    Theme: widget::button::Catalog + 'a,
-    Theme::Class<'a>: From<widget::button::StyleFn<'a, Theme>>,
-    Renderer: iced::advanced::Renderer,
-{
+pub fn link<'a, Message>(content: impl Into<Element<'a, Message>>) -> Button<'a, Message> {
     use widget::button;
 
     Button::new(content)
@@ -549,15 +577,10 @@ where
 }
 
 /// Styled bytton as a tab widget.
-pub fn tab<'a, Message, Theme, Renderer>(
-    content: impl Into<Element<'a, Message, Theme, Renderer>>,
+pub fn tab<'a, Message>(
+    content: impl Into<Element<'a, Message>>,
     selected: bool,
-) -> Button<'a, Message, Theme, Renderer>
-where
-    Theme: widget::button::Catalog + 'a,
-    Theme::Class<'a>: From<widget::button::StyleFn<'a, Theme>>,
-    Renderer: iced::advanced::Renderer,
-{
+) -> Button<'a, Message> {
     use widget::button;
 
     Button::new(content)
@@ -571,7 +594,9 @@ where
                         border: Border {
                             width: 1.0,
                             color: palette::BACKGROUND_COLOR_LIGHT_050,
-                            radius: Radius::new(0.0).bottom_left(8.0).bottom_right(8.0),
+                            radius: Radius::new(0.0)
+                                .bottom_left(8.0)
+                                .bottom_right(8.0),
                         },
                         ..Default::default()
                     }
@@ -591,7 +616,9 @@ where
                         border: Border {
                             width: 1.0,
                             color: palette::BACKGROUND_COLOR_LIGHT_050,
-                            radius: Radius::new(0.0).bottom_left(8.0).bottom_right(8.0),
+                            radius: Radius::new(0.0)
+                                .bottom_left(8.0)
+                                .bottom_right(8.0),
                         },
                         ..Default::default()
                     }
@@ -602,7 +629,9 @@ where
                         border: Border {
                             width: 1.0,
                             color: palette::BACKGROUND_COLOR_DEFAULT,
-                            radius: Radius::new(0.0).bottom_left(8.0).bottom_right(8.0),
+                            radius: Radius::new(0.0)
+                                .bottom_left(8.0)
+                                .bottom_right(8.0),
                         },
                         ..Default::default()
                     }
@@ -612,107 +641,110 @@ where
 }
 
 /// Styled scrollable widget.
-pub fn scrollable<'a, Message, Theme, Renderer>(
-    content: impl Into<Element<'a, Message, Theme, Renderer>>,
-) -> Scrollable<'a, Message, Theme, Renderer>
-where
-    Theme: widget::scrollable::Catalog + 'a,
-    Theme::Class<'a>: From<widget::scrollable::StyleFn<'a, Theme>>,
-    Renderer: iced::advanced::Renderer,
-{
+pub fn scrollable<'a, Message>(
+    content: impl Into<Element<'a, Message>>,
+) -> Scrollable<'a, Message> {
     use widget::scrollable;
 
-    Scrollable::new(content).style(|_, status| {
-        let active_rail = scrollable::Rail {
-            background: Some(Background::Color(palette::BACKGROUND_COLOR_LIGHT_050)),
-            border: Border {
-                width: 1.0,
-                color: palette::BACKGROUND_COLOR_LIGHT_050,
-                ..rounded(0.0)
-            },
-            scroller: scrollable::Scroller {
-                color: palette::BACKGROUND_COLOR_LIGHT_100,
+    Scrollable::new(content)
+        .auto_scroll(false)
+        .style(|_, status| {
+            let active_rail = scrollable::Rail {
+                background: Some(Background::Color(palette::BACKGROUND_COLOR_LIGHT_050)),
                 border: Border {
                     width: 1.0,
-                    color: palette::BACKGROUND_COLOR_LIGHT_150,
+                    color: palette::BACKGROUND_COLOR_LIGHT_050,
+                    ..rounded(0.0)
+                },
+                scroller: scrollable::Scroller {
+                    background: Background::Color(palette::BACKGROUND_COLOR_LIGHT_100),
+                    border: Border {
+                        width: 1.0,
+                        color: palette::BACKGROUND_COLOR_LIGHT_150,
+                        ..rounded(2.0)
+                    },
+                },
+            };
+
+            let disabled_rail = scrollable::Rail {
+                border: Border {
+                    width: 1.0,
+                    color: palette::BACKGROUND_COLOR_LIGHT_100,
                     ..rounded(2.0)
                 },
-            },
-        };
+                ..active_rail
+            };
 
-        let disabled_rail = scrollable::Rail {
-            border: Border {
-                width: 1.0,
-                color: palette::BACKGROUND_COLOR_LIGHT_100,
-                ..rounded(2.0)
-            },
-            ..active_rail
-        };
+            let auto_scroll = scrollable::AutoScroll {
+                background: Background::Color(Color::TRANSPARENT),
+                border: Default::default(),
+                icon: Color::WHITE,
+                shadow: Default::default(),
+            };
 
-        match status {
-            scrollable::Status::Active {
-                is_horizontal_scrollbar_disabled,
-                is_vertical_scrollbar_disabled,
-            } => scrollable::Style {
-                container: Default::default(),
-                vertical_rail: if is_vertical_scrollbar_disabled {
-                    disabled_rail
-                } else {
-                    active_rail
+            match status {
+                scrollable::Status::Active {
+                    is_horizontal_scrollbar_disabled,
+                    is_vertical_scrollbar_disabled,
+                } => scrollable::Style {
+                    container: Default::default(),
+                    vertical_rail: if is_vertical_scrollbar_disabled {
+                        disabled_rail
+                    } else {
+                        active_rail
+                    },
+                    horizontal_rail: if is_horizontal_scrollbar_disabled {
+                        disabled_rail
+                    } else {
+                        active_rail
+                    },
+                    gap: Some(Background::Color(palette::BACKGROUND_COLOR_LIGHT_025)),
+                    auto_scroll,
                 },
-                horizontal_rail: if is_horizontal_scrollbar_disabled {
-                    disabled_rail
-                } else {
-                    active_rail
+                scrollable::Status::Hovered {
+                    is_horizontal_scrollbar_disabled,
+                    is_vertical_scrollbar_disabled,
+                    ..
+                } => scrollable::Style {
+                    container: Default::default(),
+                    vertical_rail: if is_vertical_scrollbar_disabled {
+                        disabled_rail
+                    } else {
+                        active_rail
+                    },
+                    horizontal_rail: if is_horizontal_scrollbar_disabled {
+                        disabled_rail
+                    } else {
+                        active_rail
+                    },
+                    gap: Some(Background::Color(palette::BACKGROUND_COLOR_LIGHT_025)),
+                    auto_scroll,
                 },
-                gap: None,
-            },
-            scrollable::Status::Hovered {
-                is_horizontal_scrollbar_disabled,
-                is_vertical_scrollbar_disabled,
-                ..
-            } => scrollable::Style {
-                container: Default::default(),
-                vertical_rail: if is_vertical_scrollbar_disabled {
-                    disabled_rail
-                } else {
-                    active_rail
+                scrollable::Status::Dragged {
+                    is_horizontal_scrollbar_disabled,
+                    is_vertical_scrollbar_disabled,
+                    ..
+                } => scrollable::Style {
+                    container: Default::default(),
+                    vertical_rail: if is_vertical_scrollbar_disabled {
+                        disabled_rail
+                    } else {
+                        active_rail
+                    },
+                    horizontal_rail: if is_horizontal_scrollbar_disabled {
+                        disabled_rail
+                    } else {
+                        active_rail
+                    },
+                    gap: Some(Background::Color(palette::BACKGROUND_COLOR_LIGHT_025)),
+                    auto_scroll,
                 },
-                horizontal_rail: if is_horizontal_scrollbar_disabled {
-                    disabled_rail
-                } else {
-                    active_rail
-                },
-                gap: None,
-            },
-            scrollable::Status::Dragged {
-                is_horizontal_scrollbar_disabled,
-                is_vertical_scrollbar_disabled,
-                ..
-            } => scrollable::Style {
-                container: Default::default(),
-                vertical_rail: if is_vertical_scrollbar_disabled {
-                    disabled_rail
-                } else {
-                    active_rail
-                },
-                horizontal_rail: if is_horizontal_scrollbar_disabled {
-                    disabled_rail
-                } else {
-                    active_rail
-                },
-                gap: None,
-            },
-        }
-    })
+            }
+        })
 }
 
 /// Styled progress bar widget.
-pub fn progress_bar<'a, Theme>(range: RangeInclusive<f32>, value: f32) -> ProgressBar<'a, Theme>
-where
-    Theme: widget::progress_bar::Catalog + 'a,
-    Theme::Class<'a>: From<widget::progress_bar::StyleFn<'a, Theme>>,
-{
+pub fn progress_bar<'a>(range: RangeInclusive<f32>, value: f32) -> ProgressBar<'a> {
     use widget::progress_bar;
 
     ProgressBar::new(range, value).style(|_| progress_bar::Style {
@@ -733,6 +765,32 @@ pub fn spinner<'a>() -> spinner::Spinner<'a> {
         })
         .cycle_duration(Duration::from_secs(2))
         .rotation_duration(Duration::from_secs(2))
+}
+
+/// Context menu widget.
+pub fn context<'a, Message, Theme, Renderer>(
+    content: impl Into<Element<'a, Message, Theme, Renderer>>,
+) -> context::Context<'a, Message, Theme, Renderer>
+where
+    Message: Clone,
+{
+    context::Context::new(content)
+}
+
+/// Menu item widget.
+pub fn menu_item<N: Into<String>, Message>(name: N) -> context::MenuItem<Message>
+where
+    Message: Clone,
+{
+    context::MenuItem::new(name.into())
+}
+
+/// Menu item divider widget.
+pub fn menu_item_divider<Message>() -> context::MenuItem<Message>
+where
+    Message: Clone,
+{
+    context::MenuItem::divider()
 }
 
 /// Preview viewport widget.
@@ -779,6 +837,7 @@ where
 #[allow(dead_code)]
 pub fn waveform<'a, Message, Theme, Renderer>(
     is_playing: bool,
+    is_loading: bool,
     seed: u64,
     on_update: Message,
 ) -> waveform::Waveform<'a, Message, Theme, Renderer>
@@ -786,7 +845,7 @@ where
     Message: Clone,
     Renderer: iced::advanced::Renderer,
 {
-    waveform::Waveform::new(is_playing, seed, on_update)
+    waveform::Waveform::new(is_playing, is_loading, seed, on_update)
 }
 
 /// Resizable widget.
@@ -801,20 +860,10 @@ where
     resizable::Resizable::new(content, on_resize)
 }
 
-/// Text wrapping with ellipsis widget.
-pub fn text_wrap<'a, Message, Theme, Renderer>(
-    content: impl Into<Cow<'a, str>>,
-) -> text_wrap::TextWrap<'a, Message, Theme, Renderer>
-where
-    Theme: text::Catalog + 'a,
-    Renderer: iced::advanced::text::Renderer,
-{
-    text_wrap::TextWrap::new(content)
-}
-
 /// Header divider widget.
 pub fn header_divider<'a, Message, Theme, Renderer, D>(
     on_drag: D,
+    on_press: Message,
     on_release: Message,
 ) -> header_divider::HeaderDivider<'a, Message, Theme, Renderer, D>
 where
@@ -822,5 +871,5 @@ where
     Theme: container::Catalog,
     D: Fn(f32) -> Message,
 {
-    header_divider::HeaderDivider::new(on_drag, on_release)
+    header_divider::HeaderDivider::new(on_drag, on_press, on_release)
 }

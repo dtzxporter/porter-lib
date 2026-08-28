@@ -1,4 +1,4 @@
-use porter_math::PackedU8Vector4;
+use porter_macros::assert_size;
 
 /// Represents the color of a vertex.
 #[repr(C)]
@@ -14,6 +14,8 @@ pub struct VertexColor {
     pub a: u8,
 }
 
+assert_size!(VertexColor, 4);
+
 impl VertexColor {
     /// Constructs a new vertex color.
     pub const fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
@@ -25,13 +27,6 @@ impl From<VertexColor> for u32 {
     #[inline]
     fn from(value: VertexColor) -> Self {
         u32::from_le_bytes([value.r, value.g, value.b, value.a])
-    }
-}
-
-impl From<PackedU8Vector4> for VertexColor {
-    #[inline]
-    fn from(value: PackedU8Vector4) -> Self {
-        Self::new(value.x, value.y, value.z, value.w)
     }
 }
 

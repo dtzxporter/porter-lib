@@ -27,23 +27,44 @@ impl AtomicProgress {
 
     /// Resets the progress to the new total.
     pub fn reset(&self, total: usize) {
-        self.inner.total.store(total, Ordering::Relaxed);
-        self.inner.complete.store(0, Ordering::Relaxed);
+        self.inner
+            .total
+            .store(total, Ordering::Relaxed);
+        self.inner
+            .complete
+            .store(0, Ordering::Relaxed);
     }
 
     /// Adds `additional` items to the total progress.
     pub fn add(&self, additional: usize) {
-        self.inner.total.fetch_add(additional, Ordering::Relaxed);
+        self.inner
+            .total
+            .fetch_add(additional, Ordering::Relaxed);
     }
 
-    /// Increments the completed count.
-    pub fn increment(&self) {
-        self.inner.complete.fetch_add(1, Ordering::Relaxed);
+    /// Increments the completed count, returns the new progress value out of 100%
+    pub fn increment(&self) -> u32 {
+        let completed = self
+            .inner
+            .complete
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_add(1);
+
+        let total = self.inner.total.load(Ordering::Relaxed);
+
+        if completed == 0 {
+            return 0;
+        }
+
+        (((completed as f32) / (total as f32) * 100.0) as u32).clamp(0, 100)
     }
 
     /// Gets the progress value out of 100%.
-    pub fn progress(&self) -> u32 {
-        let completed = self.inner.complete.load(Ordering::Relaxed);
+    pub fn value(&self) -> u32 {
+        let completed = self
+            .inner
+            .complete
+            .load(Ordering::Relaxed);
         let total = self.inner.total.load(Ordering::Relaxed);
 
         if completed == 0 {

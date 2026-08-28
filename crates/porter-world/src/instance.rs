@@ -1,7 +1,6 @@
 use porter_cast::CastId;
 use porter_cast::CastNode;
 use porter_cast::CastPropertyId;
-use porter_cast::CastPropertyValue;
 
 use porter_math::Quaternion;
 use porter_math::Vector3;
@@ -18,7 +17,7 @@ pub struct Instance {
 
 impl Instance {
     /// Constructs a new instance.
-    pub fn new(name: Option<String>, reference: String) -> Self {
+    pub const fn new(name: Option<String>, reference: String) -> Self {
         Self {
             name,
             reference,
@@ -28,27 +27,27 @@ impl Instance {
         }
     }
 
-    /// Scales the instance by the given factor.
-    pub fn scale(&mut self, factor: f32) {
-        self.position *= factor;
-    }
-
     /// Sets the position of this instance.
-    pub fn set_position(mut self, position: Vector3) -> Self {
+    pub const fn set_position(mut self, position: Vector3) -> Self {
         self.position = position;
         self
     }
 
     /// Sets the rotation of this instance.
-    pub fn set_rotation(mut self, rotation: Quaternion) -> Self {
+    pub const fn set_rotation(mut self, rotation: Quaternion) -> Self {
         self.rotation = rotation;
         self
     }
 
     /// Sets the scale of this instance.
-    pub fn set_scale(mut self, scale: Vector3) -> Self {
+    pub const fn set_scale(mut self, scale: Vector3) -> Self {
         self.scale = scale;
         self
+    }
+
+    /// Scales the instance by the given factor.
+    pub fn scale(&mut self, factor: f32) {
+        self.position *= factor;
     }
 
     /// Saves the instance to the cast node.
@@ -79,7 +78,7 @@ impl Instance {
             .create_property(CastPropertyId::String, "p")
             .push(self.reference.as_str());
 
-        let file_hash = CastPropertyValue::from(file_node);
+        let file_hash = file_node.hash();
 
         instance_node
             .create_property(CastPropertyId::Integer64, "rf")

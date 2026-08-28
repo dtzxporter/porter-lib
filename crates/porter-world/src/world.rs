@@ -12,6 +12,7 @@ use porter_math::Axis;
 use porter_utils::BufferWriteExt;
 
 use crate::Instance;
+use crate::WorldType;
 
 /// A 3d world definition.
 #[derive(Debug, Clone)]
@@ -22,15 +23,18 @@ pub struct World {
     pub scene_root: Option<String>,
     /// The up axis for this world.
     pub up_axis: Axis,
+    /// The type of world data this is.
+    pub world_type: WorldType,
 }
 
 impl World {
     /// Constructs a new instance of world.
-    pub fn new() -> Self {
+    pub const fn new(world_type: WorldType) -> Self {
         Self {
             instances: Vec::new(),
             scene_root: None,
             up_axis: Axis::Z,
+            world_type,
         }
     }
 
@@ -83,11 +87,5 @@ impl World {
         file.write(writer)?;
 
         Ok(())
-    }
-}
-
-impl Default for World {
-    fn default() -> Self {
-        Self::new()
     }
 }

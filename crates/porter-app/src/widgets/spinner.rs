@@ -169,7 +169,7 @@ impl<Message> Widget<Message, Theme, iced::Renderer> for Spinner<'_> {
         Size::new(Length::Fixed(self.size), Length::Fixed(self.size))
     }
 
-    fn layout(&self, _tree: &mut Tree, _renderer: &iced::Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, _tree: &mut Tree, _renderer: &iced::Renderer, limits: &Limits) -> Node {
         layout::atomic(limits, self.size, self.size)
     }
 
@@ -180,7 +180,6 @@ impl<Message> Widget<Message, Theme, iced::Renderer> for Spinner<'_> {
         _layout: layout::Layout<'_>,
         _cursor: Cursor,
         _renderer: &iced::Renderer,
-        _clipboard: &mut dyn advanced::Clipboard,
         shell: &mut advanced::Shell<'_, Message>,
         _viewport: &Rectangle,
     ) {
@@ -207,51 +206,55 @@ impl<Message> Widget<Message, Theme, iced::Renderer> for Spinner<'_> {
         let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
 
-        let geometry = state.cache.draw(renderer, bounds.size(), |frame| {
-            let track_radius = frame.width() / 2.0 - self.bar_height;
-            let track_path = canvas::Path::circle(frame.center(), track_radius);
+        let geometry = state
+            .cache
+            .draw(renderer, bounds.size(), |frame| {
+                let track_radius = frame.width() / 2.0 - self.bar_height;
+                let track_path = canvas::Path::circle(frame.center(), track_radius);
 
-            frame.stroke(
-                &track_path,
-                canvas::Stroke::default()
-                    .with_color(self.style.track_color)
-                    .with_width(self.bar_height),
-            );
+                frame.stroke(
+                    &track_path,
+                    canvas::Stroke::default()
+                        .with_color(self.style.track_color)
+                        .with_width(self.bar_height),
+                );
 
-            let mut builder = canvas::path::Builder::new();
+                let mut builder = canvas::path::Builder::new();
 
-            let start = state.animation.rotation() * 2.0 * std::f32::consts::PI;
+                let start = state.animation.rotation() * 2.0 * std::f32::consts::PI;
 
-            match state.animation {
-                Animation::Expanding { progress, .. } => {
-                    builder.arc(canvas::path::Arc {
-                        center: frame.center(),
-                        radius: track_radius,
-                        start_angle: Radians(start),
-                        end_angle: Radians(
-                            start + MIN_RADIANS + WRAP_RADIANS * (self.easing.y_at_x(progress)),
-                        ),
-                    });
+                match state.animation {
+                    Animation::Expanding { progress, .. } => {
+                        builder.arc(canvas::path::Arc {
+                            center: frame.center(),
+                            radius: track_radius,
+                            start_angle: Radians(start),
+                            end_angle: Radians(
+                                start + MIN_RADIANS + WRAP_RADIANS * (self.easing.y_at_x(progress)),
+                            ),
+                        });
+                    }
+                    Animation::Contracting { progress, .. } => {
+                        builder.arc(canvas::path::Arc {
+                            center: frame.center(),
+                            radius: track_radius,
+                            start_angle: Radians(
+                                start + WRAP_RADIANS * (self.easing.y_at_x(progress)),
+                            ),
+                            end_angle: Radians(start + MIN_RADIANS + WRAP_RADIANS),
+                        });
+                    }
                 }
-                Animation::Contracting { progress, .. } => {
-                    builder.arc(canvas::path::Arc {
-                        center: frame.center(),
-                        radius: track_radius,
-                        start_angle: Radians(start + WRAP_RADIANS * (self.easing.y_at_x(progress))),
-                        end_angle: Radians(start + MIN_RADIANS + WRAP_RADIANS),
-                    });
-                }
-            }
 
-            let bar_path = builder.build();
+                let bar_path = builder.build();
 
-            frame.stroke(
-                &bar_path,
-                canvas::Stroke::default()
-                    .with_color(self.style.bar_color)
-                    .with_width(self.bar_height),
-            );
-        });
+                frame.stroke(
+                    &bar_path,
+                    canvas::Stroke::default()
+                        .with_color(self.style.bar_color)
+                        .with_width(self.bar_height),
+                );
+            });
 
         renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
             use iced::advanced::graphics::geometry::Renderer as _;
@@ -374,7 +377,9 @@ impl State {
         rotation_duration: Duration,
         now: Instant,
     ) {
-        self.animation = self.animation.step(cycle_duration, rotation_duration, now);
+        self.animation = self
+            .animation
+            .step(cycle_duration, rotation_duration, now);
     }
 }
 

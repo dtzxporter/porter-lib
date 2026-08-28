@@ -5,6 +5,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+use porter_macros::assert_size;
+
 use porter_utils::StructReadExt;
 use porter_utils::StructWriteExt;
 
@@ -15,7 +17,7 @@ use crate::CastPropertyId;
 /// Base hash constant used to generate hashes.
 const HASH_BASE: u64 = 0x534E495752545250;
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 struct CastNodeHeader {
     identifier: CastId,
@@ -24,6 +26,8 @@ struct CastNodeHeader {
     property_count: u32,
     child_count: u32,
 }
+
+assert_size!(CastNodeHeader, 24);
 
 /// A cast node.
 #[derive(Debug)]
@@ -53,30 +57,25 @@ impl CastNode {
 
         let child = CastNode {
             identifier,
-            hash: self.hash_next.fetch_add(1, Ordering::Relaxed),
+            hash: self
+                .hash_next
+                .fetch_add(1, Ordering::Relaxed),
             hash_next: self.hash_next.clone(),
             properties: Vec::new(),
             children: Vec::new(),
         };
 
-        self.children.push(child);
-
-        let index = self.children.len() - 1;
-
-        self.children.get_mut(index).unwrap()
+        self.children.push_mut(child)
     }
 
     /// Creates a new property with the given type and name.
-    pub fn create_property<N: Into<String>>(
+    pub fn create_property<N: AsRef<str>>(
         &mut self,
         property_type: CastPropertyId,
         name: N,
     ) -> &mut CastProperty {
-        self.properties.push(CastProperty::new(property_type, name));
-
-        let index = self.properties.len() - 1;
-
-        self.properties.get_mut(index).unwrap()
+        self.properties
+            .push_mut(CastProperty::new(property_type, name))
     }
 
     /// Returns the identifier of this node.
@@ -84,9 +83,23 @@ impl CastNode {
         self.identifier
     }
 
+    /// Gets the hash of this cast node.
+    pub fn hash(&self) -> u64 {
+        self.hash
+    }
+
     /// Finds a property by the given name.
     pub fn property<N: AsRef<str>>(&self, name: N) -> Option<&CastProperty> {
-        self.properties.iter().find(|x| x.name() == name.as_ref())
+        self.properties
+            .iter()
+            .find(|x| x.name() == name.as_ref())
+    }
+
+    /// Finds a mutable property by the given name.
+    pub fn property_mut<N: AsRef<str>>(&mut self, name: N) -> Option<&mut CastProperty> {
+        self.properties
+            .iter_mut()
+            .find(|x| x.name() == name.as_ref())
     }
 
     /// Returns a slice of children of this node.
@@ -118,12 +131,34 @@ impl CastNode {
 
     /// Finds a child by the given hash.
     pub fn child_by_hash(&self, hash: u64) -> Option<&CastNode> {
-        self.children.iter().find(|x| x.hash == hash)
+        self.children
+            .iter()
+            .find(|x| x.hash == hash)
     }
 
     /// Finds a mutable child by the given hash.
     pub fn child_by_hash_mut(&mut self, hash: u64) -> Option<&mut CastNode> {
-        self.children.iter_mut().find(|x| x.hash == hash)
+        self.children
+            .iter_mut()
+            .find(|x| x.hash == hash)
+    }
+
+    /// Removes and returns the child node at the given index.
+    pub fn remove(&mut self, index: usize) -> CastNode {
+        self.children.remove(index)
+    }
+
+    /// Retains only the child nodes specified by the predicate.
+    pub fn retain<F>(&mut self, f: F)
+    where
+        F: FnMut(&CastNode) -> bool,
+    {
+        self.children.retain(f);
+    }
+
+    /// Removes all child nodes.
+    pub fn clear(&mut self) {
+        self.children.clear();
     }
 
     /// Serializes the node to the writer.
@@ -176,11 +211,6 @@ impl CastNode {
             properties,
             children,
         })
-    }
-
-    /// Gets the hash of this cast node.
-    pub(crate) fn hash(&self) -> u64 {
-        self.hash
     }
 
     /// Gets the largest hash value of this cast node and it's children.

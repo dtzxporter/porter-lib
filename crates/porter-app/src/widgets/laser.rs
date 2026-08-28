@@ -117,7 +117,7 @@ where
         Size::new(self.width, self.height)
     }
 
-    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
         layout::atomic(limits, self.width, self.height)
     }
 
@@ -128,7 +128,6 @@ where
         _layout: advanced::Layout<'_>,
         _cursor: Cursor,
         _renderer: &Renderer,
-        _clipboard: &mut dyn advanced::Clipboard,
         shell: &mut advanced::Shell<'_, Message>,
         _viewport: &Rectangle,
     ) {
@@ -191,7 +190,7 @@ where
                     radius: radius(self.radius),
                     ..Default::default()
                 },
-                shadow: Default::default(),
+                ..Default::default()
             },
             background,
         );
@@ -203,7 +202,7 @@ where
                     radius: radius(self.radius - 2.0),
                     ..Default::default()
                 },
-                shadow: Default::default(),
+                ..Default::default()
             },
             Background::Color(palette::BACKGROUND_COLOR_LIGHT_050),
         );

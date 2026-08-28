@@ -19,12 +19,14 @@ impl AtomicCancel {
 
     /// Resets the value of the canceller.
     pub fn reset(&self) {
-        self.inner.store(false, Ordering::Relaxed);
+        self.inner
+            .store(false, Ordering::Relaxed);
     }
 
     /// Signals that the operation is cancelled.
-    pub fn cancel(&self) {
-        self.inner.store(true, Ordering::Relaxed);
+    pub fn signal(&self) {
+        self.inner
+            .store(true, Ordering::Relaxed);
     }
 
     /// Whether or not the operation is cancelled.

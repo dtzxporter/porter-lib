@@ -1,17 +1,18 @@
 use std::path::PathBuf;
 
-use iced::theme::Palette;
-
 use iced::window;
 
 use iced::Element;
 use iced::Event;
 use iced::Subscription;
 use iced::Task;
-use iced::Theme;
+
+use iced::theme::Theme;
+use iced::theme::palette::Seed;
 
 use crate::AppState;
 use crate::AssetPreview;
+use crate::AssetPreviewRequest;
 use crate::ColumnStatus;
 use crate::Controller;
 use crate::MainMessage;
@@ -25,7 +26,9 @@ use crate::components::ContentMessage;
 use crate::components::HeaderMessage;
 use crate::components::PreviewMessage;
 use crate::components::SearchBarMessage;
+use crate::components::SettingsMessage;
 use crate::palette;
+use crate::strings;
 
 /// Entry point for the iced application.
 pub struct App {
@@ -59,18 +62,12 @@ impl App {
             self.main_window.title(&self.state)
         } else if id == self.splash_window.id {
             self.splash_window.title(&self.state)
-        } else if self
-            .preview_window
-            .as_ref()
-            .map(|window| window.id)
-            .is_some_and(|x| x == id)
+        } else if let Some(preview_window) = &self.preview_window
+            && preview_window.id == id
         {
-            self.preview_window
-                .as_ref()
-                .map(|window| window.title(&self.state))
-                .unwrap_or_else(|| String::from("<unset>"))
+            preview_window.title(&self.state)
         } else {
-            String::from("<unset>")
+            String::new()
         }
     }
 
@@ -84,7 +81,9 @@ impl App {
             WindowOpened(id) => self.on_window_opened(id),
             Controller(controller) => self.on_controller(controller),
             Splash(message) => self.splash_window.update(message),
-            Main(message) => self.main_window.update(&mut self.state, message),
+            Main(message) => self
+                .main_window
+                .update(&mut self.state, message),
             PreviewProxy(message) => self.on_preview_proxy(message),
             PreviewWindow(message) => self
                 .preview_window
@@ -95,14 +94,18 @@ impl App {
             PreviewWindowClosed => self.on_preview_window_closed(),
             PreviewToggle => self.on_preview_toggle(),
             PreviewRequest => self.on_preview_request(),
-            LoadUpdate(result) => self.on_load_update(result),
+            PreviewAsset(index, raw) => self.on_preview_asset(index, raw),
+            LoadUpdate(result, files) => self.on_load_update(result, files),
             ProgressUpdate(finished, progress) => self.on_progress_update(finished, progress),
             PreviewUpdate(request_id, asset) => self.on_preview_update(request_id, asset),
+            ExportOne(index) => self.on_export_one(index),
             ExportSelected => self.on_export_selected(),
             ExportAll => self.on_export_all(),
             ExportCancel => self.on_export_cancel(),
+            CopyColumn(index, column_index) => self.on_copy_column(index, column_index),
             LoadFiles(files) => self.on_load_files(files),
             LoadFilesDropped => self.on_load_files_dropped(),
+            LoadLastFiles => self.on_load_last_files(),
             LoadGame => self.on_load_game(),
             Sort(index) => self.on_sort(index),
             CheckReload => self.on_check_reload(),
@@ -113,11 +116,11 @@ impl App {
     pub fn theme(&self, _: window::Id) -> Theme {
         Theme::custom(
             String::from("Porter"),
-            Palette {
+            Seed {
                 background: palette::BACKGROUND_COLOR_DEFAULT,
                 text: palette::TEXT_COLOR_DEFAULT,
                 primary: palette::PRIMARY_COLOR,
-                ..Palette::LIGHT
+                ..Seed::LIGHT
             },
         )
     }
@@ -181,18 +184,12 @@ impl App {
             self.main_window.view(&self.state)
         } else if id == self.splash_window.id {
             self.splash_window.view(&self.state)
-        } else if self
-            .preview_window
-            .as_ref()
-            .map(|window| window.id)
-            .is_some_and(|x| x == id)
+        } else if let Some(preview_window) = &self.preview_window
+            && preview_window.id == id
         {
-            self.preview_window
-                .as_ref()
-                .map(|window| window.view(&self.state))
-                .unwrap_or_else(|| iced::widget::text("<unset>").into())
+            preview_window.view(&self.state)
         } else {
-            iced::widget::text("<unset>").into()
+            iced::widget::space().into()
         }
     }
 
@@ -207,17 +204,12 @@ impl App {
             self.main_window
                 .update(&mut self.state, MainMessage::UI(event))
         } else if id == self.splash_window.id {
-            self.splash_window.update(SplashMessage::UI(event))
-        } else if self
-            .preview_window
-            .as_ref()
-            .map(|window| window.id)
-            .is_some_and(|x| x == id)
+            self.splash_window
+                .update(SplashMessage::UI(event))
+        } else if let Some(preview_window) = &mut self.preview_window
+            && preview_window.id == id
         {
-            self.preview_window
-                .as_mut()
-                .map(|window| window.update(&mut self.state, PreviewWindowMessage::UI(event)))
-                .unwrap_or_else(Task::none)
+            preview_window.update(&mut self.state, PreviewWindowMessage::UI(event))
         } else {
             Task::none()
         }
@@ -234,10 +226,13 @@ impl App {
 
             use crate::icon_windows;
 
-            iced::window::run_with_handle(id, |handle| {
+            iced::window::run(id, |handle| {
                 let icon = icon_windows::windows_icon();
 
-                if let RawWindowHandle::Win32(handle) = handle.window.as_raw() {
+                if let Ok(RawWindowHandle::Win32(handle)) = handle
+                    .window_handle()
+                    .map(|x| x.as_raw())
+                {
                     unsafe {
                         PostMessageW(
                             handle.hwnd.get() as _,
@@ -293,19 +288,42 @@ impl App {
 
     /// Occurs when a preview request has been completed by the asset manager.
     fn on_preview_update(&mut self, request_id: u64, asset: AssetPreview) -> Task<Message> {
-        if self.state.asset_preview_id.is_none()
-            || self.state.asset_preview_id.is_some_and(|x| x != request_id)
-        {
-            return Task::none();
+        match self.state.asset_preview {
+            None => Task::none(),
+            Some(request) if request.request_id() != request_id => {
+                if self.state.asset_manager.assets_empty() {
+                    self.state.asset_preview = None;
+                    return Task::none();
+                }
+
+                let manager = self.state.asset_manager.clone();
+                let controller = self.state.controller.clone();
+                let settings = self.state.settings.clone();
+
+                let index = request.index();
+                let raw = request.raw();
+                let request_id = request.request_id();
+
+                porter_threads::spawn(move || {
+                    manager.preview(settings, controller, index, raw, request_id);
+                });
+
+                Task::none()
+            }
+            Some(_) => {
+                self.state.asset_preview = None;
+
+                self.on_preview_proxy(PreviewMessage::Update(asset))
+            }
         }
-
-        self.state.asset_preview_id = None;
-
-        self.on_preview_proxy(PreviewMessage::Update(asset))
     }
 
     /// Occurs when a load request has been completed by the asset manager.
-    fn on_load_update(&mut self, result: Result<(), String>) -> Task<Message> {
+    fn on_load_update(
+        &mut self,
+        result: Result<(), String>,
+        files: Option<Vec<PathBuf>>,
+    ) -> Task<Message> {
         self.state.loading = false;
         self.state.progress = 0;
         self.state.reset_item_range();
@@ -320,12 +338,23 @@ impl App {
                 Task::done(Message::from(HeaderMessage::UpdateIcon(icon))),
             ])
         } else {
-            Task::batch([
-                Task::done(Message::from(SearchBarMessage::Submit)),
-                Task::done(Message::from(HeaderMessage::UpdateIcon(icon))),
-                Task::done(Message::Sort(None)),
-                self.on_check_reload(),
-            ])
+            Task::batch(
+                [
+                    Task::done(Message::from(SearchBarMessage::Submit)),
+                    Task::done(Message::from(HeaderMessage::UpdateIcon(icon))),
+                    Task::done(Message::Sort(None)),
+                    self.on_check_reload(),
+                ]
+                .into_iter()
+                .chain(files.map(|files| {
+                    let settings = self
+                        .state
+                        .settings
+                        .update(|settings| settings.set_last_files(Some(files)));
+
+                    Task::done(Message::from(SettingsMessage::Save(settings)))
+                })),
+            )
         }
     }
 
@@ -377,34 +406,77 @@ impl App {
         }
     }
 
-    /// Occurs when we need to request a new preview asset from the asset manager.
+    /// Occurs when we need to request to preview the selected asset.
     fn on_preview_request(&mut self) -> Task<Message> {
-        let Some(index) = self.state.assets_selected.first().cloned() else {
+        let Some(index) = self
+            .state
+            .assets_selected
+            .first()
+            .cloned()
+        else {
             return Task::none();
         };
 
+        self.on_preview_asset_request(index, self.state.modifier_keys.alt())
+    }
+
+    /// Occurs when we need to request to preview a specific asset.
+    fn on_preview_asset(&mut self, index: usize, raw: bool) -> Task<Message> {
+        if self.state.settings.preview_window() && self.preview_window.is_none() {
+            let (preview_window, preview_window_task) = PreviewWindow::create();
+
+            self.preview_window = Some(preview_window);
+
+            Task::batch([
+                preview_window_task.discard(),
+                self.on_preview_asset_request(index, raw),
+            ])
+        } else if self.preview_window.is_some() {
+            self.on_preview_asset_request(index, raw)
+        } else {
+            Task::batch([
+                Task::done(Message::from(ContentMessage::PreviewOpen)),
+                self.on_preview_asset_request(index, raw),
+            ])
+        }
+    }
+
+    /// Occurs when we need to request a preview asset from the asset manager.
+    fn on_preview_asset_request(&mut self, index: usize, raw: bool) -> Task<Message> {
         if self.state.asset_manager.assets_empty() {
             return Task::none();
         }
 
-        let manager = self.state.asset_manager.clone();
-        let controller = self.state.controller.clone();
-        let settings = self.state.settings.clone();
-        let request_id = self
-            .state
-            .asset_preview_id
-            .map(|id| id + 1)
-            .unwrap_or_default();
+        match &mut self.state.asset_preview {
+            None => {
+                let request = AssetPreviewRequest::new(index, raw);
+                let request_id = request.request_id();
 
-        self.state.asset_preview_id = Some(request_id);
+                let manager = self.state.asset_manager.clone();
+                let controller = self.state.controller.clone();
+                let settings = self.state.settings.clone();
 
-        let raw = self.state.modifier_keys.alt();
+                porter_threads::spawn(move || {
+                    manager.preview(settings, controller, index, raw, request_id);
+                });
 
-        porter_threads::spawn(move || {
-            manager.preview(settings, index, raw, request_id, controller);
-        });
+                self.state.asset_preview = Some(request);
+            }
+            Some(request) => {
+                request.next_request(index, raw);
+            }
+        }
 
         Task::none()
+    }
+
+    /// Occurs when the user requests to export one asset.
+    fn on_export_one(&mut self, index: usize) -> Task<Message> {
+        if self.state.is_busy() {
+            return Task::none();
+        }
+
+        self.on_export(vec![index])
     }
 
     /// Occurs when the user requests to export selected assets.
@@ -413,20 +485,14 @@ impl App {
             return Task::none();
         }
 
-        let manager = self.state.asset_manager.clone();
-        let controller = self.state.controller.clone();
-        let settings = self.state.settings.clone();
-        let assets: Vec<usize> = self.state.assets_selected.iter().copied().collect();
+        let assets: Vec<usize> = self
+            .state
+            .assets_selected
+            .iter()
+            .copied()
+            .collect();
 
-        self.state.exporting = true;
-        self.state.export_canceled = false;
-        self.state.progress = 0;
-
-        porter_threads::spawn(move || {
-            manager.export(settings, assets, controller);
-        });
-
-        Task::none()
+        self.on_export(assets)
     }
 
     /// Occurs when the user requests to export all assets.
@@ -435,20 +501,13 @@ impl App {
             return Task::none();
         }
 
-        let manager = self.state.asset_manager.clone();
-        let controller = self.state.controller.clone();
-        let settings = self.state.settings.clone();
-        let assets: Vec<usize> = (0..self.state.asset_manager.assets_visible()).collect();
+        let assets: Vec<usize> = (0..self
+            .state
+            .asset_manager
+            .assets_visible())
+            .collect();
 
-        self.state.exporting = true;
-        self.state.export_canceled = false;
-        self.state.progress = 0;
-
-        porter_threads::spawn(move || {
-            manager.export(settings, assets, controller);
-        });
-
-        Task::none()
+        self.on_export(assets)
     }
 
     /// Occurs when the user requests to cancel an export.
@@ -461,6 +520,42 @@ impl App {
         self.state.asset_manager.export_cancel();
 
         Task::none()
+    }
+
+    /// Occurs when the user wants to export the provided assets.
+    fn on_export(&mut self, assets: Vec<usize>) -> Task<Message> {
+        let manager = self.state.asset_manager.clone();
+        let controller = self.state.controller.clone();
+        let settings = self.state.settings.clone();
+
+        self.state.exporting = true;
+        self.state.export_canceled = false;
+        self.state.progress = 0;
+
+        porter_threads::spawn(move || {
+            manager.export(settings, controller, assets);
+        });
+
+        Task::none()
+    }
+
+    /// Occurs when the user requests to copy the value of an asset column.
+    fn on_copy_column(&mut self, index: usize, column_index: usize) -> Task<Message> {
+        if self.state.loading {
+            return Task::none();
+        }
+
+        let Some(value) = self
+            .state
+            .asset_manager
+            .assets_info(index)
+            .into_iter()
+            .nth(column_index)
+        else {
+            return Task::none();
+        };
+
+        iced::clipboard::write(value.0).discard()
     }
 
     /// Occurs when the user requests to load some files.
@@ -479,7 +574,7 @@ impl App {
         self.state.assets_selected.clear();
 
         porter_threads::spawn(move || {
-            controller.load_update(manager.load_files(settings, files));
+            controller.load_update(manager.load_files(settings, files.clone()), Some(files));
         });
 
         Task::none()
@@ -533,6 +628,35 @@ impl App {
         Task::none()
     }
 
+    /// Occurs when the user requests to load the last loaded files.
+    fn on_load_last_files(&mut self) -> Task<Message> {
+        let Some(files) = self.state.settings.last_files() else {
+            return Task::none();
+        };
+
+        let missing = files.iter().any(|file| !file.exists());
+
+        if missing {
+            let settings = self
+                .state
+                .settings
+                .update(|settings| settings.set_last_files(None));
+
+            return Task::batch([
+                Task::done(Message::from(SettingsMessage::Save(settings))),
+                Task::done(Message::from(MainMessage::Warning(
+                    if cfg!(feature = "multi-file") {
+                        String::from(strings::ONE_OR_MORE_MISSING)
+                    } else {
+                        String::from(strings::ONE_MISSING)
+                    },
+                ))),
+            ]);
+        }
+
+        self.on_load_files(files)
+    }
+
     /// Occurs when the user requests to load a game.
     fn on_load_game(&mut self) -> Task<Message> {
         if self.state.is_busy() {
@@ -549,7 +673,7 @@ impl App {
         self.state.assets_selected.clear();
 
         porter_threads::spawn(move || {
-            controller.load_update(manager.load_game(settings));
+            controller.load_update(manager.load_game(settings), None);
         });
 
         Task::none()
@@ -569,8 +693,15 @@ impl App {
             .map(|(index, column)| ColumnStatus::new(index, column.sort.unwrap_or_default()))
             .collect();
 
-        for status in self.state.asset_manager.sort(index, statuses) {
-            if let Some(column) = self.state.asset_columns.get_mut(status.index)
+        for status in self
+            .state
+            .asset_manager
+            .sort(index, statuses)
+        {
+            if let Some(column) = self
+                .state
+                .asset_columns
+                .get_mut(status.index)
                 && column.sort.is_some()
             {
                 column.sort = Some(status.sort);

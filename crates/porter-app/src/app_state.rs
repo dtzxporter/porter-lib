@@ -3,35 +3,29 @@ use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use iced::advanced::graphics;
-
 use iced::keyboard::Modifiers;
 
+use iced::Backend;
 use iced::Color;
-use iced::Error;
 use iced::Font;
 use iced::Pixels;
 
 use porter_threads::initialize_thread_pool;
 
-use porter_utils::StringCaseExt;
-
-use rfd::MessageButtons;
-use rfd::MessageDialog;
-
 use crate::App;
 use crate::AssetColumn;
 use crate::AssetManager;
+use crate::AssetPreviewRequest;
 use crate::Controller;
 use crate::Executor;
 use crate::Settings;
 use crate::Sort;
 use crate::palette;
 use crate::panic_hook;
-use crate::strings;
 use crate::system;
 
 /// Shared application state information.
+#[derive(Clone)]
 pub struct AppState {
     pub(crate) name: &'static str,
     pub(crate) version: &'static str,
@@ -50,7 +44,7 @@ pub struct AppState {
     pub(crate) item_range: Range<usize>,
     pub(crate) asset_manager: Arc<dyn AssetManager + 'static>,
     pub(crate) asset_columns: Vec<AssetColumn>,
-    pub(crate) asset_preview_id: Option<u64>,
+    pub(crate) asset_preview: Option<AssetPreviewRequest>,
     pub(crate) assets_selected: BTreeSet<usize>,
 }
 
@@ -75,7 +69,7 @@ impl AppState {
             item_range: 0..0,
             asset_manager: Arc::new(asset_manager),
             asset_columns: Vec::new(),
-            asset_preview_id: None,
+            asset_preview: None,
             assets_selected: BTreeSet::new(),
         }
     }
@@ -131,7 +125,8 @@ impl AppState {
 
     /// Adds a file filter to the load files dialog.
     pub fn file_filter(mut self, title: &'static str, extensions: Vec<&'static str>) -> Self {
-        self.file_filters.push((title, extensions));
+        self.file_filters
+            .push((title, extensions));
         self
     }
 
@@ -154,6 +149,7 @@ impl AppState {
             fonts: Vec::new(),
             default_font: Font::DEFAULT,
             default_text_size: Pixels(16.0),
+            backend: Backend::Software,
             antialiasing: true,
             #[cfg(target_os = "windows")]
             vsync: false,
@@ -161,52 +157,14 @@ impl AppState {
             vsync: true,
         };
 
-        let name = self.name;
-
-        let result = iced::daemon(App::title, App::update, App::view)
+        iced::daemon(move || App::new(self.clone()), App::update, App::view)
             .settings(settings)
             .executor::<Executor>()
+            .title(App::title)
             .theme(App::theme)
             .subscription(App::subscription)
             .font(include_bytes!("./fonts/porter.ttf"))
-            .run_with(move || App::new(self));
-
-        if let Err(error) = result {
-            handle_error(name, error);
-        }
+            .run()
+            .unwrap();
     }
-}
-
-/// Handles errors that occur during initialization.
-fn handle_error(name: &'static str, original: Error) {
-    let Error::GraphicsCreationFailed(original) = original else {
-        std::panic::panic_any(original);
-    };
-
-    let error = if let graphics::Error::List(errors) = &original {
-        errors.first().unwrap()
-    } else {
-        &original
-    };
-
-    if matches!(
-        error,
-        graphics::Error::VersionNotSupported
-            | graphics::Error::BackendError(_)
-            | graphics::Error::NoAvailablePixelFormat
-    ) {
-        MessageDialog::new()
-            .set_title(format!("{} | Graphics Error", name.to_titlecase()))
-            .set_description(strings::GRAPHICS_DRIVER_ERROR)
-            .set_buttons(MessageButtons::Ok)
-            .show();
-    } else if matches!(error, graphics::Error::GraphicsAdapterNotFound { .. }) {
-        MessageDialog::new()
-            .set_title(format!("{} | Graphics Error", name.to_titlecase()))
-            .set_description(strings::GRAPHICS_DEVICE_ERROR)
-            .set_buttons(MessageButtons::Ok)
-            .show();
-    }
-
-    std::panic::panic_any(original);
 }

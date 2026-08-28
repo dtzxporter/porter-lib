@@ -2,6 +2,9 @@ use std::io::Read;
 use std::io::Seek;
 use std::io::Write;
 
+use porter_macros::assert_size;
+
+use porter_utils::AsAligned;
 use porter_utils::StructReadExt;
 use porter_utils::StructWriteExt;
 
@@ -63,6 +66,8 @@ struct DdsPixelFormat {
     pub abit_mask: u32,
 }
 
+assert_size!(DdsPixelFormat, 32);
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 struct DdsHeader {
@@ -82,6 +87,8 @@ struct DdsHeader {
     pub reserved2: u32,
 }
 
+assert_size!(DdsHeader, 124);
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 struct DdsHeaderDx10 {
@@ -91,6 +98,8 @@ struct DdsHeaderDx10 {
     pub array_size: u32,
     pub misc_flags2: u32,
 }
+
+assert_size!(DdsHeaderDx10, 20);
 
 /// Calculates the pitch and slice of the given format.
 fn compute_pitch_slice(format: ImageFormat, width: u32, height: u32) -> (u32, u32) {
@@ -386,7 +395,6 @@ pub fn to_dds<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), Text
     let (header, header_dx10) = format_to_dds(image);
 
     output.write_all(&make_four_cc!('D', 'D', 'S', ' ').to_le_bytes())?;
-
     output.write_struct(header)?;
 
     if let Some(header_dx10) = header_dx10 {
@@ -433,17 +441,17 @@ pub fn from_dds<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
         format = format.to_srgb();
     }
 
+    let (align_w, align_h) = format.block_dimensions();
+
     let mut image = Image::with_mipmaps(
-        header.width,
-        header.height,
+        header.width.as_aligned(align_w),
+        header.height.as_aligned(align_h),
         header.mip_map_count.max(1),
         format,
     )?;
 
     for _ in 0..frames {
-        let frame = image.create_frame()?;
-
-        input.read_exact(frame.buffer_mut())?;
+        image.read_frame(input)?;
     }
 
     Ok(image)

@@ -133,7 +133,7 @@ pub fn press_any_key() {
 
     let mut rec: INPUT_RECORD = INPUT_RECORD {
         EventType: 0,
-        Event: unsafe { std::mem::zeroed() },
+        Event: Default::default(),
     };
 
     let mut read = 0;
@@ -147,7 +147,7 @@ pub fn press_any_key() {
             continue;
         }
 
-        let ch = unsafe { rec.Event.KeyEvent.uChar.AsciiChar } as i8;
+        let ch = unsafe { rec.Event.KeyEvent.uChar.AsciiChar };
 
         if ch == 0 && win32::is_mod_key(&rec) {
             continue;
@@ -177,7 +177,10 @@ fn setup_windows_console(title: &str) {
 
     use windows_sys::Win32::System::Console::*;
 
-    let title: Vec<u16> = OsStr::new(title).encode_wide().chain(Some(0x0)).collect();
+    let title: Vec<u16> = OsStr::new(title)
+        .encode_wide()
+        .chain(Some(0x0))
+        .collect();
 
     unsafe { SetConsoleTitleW(title.as_ptr()) };
 
@@ -185,8 +188,10 @@ fn setup_windows_console(title: &str) {
 
     let stdout = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
 
-    let mut screen_buffer: CONSOLE_SCREEN_BUFFER_INFOEX = unsafe { std::mem::zeroed() };
-    screen_buffer.cbSize = size_of_val(&screen_buffer) as u32;
+    let mut screen_buffer: CONSOLE_SCREEN_BUFFER_INFOEX = CONSOLE_SCREEN_BUFFER_INFOEX {
+        cbSize: size_of::<CONSOLE_SCREEN_BUFFER_INFOEX>() as _,
+        ..Default::default()
+    };
 
     unsafe { GetConsoleScreenBufferInfoEx(stdout, &mut screen_buffer as *mut _) };
 

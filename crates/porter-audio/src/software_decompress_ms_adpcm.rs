@@ -1,5 +1,7 @@
 use std::io::Cursor;
 
+use porter_macros::assert_size;
+
 use porter_utils::StructReadExt;
 use porter_utils::StructWriteExt;
 
@@ -25,6 +27,8 @@ struct MsAdpcm1ChHeader {
     sample2: i16,
 }
 
+assert_size!(MsAdpcm1ChHeader, 7);
+
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 struct MsAdpcm2ChHeader {
@@ -37,6 +41,8 @@ struct MsAdpcm2ChHeader {
     l_sample2: i16,
     r_sample2: i16,
 }
+
+assert_size!(MsAdpcm2ChHeader, 14);
 
 /// Unpacks a nibble to upper, lower parts.
 #[inline(always)]
@@ -96,7 +102,9 @@ fn decompress_nibble(
 /// Decompress MsAdpcm to 16bit IntegerPcm.
 pub fn decompress_ms_adpcm(audio: &mut Audio) -> Result<(), AudioError> {
     let extra = audio.extra();
-    let block_align = audio.block_align().ok_or(AudioError::ConversionError)? as usize;
+    let block_align = audio
+        .block_align()
+        .ok_or(AudioError::ConversionError)? as usize;
 
     let mut _samples_per_block: u16 = 0;
     let mut num_coeffs: u16 = 0;

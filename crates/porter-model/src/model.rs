@@ -15,7 +15,7 @@ use crate::Hair;
 use crate::Material;
 use crate::MaterialRemapFaces;
 use crate::MaterialRemapVertices;
-use crate::MaterialTextureRef;
+use crate::MaterialTexture;
 use crate::Mesh;
 use crate::ModelError;
 use crate::ModelFileType;
@@ -70,12 +70,18 @@ impl Model {
 
     /// Returns the total number of vertices in the model.
     pub fn vertex_count(&self) -> usize {
-        self.meshes.iter().map(|x| x.vertices.len()).sum()
+        self.meshes
+            .iter()
+            .map(|x| x.vertices.len())
+            .sum()
     }
 
     /// Returns the total number of faces in the model.
     pub fn face_count(&self) -> usize {
-        self.meshes.iter().map(|x| x.faces.len()).sum()
+        self.meshes
+            .iter()
+            .map(|x| x.faces.len())
+            .sum()
     }
 
     /// Scales the model by the given factor.
@@ -157,16 +163,17 @@ impl Model {
                         old_mesh.vertices.maximum_influence(),
                     ))
                     .or_insert_with(|| {
-                        let mesh = Mesh::with_skinning_method(
-                            FaceBuffer::new(),
-                            VertexBuffer::builder()
-                                .colors(old_mesh.vertices.colors())
-                                .uv_layers(old_mesh.vertices.uv_layers())
-                                .maximum_influence(old_mesh.vertices.maximum_influence())
-                                .build(),
-                            old_mesh.skinning_method,
-                        )
-                        .name(old_mesh.name.clone());
+                        let face_buffer = FaceBuffer::new();
+                        let vertex_buffer = VertexBuffer::builder()
+                            .colors(old_mesh.vertices.colors())
+                            .uv_layers(old_mesh.vertices.uv_layers())
+                            .maximum_influence(old_mesh.vertices.maximum_influence())
+                            .build();
+                        let skinning_method = old_mesh.skinning_method;
+
+                        let mesh =
+                            Mesh::with_skinning_method(face_buffer, vertex_buffer, skinning_method)
+                                .name(old_mesh.name.clone());
 
                         (mesh, HashMap::with_capacity(old_mesh.blend_shapes.len()))
                     });
@@ -231,7 +238,9 @@ impl Model {
                         None => remap_index(face.i3, &mut vertex_remap),
                     };
 
-                    new_mesh.faces.push(Face::new(i1, i2, i3));
+                    new_mesh
+                        .faces
+                        .push(Face::new(i1, i2, i3));
                 }
             }
         }
@@ -293,16 +302,17 @@ impl Model {
                         old_mesh.vertices.maximum_influence(),
                     ))
                     .or_insert_with(|| {
-                        let mesh = Mesh::with_skinning_method(
-                            FaceBuffer::new(),
-                            VertexBuffer::builder()
-                                .colors(old_mesh.vertices.colors())
-                                .uv_layers(old_mesh.vertices.uv_layers())
-                                .maximum_influence(old_mesh.vertices.maximum_influence())
-                                .build(),
-                            old_mesh.skinning_method,
-                        )
-                        .name(old_mesh.name.clone());
+                        let face_buffer = FaceBuffer::new();
+                        let vertex_buffer = VertexBuffer::builder()
+                            .colors(old_mesh.vertices.colors())
+                            .uv_layers(old_mesh.vertices.uv_layers())
+                            .maximum_influence(old_mesh.vertices.maximum_influence())
+                            .build();
+                        let skinning_method = old_mesh.skinning_method;
+
+                        let mesh =
+                            Mesh::with_skinning_method(face_buffer, vertex_buffer, skinning_method)
+                                .name(old_mesh.name.clone());
 
                         (mesh, HashMap::with_capacity(old_mesh.blend_shapes.len()))
                     });
@@ -349,7 +359,9 @@ impl Model {
                         let i2 = remap_index(face.i2);
                         let i3 = remap_index(face.i3);
 
-                        new_mesh.faces.push(Face::new(i1, i2, i3));
+                        new_mesh
+                            .faces
+                            .push(Face::new(i1, i2, i3));
                     }
                 }
             }
@@ -366,12 +378,40 @@ impl Model {
         }
     }
 
+    /// Gets the base texture for each material in this model after deduplicating them.
+    pub fn material_textures_deduped(&mut self) -> Vec<Option<&MaterialTexture>> {
+        let mut materials: Vec<Material> = Vec::new();
+
+        for mesh in self.meshes.iter_mut() {
+            let Some(index) = &mut mesh.material else {
+                continue;
+            };
+
+            let material = &self.materials[*index];
+
+            if let Some(existing) = materials
+                .iter()
+                .position(|x| x == material)
+            {
+                *index = existing;
+                continue;
+            }
+
+            *index = materials.len();
+
+            materials.push(material.clone());
+        }
+
+        self.materials = materials;
+        self.material_textures()
+    }
+
     /// Gets the base texture for each material in this model.
-    pub fn material_textures(&self) -> Vec<Option<MaterialTextureRef>> {
+    pub fn material_textures(&self) -> Vec<Option<&MaterialTexture>> {
         let mut result = Vec::with_capacity(self.materials.len());
 
         for material in &self.materials {
-            result.push(material.base_color_texture().cloned());
+            result.push(material.base_color_texture());
         }
 
         result

@@ -44,7 +44,7 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
 
     animation_node
         .create_property(CastPropertyId::Float, "fr")
-        .push(animation.framerate);
+        .push(animation.frame_rate);
     animation_node
         .create_property(CastPropertyId::Byte, "lo")
         .push(animation.looping);
@@ -124,9 +124,9 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
                 CurveAttribute::BlendShape => CastPropertyId::Float,
             };
 
-            let keyvalue_buffer = curve_node.create_property(property_type, "kv");
-
-            keyvalue_buffer.try_reserve_exact(keyframes.len())?;
+            let keyvalue_buffer = curve_node
+                .create_property(property_type, "kv")
+                .try_reserve_exact(keyframes.len())?;
 
             for keyframe in keyframes {
                 match keyframe.value {
@@ -163,9 +163,9 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
 
         let keyframes = curve.keyframes();
 
-        let key_buffer = track_node.create_property(CastPropertyId::Integer32, "kb");
-
-        key_buffer.try_reserve_exact(keyframes.len())?;
+        let key_buffer = track_node
+            .create_property(CastPropertyId::Integer32, "kb")
+            .try_reserve_exact(keyframes.len())?;
 
         for key in keyframes {
             key_buffer.push(key.time);

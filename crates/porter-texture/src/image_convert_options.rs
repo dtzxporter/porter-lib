@@ -1,4 +1,5 @@
-#[derive(Default, Clone, Copy)]
+/// Options to apply when converting images.
+#[derive(Default, Debug, Clone, Copy)]
 pub enum ImageConvertOptions {
     /// Do nothing to modify the image.
     #[default]

@@ -3,6 +3,8 @@ use std::io::Read;
 use std::io::Seek;
 use std::io::Write;
 
+use porter_macros::assert_size;
+
 use porter_utils::SeekExt;
 use porter_utils::StackVec;
 use porter_utils::StructReadExt;
@@ -53,6 +55,8 @@ struct TgaHeader {
     bits_per_pixel: u8,
     image_descriptor: u8,
 }
+
+assert_size!(TgaHeader, 18);
 
 /// Converts an image format to a tga specification.
 const fn format_to_tga(format: ImageFormat) -> Result<(ColorType, ImageType, u8), TextureError> {
@@ -134,7 +138,7 @@ pub fn to_tga<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), Text
 
     output.write_struct(header)?;
 
-    let size = image.frame_size_with_mipmaps(image.width(), image.height(), 1);
+    let rows = image.height();
     let stride = match color_type {
         ColorType::Gray => image.width() as usize,
         ColorType::Rgba => image.width() as usize * 4,
@@ -142,12 +146,8 @@ pub fn to_tga<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), Text
 
     for frame in frames.iter().take(MAXIMUM_TGA_FRAMES) {
         match color_type {
-            ColorType::Gray => {
-                write_rle_encode::<1, _>(&frame.buffer()[..size as usize], stride, output)?
-            }
-            ColorType::Rgba => {
-                write_rle_encode::<4, _>(&frame.buffer()[..size as usize], stride, output)?
-            }
+            ColorType::Gray => write_rle_encode::<1, _>(frame.buffer(), stride, rows as _, output)?,
+            ColorType::Rgba => write_rle_encode::<4, _>(frame.buffer(), stride, rows as _, output)?,
         };
     }
 
@@ -176,20 +176,19 @@ pub fn from_tga<I: Read + Seek>(input: &mut I) -> Result<Image, TextureError> {
     };
 
     let mut image = Image::new(header.width as u32, header.height as u32, format)?;
-    let frame = image.create_frame()?;
 
     match header.image_type {
         x if x == ImageType::UncompressedRgb as u8 => {
-            input.read_exact(frame.buffer_mut())?;
+            image.read_frame(input)?;
         }
         x if x == ImageType::UncompressedGrayscale as u8 => {
-            input.read_exact(frame.buffer_mut())?;
+            image.read_frame(input)?;
         }
         x if x == ImageType::CompressedRgb as u8 => {
-            read_rle_decode::<4, _>(frame.buffer_mut(), input)?;
+            read_rle_decode::<4, _>(image.create_frame()?.buffer_mut(), input)?;
         }
         x if x == ImageType::CompressedGrayscale as u8 => {
-            read_rle_decode::<1, _>(frame.buffer_mut(), input)?;
+            read_rle_decode::<1, _>(image.create_frame()?.buffer_mut(), input)?;
         }
         _ => return Err(TextureError::ContainerInvalid(ImageFileType::Tga)),
     }
@@ -234,11 +233,12 @@ fn read_rle_decode<const BYTES_PER_PIXEL: usize, I: Read + Seek>(
 fn write_rle_encode<const BYTES_PER_PIXEL: usize, O: Write + Seek>(
     buffer: &[u8],
     stride: usize,
+    rows: usize,
     output: &mut O,
 ) -> Result<(), TextureError> {
-    let mut scratch = StackVec::new([0; MAXIMUM_RLE_BUFFER]);
+    let mut scratch: StackVec<u8, MAXIMUM_RLE_BUFFER> = StackVec::new();
 
-    for row in buffer.chunks_exact(stride) {
+    for row in buffer.chunks_exact(stride).take(rows) {
         let mut counter = 0;
         let mut prev_pixel: Option<&[u8]> = None;
         let mut packet_type_rle = true;

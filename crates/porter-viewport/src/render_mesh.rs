@@ -11,12 +11,12 @@ use porter_math::Vector3;
 
 use porter_model::Mesh;
 
-use porter_utils::AsThisSlice;
+use porter_utils::SliceExt;
 use porter_utils::StructWriteExt;
 use porter_utils::VecExt;
 
-use crate::PreviewError;
 use crate::RenderMaterialTexture;
+use crate::ViewportError;
 
 /// A 3d render mesh.
 pub struct RenderMesh {
@@ -33,11 +33,12 @@ impl RenderMesh {
     /// Constructs a new render mesh from the given mesh.
     pub fn from_mesh(
         instance: &GPUInstance,
-        bind_group_layouts: &[&BindGroupLayout],
+        bind_group_layouts: &[Option<&BindGroupLayout>],
         mesh: &Mesh,
         material_textures: &[Arc<RenderMaterialTexture>],
+        material_bind_group_layout: &BindGroupLayout,
         culling: bool,
-    ) -> Result<Self, PreviewError> {
+    ) -> Result<Self, ViewportError> {
         let vertex_stride = (size_of::<Vector3>() * 2) + size_of::<Vector2>();
 
         let material_texture = match mesh.material {
@@ -82,18 +83,14 @@ impl RenderMesh {
                 usage: BufferUsages::INDEX,
             });
 
-        let render_pipeline_layout =
-            instance
-                .device()
-                .create_pipeline_layout(&PipelineLayoutDescriptor {
-                    label: None,
-                    bind_group_layouts: &[
-                        bind_group_layouts,
-                        &[material_texture.bind_group_layout()],
-                    ]
+        let render_pipeline_layout = instance
+            .device()
+            .create_pipeline_layout(&PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[bind_group_layouts, &[Some(material_bind_group_layout)]]
                     .concat(),
-                    push_constant_ranges: &[],
-                });
+                immediate_size: 0,
+            });
 
         let render_pipeline_desc = RenderPipelineDescriptor {
             label: None,
@@ -135,8 +132,8 @@ impl RenderMesh {
             },
             depth_stencil: Some(DepthStencilState {
                 format: TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: CompareFunction::Less,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(CompareFunction::Less),
                 stencil: StencilState::default(),
                 bias: DepthBiasState::default(),
             }),
@@ -159,7 +156,7 @@ impl RenderMesh {
                 })],
                 compilation_options: Default::default(),
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         };
 
@@ -167,16 +164,15 @@ impl RenderMesh {
             .device()
             .create_render_pipeline(&render_pipeline_desc);
 
-        let render_pipeline_wireframe =
-            instance
-                .device()
-                .create_render_pipeline(&RenderPipelineDescriptor {
-                    primitive: PrimitiveState {
-                        polygon_mode: PolygonMode::Line,
-                        ..render_pipeline_desc.primitive
-                    },
-                    ..render_pipeline_desc
-                });
+        let render_pipeline_wireframe = instance
+            .device()
+            .create_render_pipeline(&RenderPipelineDescriptor {
+                primitive: PrimitiveState {
+                    polygon_mode: PolygonMode::Line,
+                    ..render_pipeline_desc.primitive
+                },
+                ..render_pipeline_desc
+            });
 
         Ok(Self {
             render_pipeline,

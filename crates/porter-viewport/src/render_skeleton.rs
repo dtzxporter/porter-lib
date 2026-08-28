@@ -4,7 +4,7 @@ use wgpu::*;
 use porter_gpu::GPUInstance;
 use porter_math::Vector3;
 use porter_model::Skeleton;
-use porter_utils::AsThisSlice;
+use porter_utils::SliceExt;
 
 /// A 3d render skeleton.
 pub struct RenderSkeleton {
@@ -17,7 +17,7 @@ impl RenderSkeleton {
     /// Constructs  a new render skeleton from the given skeleton.
     pub fn from_skeleton(
         instance: &GPUInstance,
-        bind_group_layouts: &[&BindGroupLayout],
+        bind_group_layouts: &[Option<&BindGroupLayout>],
         skeleton: &Skeleton,
     ) -> Self {
         let mut vertex_buffer = Vec::new();
@@ -32,20 +32,21 @@ impl RenderSkeleton {
             }
         }
 
-        let vertex_buffer = instance.device().create_buffer_init(&BufferInitDescriptor {
-            label: None,
-            contents: vertex_buffer.as_slice().as_this_slice(),
-            usage: BufferUsages::VERTEX,
-        });
+        let vertex_buffer = instance
+            .device()
+            .create_buffer_init(&BufferInitDescriptor {
+                label: None,
+                contents: vertex_buffer.as_slice().as_this_slice(),
+                usage: BufferUsages::VERTEX,
+            });
 
-        let render_pipeline_layout =
-            instance
-                .device()
-                .create_pipeline_layout(&PipelineLayoutDescriptor {
-                    label: None,
-                    bind_group_layouts,
-                    push_constant_ranges: &[],
-                });
+        let render_pipeline_layout = instance
+            .device()
+            .create_pipeline_layout(&PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts,
+                immediate_size: 0,
+            });
 
         let render_pipeline = instance
             .device()
@@ -77,8 +78,8 @@ impl RenderSkeleton {
                 },
                 depth_stencil: Some(DepthStencilState {
                     format: TextureFormat::Depth32Float,
-                    depth_write_enabled: true,
-                    depth_compare: CompareFunction::Always,
+                    depth_write_enabled: Some(true),
+                    depth_compare: Some(CompareFunction::Always),
                     stencil: StencilState::default(),
                     bias: DepthBiasState::default(),
                 }),
@@ -97,7 +98,7 @@ impl RenderSkeleton {
                     })],
                     compilation_options: Default::default(),
                 }),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 

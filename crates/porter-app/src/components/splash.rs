@@ -28,8 +28,8 @@ use crate::SplashMessage;
 
 /// The size of the cube in pixels.
 const CUBE_SIZE: f32 = 50.0;
-/// The framerate to redraw the cube.
-const CUBE_FRAMERATE: u64 = 60;
+/// The frame rate to redraw the cube.
+const CUBE_FRAME_RATE: u64 = 60;
 
 /// Cube face color (0|2).
 const CUBE_FACES_02: Color = Color::from_rgb8(0x07, 0x7B, 0xB4);
@@ -79,7 +79,7 @@ impl Program<Message> for Splash {
             state.last = *now;
 
             Some(Action::request_redraw_at(
-                *now + Duration::from_millis(1000 / CUBE_FRAMERATE),
+                *now + Duration::from_millis(1000 / CUBE_FRAME_RATE),
             ))
         } else {
             None
@@ -95,7 +95,7 @@ impl Program<Message> for Splash {
         _cursor: Cursor,
     ) -> Vec<Geometry<Renderer>> {
         let time = state.last - state.started;
-        let delta = (time.as_millis() / (1000 / CUBE_FRAMERATE) as u128) as f32 * 0.96;
+        let delta = (time.as_millis() / (1000 / CUBE_FRAME_RATE) as u128) as f32 * 0.96;
 
         let mut frame = Frame::new(renderer, bounds.size());
 

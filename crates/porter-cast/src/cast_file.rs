@@ -5,12 +5,14 @@ use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
+use porter_macros::assert_size;
+
 use porter_utils::StructReadExt;
 use porter_utils::StructWriteExt;
 
 use crate::CastNode;
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 struct CastHeader {
     magic: u32,
@@ -18,6 +20,8 @@ struct CastHeader {
     root_nodes: u32,
     flags: u32,
 }
+
+assert_size!(CastHeader, 16);
 
 /// A cast file.
 #[derive(Debug, Default)]

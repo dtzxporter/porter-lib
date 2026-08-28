@@ -9,6 +9,7 @@ pub struct Rect {
 
 impl Rect {
     /// Constructs a new rect.
+    #[inline]
     pub const fn new(x: u32, y: u32, width: u32, height: u32) -> Self {
         Self {
             x,
@@ -19,26 +20,31 @@ impl Rect {
     }
 
     /// Gets the left of the rect.
-    pub fn left(&self) -> u32 {
+    #[inline]
+    pub const fn left(&self) -> u32 {
         self.x
     }
 
     /// Gets the top of the rect.
-    pub fn top(&self) -> u32 {
+    #[inline]
+    pub const fn top(&self) -> u32 {
         self.y
     }
 
     /// Gets the right of the rect.
-    pub fn right(&self) -> u32 {
+    #[inline]
+    pub const fn right(&self) -> u32 {
         self.x + self.width
     }
 
     /// Gets the bottom of the rect.
-    pub fn bottom(&self) -> u32 {
+    #[inline]
+    pub const fn bottom(&self) -> u32 {
         self.y + self.height
     }
 
     /// Returns the intersection of two rectangles.
+    #[inline]
     pub fn intersection(&self, other: &Rect) -> Option<Rect> {
         let x = self.x.max(other.x);
         let y = self.y.max(other.y);
@@ -54,6 +60,7 @@ impl Rect {
     }
 
     /// Returns true if the other rectangle intersects this rectangle.
+    #[inline]
     pub fn intersects(&self, other: &Rect) -> bool {
         self.intersection(other).is_some()
     }

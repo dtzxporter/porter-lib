@@ -5,17 +5,17 @@ use crate::KeyframeValue;
 /// The attribute of the node a curve is animating.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CurveAttribute {
-    /// Animates the translation of this node as a vector3.
+    /// Animates the translation of this node as a vector.
     Translate,
     /// Animates the rotation of this node as a quaternion.
     Rotation,
-    /// Animates the scale of this node.
+    /// Animates the scale of this node as a vector.
     Scale,
-    /// Animates the visibility of this node.
+    /// Animates the visibility of this node as a bool.
     Visibility,
     /// Animates the node as if it were a notification track.
     Notetrack,
-    /// Animates the weight of this node as blend shape key.
+    /// Animates the weight of this node as blend shape key as a float.
     BlendShape,
 }
 
@@ -55,33 +55,33 @@ impl Curve {
     }
 
     /// Returns the name of the node this curve targets.
-    pub fn name(&self) -> &str {
-        &self.name
+    pub const fn name(&self) -> &str {
+        self.name.as_str()
     }
 
     /// Returns the attribute of the node this curve targets.
-    pub fn attribute(&self) -> CurveAttribute {
+    pub const fn attribute(&self) -> CurveAttribute {
         self.attribute
     }
 
     /// Returns the data type of the keyframes.
-    pub fn data_type(&self) -> CurveDataType {
+    pub const fn data_type(&self) -> CurveDataType {
         self.data_type
     }
 
     /// Sets the data type of the keyframes.
-    pub fn set_data_type(&mut self, data_type: CurveDataType) {
+    pub const fn set_data_type(&mut self, data_type: CurveDataType) {
         self.data_type = data_type;
     }
 
     /// Returns the keyframes of this curve.
-    pub fn keyframes(&self) -> &[Keyframe] {
-        &self.keyframes
+    pub const fn keyframes(&self) -> &[Keyframe] {
+        self.keyframes.as_slice()
     }
 
     /// Returns the keyframes mutable of this curve.
-    pub fn keyframes_mut(&mut self) -> &mut [Keyframe] {
-        &mut self.keyframes
+    pub const fn keyframes_mut(&mut self) -> &mut [Keyframe] {
+        self.keyframes.as_mut_slice()
     }
 
     /// Returns the largest frame time in this curve.
@@ -97,7 +97,8 @@ impl Curve {
 
     /// Sorts the curve's keyframes in order by time.
     pub fn sort(&mut self) {
-        self.keyframes.sort_by_key(|keyframe| keyframe.time);
+        self.keyframes
+            .sort_by_key(|keyframe| keyframe.time);
     }
 
     /// Insert a keyframe at the given time with the given value.
@@ -113,16 +114,17 @@ impl Curve {
             CurveAttribute::BlendShape => matches!(value, KeyframeValue::Float(_)),
         });
 
-        self.keyframes.push(Keyframe { time, value });
+        self.keyframes
+            .push(Keyframe { time, value });
     }
 
     /// Returns the number of keyframes in this curve.
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.keyframes.len()
     }
 
     /// Returns whether or not this curve has any keyframes.
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.keyframes.is_empty()
     }
 
@@ -148,6 +150,8 @@ impl Curve {
     /// # Errors
     /// If the capacity overflows, or the allocator reports a failure, then an error is returned.
     pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), AnimationError> {
-        Ok(self.keyframes.try_reserve_exact(additional)?)
+        Ok(self
+            .keyframes
+            .try_reserve_exact(additional)?)
     }
 }

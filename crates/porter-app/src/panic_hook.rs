@@ -1,6 +1,6 @@
 use std::backtrace::Backtrace;
 
-use directories::ProjectDirs;
+use crate::system;
 
 /// Encrypt/Decrypt an input with the given key.
 fn xor_encrypt<K: AsRef<[u8]>>(input: String, key: K) -> Vec<u8> {
@@ -21,19 +21,16 @@ pub fn install(name: &'static str, version: &'static str) {
         return;
     }
 
-    if let Some(project_directory) = ProjectDirs::from("com", "DTZxPorter", "GameTools") {
-        let target = project_directory
-            .config_dir()
-            .join(name.to_lowercase())
-            .with_extension("crash");
+    let target = system::config_dir()
+        .join(name.to_lowercase())
+        .with_extension("crash");
 
-        let _ = std::fs::create_dir_all(project_directory.config_dir());
+    let _ = std::fs::create_dir_all(system::config_dir());
 
-        std::panic::set_hook(Box::new(move |error| {
-            let backtrace = Backtrace::force_capture();
-            let error = format!("{} {:?} ({})", error, backtrace, version);
+    std::panic::set_hook(Box::new(move |error| {
+        let backtrace = Backtrace::force_capture();
+        let error = format!("{} {:?} ({})", error, backtrace, version);
 
-            let _ = std::fs::write(target.clone(), xor_encrypt(error, "bijudama"));
-        }));
-    }
+        let _ = std::fs::write(target.clone(), xor_encrypt(error, "bijudama"));
+    }));
 }

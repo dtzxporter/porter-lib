@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 porter-math = { path = "../porter-math" }
+porter-macros = { path = "../porter-macros" }
 
 lz4_flex.workspace = true
 xxhash-rust.workspace = true

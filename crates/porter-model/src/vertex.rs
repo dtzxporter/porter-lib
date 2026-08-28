@@ -23,7 +23,7 @@ pub struct VertexMut<'a> {
 
 impl<'a> Vertex<'a> {
     /// Creates a new instance of vertex.
-    pub(crate) fn new(buffer: &'a VertexBuffer, index: usize) -> Self {
+    pub(crate) const fn new(buffer: &'a VertexBuffer, index: usize) -> Self {
         Self { buffer, index }
     }
 
@@ -91,13 +91,20 @@ impl<'a> Vertex<'a> {
         debug_assert!((count + size_of::<T>()) <= self.buffer.as_slice().len());
 
         // SAFETY: We assert that the count of bytes is less than the buffer size.
-        unsafe { std::ptr::read(self.buffer.as_slice().as_ptr().add(count) as *const T) }
+        unsafe {
+            std::ptr::read(
+                self.buffer
+                    .as_slice()
+                    .as_ptr()
+                    .add(count) as *const T,
+            )
+        }
     }
 }
 
 impl<'a> VertexMut<'a> {
     /// Creates a new instance of vertex.
-    pub(crate) fn new(buffer: &'a mut VertexBuffer, index: usize) -> Self {
+    pub(crate) const fn new(buffer: &'a mut VertexBuffer, index: usize) -> Self {
         Self { buffer, index }
     }
 
@@ -247,8 +254,15 @@ impl<'a> VertexMut<'a> {
 
         unsafe {
             std::ptr::copy_nonoverlapping(
-                vertex.buffer.as_slice().as_ptr().add(offset_src),
-                self.buffer.as_slice().as_ptr().add(offset_dst) as *mut u8,
+                vertex
+                    .buffer
+                    .as_slice()
+                    .as_ptr()
+                    .add(offset_src),
+                self.buffer
+                    .as_slice()
+                    .as_ptr()
+                    .add(offset_dst) as *mut u8,
                 size,
             )
         };
@@ -269,8 +283,15 @@ impl<'a> VertexMut<'a> {
 
         unsafe {
             std::ptr::copy_nonoverlapping(
-                vertex.buffer.as_slice().as_ptr().add(offset_src),
-                self.buffer.as_slice().as_ptr().add(offset_dst) as *mut u8,
+                vertex
+                    .buffer
+                    .as_slice()
+                    .as_ptr()
+                    .add(offset_src),
+                self.buffer
+                    .as_slice()
+                    .as_ptr()
+                    .add(offset_dst) as *mut u8,
                 size,
             )
         };
@@ -284,7 +305,14 @@ impl<'a> VertexMut<'a> {
         debug_assert!((count + size_of::<T>()) <= self.buffer.as_slice().len());
 
         // SAFETY: We assert that the count of bytes is less than the buffer size.
-        unsafe { std::ptr::read(self.buffer.as_slice().as_ptr().add(count) as *const T) }
+        unsafe {
+            std::ptr::read(
+                self.buffer
+                    .as_slice()
+                    .as_ptr()
+                    .add(count) as *const T,
+            )
+        }
     }
 
     /// Writes T to the specified offset.
@@ -295,7 +323,15 @@ impl<'a> VertexMut<'a> {
         debug_assert!((count + size_of::<T>()) <= self.buffer.as_slice().len());
 
         // SAFETY: We assert that the count of bytes is less than the buffer size.
-        unsafe { std::ptr::write(self.buffer.as_slice().as_ptr().add(count) as *mut T, value) };
+        unsafe {
+            std::ptr::write(
+                self.buffer
+                    .as_slice()
+                    .as_ptr()
+                    .add(count) as *mut T,
+                value,
+            )
+        };
     }
 }
 

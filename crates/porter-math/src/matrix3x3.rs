@@ -2,13 +2,12 @@ use std::cmp;
 use std::fmt;
 use std::ops;
 
-use static_assertions::assert_eq_size;
+use porter_macros::assert_size;
 
 use crate::Angles;
 use crate::Matrix4x4;
 use crate::Quaternion;
 use crate::Vector3;
-use crate::radians_to_degrees;
 
 /// Represents a 3x3 matrix in column major order.
 #[repr(C)]
@@ -17,7 +16,7 @@ pub struct Matrix3x3 {
     data: [f32; 9],
 }
 
-assert_eq_size!([u8; 36], Matrix3x3);
+assert_size!(Matrix3x3, 36);
 
 impl Matrix3x3 {
     /// Constructs a new identity matrix.
@@ -68,7 +67,7 @@ impl Matrix3x3 {
 
     /// Creates a new scale matrix.
     #[inline]
-    pub fn create_scale(scale: Vector3) -> Matrix3x3 {
+    pub const fn create_scale(scale: Vector3) -> Matrix3x3 {
         let mut result = Matrix3x3::new();
 
         *result.mat_mut::<0, 0>() = scale.x;
@@ -78,17 +77,37 @@ impl Matrix3x3 {
         result
     }
 
+    /// Creates a new (R * S) matrix.
+    #[inline]
+    pub const fn create_rs(rotation: Quaternion, scale: Vector3) -> Matrix3x3 {
+        let mut result = rotation.to_3x3();
+
+        *result.mat_mut::<0, 0>() *= scale.x;
+        *result.mat_mut::<1, 0>() *= scale.x;
+        *result.mat_mut::<2, 0>() *= scale.x;
+
+        *result.mat_mut::<0, 1>() *= scale.y;
+        *result.mat_mut::<1, 1>() *= scale.y;
+        *result.mat_mut::<2, 1>() *= scale.y;
+
+        *result.mat_mut::<0, 2>() *= scale.z;
+        *result.mat_mut::<1, 2>() *= scale.z;
+        *result.mat_mut::<2, 2>() *= scale.z;
+
+        result
+    }
+
     /// Access a single matrix value.
     /// `m[X][Y]`
     #[inline]
-    pub fn mat<const X: usize, const Y: usize>(&self) -> f32 {
+    pub const fn mat<const X: usize, const Y: usize>(&self) -> f32 {
         self.data[X * 3 + Y]
     }
 
     /// Mutably access a single matrix value.
     /// `m[X][Y]`
     #[inline]
-    pub fn mat_mut<const X: usize, const Y: usize>(&mut self) -> &mut f32 {
+    pub const fn mat_mut<const X: usize, const Y: usize>(&mut self) -> &mut f32 {
         &mut self.data[X * 3 + Y]
     }
 
@@ -190,9 +209,11 @@ impl Matrix3x3 {
 
         let result = if square_sum > 0.00016 {
             Vector3::new(
-                self.mat::<1, 2>().atan2(self.mat::<2, 2>()),
+                self.mat::<1, 2>()
+                    .atan2(self.mat::<2, 2>()),
                 (-self.mat::<0, 2>()).atan2(square_sum),
-                self.mat::<0, 1>().atan2(self.mat::<0, 0>()),
+                self.mat::<0, 1>()
+                    .atan2(self.mat::<0, 0>()),
             )
         } else {
             Vector3::new(
@@ -204,9 +225,9 @@ impl Matrix3x3 {
 
         if measurment == Angles::Degrees {
             Vector3::new(
-                radians_to_degrees(result.x),
-                radians_to_degrees(result.y),
-                radians_to_degrees(result.z),
+                result.x.to_degrees(),
+                result.y.to_degrees(),
+                result.z.to_degrees(),
             )
         } else {
             result
@@ -216,7 +237,7 @@ impl Matrix3x3 {
     /// Reverses the byte order of the matrix.
     #[inline]
     #[unroll::unroll_for_loops]
-    pub fn swap_bytes(self) -> Matrix3x3 {
+    pub const fn swap_bytes(self) -> Matrix3x3 {
         let mut result = Matrix3x3::new();
 
         for i in 0..9 {
@@ -231,14 +252,16 @@ impl Matrix3x3 {
     pub fn swap_handedness(self) -> Self {
         let (rot, sca) = self.decompose();
 
-        Self::create_rotation(Quaternion::new(-rot.z, rot.x, -rot.y, rot.w))
-            * Self::create_scale(Vector3::new(sca.z, sca.x, sca.y))
+        let rot = Quaternion::new(-rot.z, rot.x, -rot.y, rot.w);
+        let sca = Vector3::new(sca.z, sca.x, sca.y);
+
+        Self::create_rs(rot, sca)
     }
 
     /// Returns the transpose of this matrix.
     #[inline]
     #[unroll::unroll_for_loops]
-    pub fn transpose(&self) -> Matrix3x3 {
+    pub const fn transpose(&self) -> Matrix3x3 {
         let mut result = Matrix3x3::new();
 
         for i in 0..3 {
@@ -252,7 +275,7 @@ impl Matrix3x3 {
 
     /// Converts this rotation matrix to a matrix.
     #[inline]
-    pub fn to_4x4(self) -> Matrix4x4 {
+    pub const fn to_4x4(self) -> Matrix4x4 {
         let mut result = Matrix4x4::new();
 
         *result.mat_mut::<0, 0>() = self.mat::<0, 0>();

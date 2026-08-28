@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use iced::Theme;
 use iced::keyboard;
 use iced::keyboard::Key;
 use iced::keyboard::Modifiers;
@@ -19,6 +18,7 @@ use iced::Event;
 use iced::Length;
 use iced::Size;
 use iced::Task;
+use iced::Theme;
 
 use porter_utils::StringCaseExt;
 
@@ -73,9 +73,9 @@ impl MainWindow {
     /// Creates a new main window.
     pub fn create() -> (Self, Task<window::Id>) {
         let (id, task) = window::open(window::Settings {
-            size: Size::new(920.0, 582.0),
+            size: Size::new(980.0, 625.0),
             position: Position::Centered,
-            min_size: Some(Size::new(920.0, 582.0)),
+            min_size: Some(Size::new(980.0, 625.0)),
             visible: false,
             ..Default::default()
         });
@@ -119,26 +119,31 @@ impl MainWindow {
 
     /// Handles rendering the main window.
     pub fn view<'a>(&'a self, state: &'a AppState) -> Element<'a, Message> {
-        let mut columns: Column<_> = Column::with_capacity(4);
+        let mut columns: Vec<_> = Vec::with_capacity(4);
 
-        columns = columns.push(self.header.view(state));
+        columns.push(self.header.view(state));
 
         if self.header.show_about {
-            columns = columns.push(self.about.view(state));
+            columns.push(self.about.view(state));
         } else if self.header.show_settings {
-            columns = columns.push(self.settings.view(state));
+            columns.push(self.settings.view(state));
         } else {
-            columns = columns
-                .push(self.search_bar.view(state))
-                .push(self.content.view(state))
-                .push(self.controls.view(state));
+            columns.extend([
+                self.search_bar.view(state),
+                self.content.view(state),
+                self.controls.view(state),
+            ]);
         }
 
-        container(columns)
-            .style(main_background_style)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+        container(
+            Column::from_vec(columns)
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .style(main_background_style)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
     }
 
     /// Occurs when a ui event has fired.
@@ -264,8 +269,10 @@ impl MainWindow {
 
         let title = format!("{} | Select game files to load", state.name.to_titlecase());
 
-        window::run_with_handle(self.id, move |handle| {
-            let file_dialog = file_dialog.set_parent(&handle).set_title(title);
+        window::run(self.id, move |handle| {
+            let file_dialog = file_dialog
+                .set_parent(&handle)
+                .set_title(title);
 
             let dialog = move || {
                 if cfg!(feature = "multi-file") {
@@ -293,7 +300,7 @@ impl MainWindow {
 
         let title = format!("{} | Select an export directory", state.name.to_titlecase());
 
-        window::run_with_handle(self.id, move |handle| {
+        window::run(self.id, move |handle| {
             let path = FileDialog::new()
                 .set_directory(settings.output_directory())
                 .set_parent(&handle)
@@ -314,7 +321,7 @@ impl MainWindow {
     fn on_warning(&mut self, state: &mut AppState, message: String) -> Task<Message> {
         let title = state.name.to_titlecase();
 
-        window::run_with_handle(self.id, move |handle| {
+        window::run(self.id, move |handle| {
             let dialog = MessageDialog::new()
                 .set_title(title)
                 .set_description(message)
@@ -338,7 +345,7 @@ impl MainWindow {
 
     /// Copy the selected assets to the clipboard.
     fn on_copy_text(&mut self, state: &mut AppState) -> Task<Message> {
-        if state.is_busy() || state.assets_selected.is_empty() {
+        if state.loading || state.assets_selected.is_empty() {
             return Task::none();
         }
 
@@ -351,7 +358,7 @@ impl MainWindow {
             .collect::<Vec<_>>()
             .join("\n");
 
-        iced::clipboard::write(buffer)
+        iced::clipboard::write(buffer).discard()
     }
 }
 

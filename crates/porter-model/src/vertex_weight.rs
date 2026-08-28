@@ -1,4 +1,4 @@
-use static_assertions::assert_eq_size;
+use porter_macros::assert_size;
 
 /// The type of a bone id.
 pub type WeightBoneId = u16;
@@ -13,7 +13,7 @@ pub struct VertexWeight {
     pub value: f32,
 }
 
-assert_eq_size!([u8; 0x6], VertexWeight);
+assert_size!(VertexWeight, 6);
 
 impl VertexWeight {
     /// Constructs a new vertex weight.

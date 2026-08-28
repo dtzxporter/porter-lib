@@ -2,17 +2,17 @@ use wgpu::*;
 
 use porter_gpu::GPUInstance;
 
-use porter_model::MaterialTextureRefUsage;
+use porter_model::MaterialUsage;
 
 use porter_texture::Image;
 use porter_texture::ImageFormat;
 
-use crate::PreviewError;
 use crate::RenderImage;
+use crate::ViewportError;
 
 /// A 3d render material.
 pub struct RenderMaterial {
-    images: Vec<(Option<RenderImage>, ImageFormat, MaterialTextureRefUsage)>,
+    images: Vec<(Option<RenderImage>, ImageFormat, MaterialUsage)>,
     index: usize,
 }
 
@@ -20,10 +20,10 @@ impl RenderMaterial {
     /// Constructs a new render material from the images.
     pub fn from_images(
         instance: &GPUInstance,
-        bind_group_layouts: &[&BindGroupLayout],
-        images: &[(MaterialTextureRefUsage, Image)],
-    ) -> Result<Self, PreviewError> {
-        let mut images: Vec<(Option<RenderImage>, ImageFormat, MaterialTextureRefUsage)> = images
+        bind_group_layouts: &[Option<&BindGroupLayout>],
+        images: &[(MaterialUsage, Image)],
+    ) -> Result<Self, ViewportError> {
+        let mut images: Vec<(Option<RenderImage>, ImageFormat, MaterialUsage)> = images
             .iter()
             .map(|(usage, image)| {
                 let format = image.format();
@@ -96,7 +96,7 @@ impl RenderMaterial {
     /// Returns the usage of the image.
     pub fn usage(&self) -> String {
         if self.images.is_empty() {
-            return MaterialTextureRefUsage::Unknown.to_string();
+            return MaterialUsage::Unknown.to_string();
         }
 
         self.images[self.index].2.to_string()

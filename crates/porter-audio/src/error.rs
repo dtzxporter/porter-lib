@@ -25,6 +25,9 @@ pub enum AudioError {
     WwiseHeaderReadError(lewton::header::HeaderReadError),
     #[cfg(feature = "wwise-vorbis")]
     WwiseAudioReadError(lewton::audio::AudioReadError),
+    WwiseParseNumberEnd,
+    WwiseParseNumberParse,
+    WwiseParseTagEnd,
     #[cfg(feature = "ogg")]
     OggVorbisError(lewton::VorbisError),
     #[cfg(feature = "ogg")]

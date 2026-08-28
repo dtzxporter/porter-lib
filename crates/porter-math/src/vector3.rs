@@ -1,7 +1,7 @@
 use std::cmp;
 use std::ops;
 
-use static_assertions::assert_eq_size;
+use porter_macros::assert_size;
 
 use crate::Matrix4x4;
 use crate::Quaternion;
@@ -16,7 +16,7 @@ pub struct Vector3 {
     pub z: f32,
 }
 
-assert_eq_size!([u8; 0xC], Vector3);
+assert_size!(Vector3, 12);
 
 /// Utility to implement the regular op traits.
 macro_rules! impl_op_routine {
@@ -111,6 +111,26 @@ impl Vector3 {
         }
     }
 
+    /// Returns the minimum of two vectors.
+    #[inline]
+    pub const fn min(self, other: Self) -> Self {
+        Self {
+            x: self.x.min(other.x),
+            y: self.y.min(other.y),
+            z: self.z.min(other.z),
+        }
+    }
+
+    /// Returns the maximum of two vectors.
+    #[inline]
+    pub const fn max(self, other: Self) -> Self {
+        Self {
+            x: self.x.max(other.x),
+            y: self.y.max(other.y),
+            z: self.z.max(other.z),
+        }
+    }
+
     /// Swizzles the order of the vectors components.
     #[inline]
     pub fn swizzle<const X: usize, const Y: usize, const Z: usize>(&self) -> Self {
@@ -118,6 +138,36 @@ impl Vector3 {
             x: self[X],
             y: self[Y],
             z: self[Z],
+        }
+    }
+
+    /// Returns a vector mask containing the result of a `==` comparison for each element of `self` and `other`.
+    #[inline]
+    pub const fn cmpeq(&self, other: Self) -> Self {
+        Self {
+            x: ((self.x - other.x).abs() < f32::EPSILON) as i32 as f32,
+            y: ((self.y - other.y).abs() < f32::EPSILON) as i32 as f32,
+            z: ((self.z - other.z).abs() < f32::EPSILON) as i32 as f32,
+        }
+    }
+
+    /// Returns a vector mask containing the result of a `!=` comparison for each element of `self` and `other`.
+    #[inline]
+    pub const fn cmpne(&self, other: Self) -> Self {
+        Self {
+            x: ((self.x - other.x).abs() >= f32::EPSILON) as i32 as f32,
+            y: ((self.y - other.y).abs() >= f32::EPSILON) as i32 as f32,
+            z: ((self.z - other.z).abs() >= f32::EPSILON) as i32 as f32,
+        }
+    }
+
+    /// Returns a vector from the elements in `self` if the mask is true or `other` if false.
+    #[inline]
+    pub const fn select(&self, mask: Self, other: Self) -> Self {
+        Self {
+            x: if mask.x != 0.0 { self.x } else { other.x },
+            y: if mask.y != 0.0 { self.y } else { other.y },
+            z: if mask.z != 0.0 { self.z } else { other.z },
         }
     }
 
@@ -131,7 +181,7 @@ impl Vector3 {
     /// Calculates the length squared of this vector.
     /// `x * x + y * y + z * z`
     #[inline]
-    pub fn length_squared(&self) -> f32 {
+    pub const fn length_squared(&self) -> f32 {
         self.x * self.x + self.y * self.y + self.z * self.z
     }
 
@@ -157,7 +207,7 @@ impl Vector3 {
 
     /// Calculates the cross product of the two vectors.
     #[inline]
-    pub fn cross(&self, rhs: Self) -> Self {
+    pub const fn cross(&self, rhs: Self) -> Self {
         Self {
             x: (self.y * rhs.z) - (self.z * rhs.y),
             y: (self.z * rhs.x) - (self.x * rhs.z),
@@ -168,7 +218,7 @@ impl Vector3 {
     /// Calculates the dot product of the two vectors.
     /// `(x * rhs.x) + (y * rhs.y) + (z * rhs.z)`
     #[inline]
-    pub fn dot(&self, rhs: Self) -> f32 {
+    pub const fn dot(&self, rhs: Self) -> f32 {
         (self.x * rhs.x) + (self.y * rhs.y) + (self.z * rhs.z)
     }
 
@@ -180,12 +230,78 @@ impl Vector3 {
 
     /// Reverses the byte order of the vector.
     #[inline]
-    pub fn swap_bytes(self) -> Self {
+    pub const fn swap_bytes(self) -> Self {
         Self {
             x: f32::from_bits(self.x.to_bits().swap_bytes()),
             y: f32::from_bits(self.y.to_bits().swap_bytes()),
             z: f32::from_bits(self.z.to_bits().swap_bytes()),
         }
+    }
+
+    /// Creates a native endian vector value from its representation as a byte array in in big endian.
+    #[inline]
+    pub const fn from_be_bytes(bytes: [u8; size_of::<Self>()]) -> Self {
+        let [b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12] = bytes;
+
+        Self {
+            x: f32::from_be_bytes([b1, b2, b3, b4]),
+            y: f32::from_be_bytes([b5, b6, b7, b8]),
+            z: f32::from_be_bytes([b9, b10, b11, b12]),
+        }
+    }
+
+    /// Creates a native endian vector value from its representation as a byte array in little endian.
+    #[inline]
+    pub const fn from_le_bytes(bytes: [u8; size_of::<Self>()]) -> Self {
+        let [b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12] = bytes;
+
+        Self {
+            x: f32::from_le_bytes([b1, b2, b3, b4]),
+            y: f32::from_le_bytes([b5, b6, b7, b8]),
+            z: f32::from_le_bytes([b9, b10, b11, b12]),
+        }
+    }
+
+    /// Creates a native endian vector value from its representation as a byte array in native endianness.
+    #[inline]
+    pub const fn from_ne_bytes(bytes: [u8; size_of::<Self>()]) -> Self {
+        let [b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12] = bytes;
+
+        Self {
+            x: f32::from_ne_bytes([b1, b2, b3, b4]),
+            y: f32::from_ne_bytes([b5, b6, b7, b8]),
+            z: f32::from_ne_bytes([b9, b10, b11, b12]),
+        }
+    }
+
+    /// Returns the memory representation of this vector as a byte array in big-endian (network) byte order.
+    #[inline]
+    pub const fn to_be_bytes(self) -> [u8; size_of::<Self>()] {
+        let [b1, b2, b3, b4] = self.x.to_be_bytes();
+        let [b5, b6, b7, b8] = self.y.to_be_bytes();
+        let [b9, b10, b11, b12] = self.z.to_be_bytes();
+
+        [b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12]
+    }
+
+    /// Returns the memory representation of this vector as a byte array in little-endian byte order.
+    #[inline]
+    pub const fn to_le_bytes(self) -> [u8; size_of::<Self>()] {
+        let [b1, b2, b3, b4] = self.x.to_le_bytes();
+        let [b5, b6, b7, b8] = self.y.to_le_bytes();
+        let [b9, b10, b11, b12] = self.z.to_le_bytes();
+
+        [b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12]
+    }
+
+    /// Returns the memory representation of this vector as a byte array in native byte order.
+    #[inline]
+    pub const fn to_ne_bytes(self) -> [u8; size_of::<Self>()] {
+        let [b1, b2, b3, b4] = self.x.to_ne_bytes();
+        let [b5, b6, b7, b8] = self.y.to_ne_bytes();
+        let [b9, b10, b11, b12] = self.z.to_ne_bytes();
+
+        [b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12]
     }
 
     /// Transforms this vector with the given matrix.
@@ -219,19 +335,9 @@ impl Vector3 {
         *self + (uv * (2.0 * s)) + (uuv * 2.0)
     }
 
-    /// Returns a vector with any components that are `NaN` set to `0.0`.
-    #[inline]
-    pub fn nan_to_zero(self) -> Self {
-        Self {
-            x: if self.x.is_nan() { 0.0 } else { self.x },
-            y: if self.y.is_nan() { 0.0 } else { self.y },
-            z: if self.z.is_nan() { 0.0 } else { self.z },
-        }
-    }
-
     /// Returns any unit vector that is orthogonal to this unit vector.
     #[inline]
-    pub fn orthonormal_vector(&self) -> Self {
+    pub const fn orthonormal_vector(&self) -> Self {
         debug_assert!(self.is_normalized());
 
         let sign = self.z.signum();
@@ -264,7 +370,7 @@ impl Vector3 {
 
     /// Return `true` if the unit vector is parallel (same or opposite direction) to the given unit vector.
     #[inline]
-    pub fn is_parallel(&self, rhs: Self) -> bool {
+    pub const fn is_parallel(&self, rhs: Self) -> bool {
         debug_assert!(self.is_normalized());
         debug_assert!(rhs.is_normalized());
 
@@ -273,7 +379,7 @@ impl Vector3 {
 
     /// Returns `true` if the vector is normalized having a length of `1.0`.
     #[inline]
-    pub fn is_normalized(&self) -> bool {
+    pub const fn is_normalized(&self) -> bool {
         (self.length_squared().abs() - 1.0) <= 2e-4
     }
 }

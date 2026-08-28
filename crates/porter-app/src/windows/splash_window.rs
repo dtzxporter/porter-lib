@@ -7,8 +7,8 @@ use iced::widget::canvas;
 use iced::widget::column;
 use iced::widget::container;
 use iced::widget::row;
+use iced::widget::space;
 use iced::widget::text;
-use iced::widget::vertical_space;
 
 use iced::Alignment;
 use iced::Background;
@@ -91,17 +91,19 @@ impl SplashWindow {
         let splash = row([
             container(
                 column([
-                    vertical_space().height(20.0).into(),
+                    space().height(20.0).into(),
                     text(state.name.to_uppercase())
                         .size(32.0)
                         .font(fonts::TITLE_FONT)
                         .into(),
                     text(state.description).into(),
-                    vertical_space().height(42.0).into(),
+                    space().height(42.0).into(),
                     text(format!("Version {}", state.version)).into(),
                     row([
                         text("Developed by:").into(),
-                        text("DTZxPorter").color(palette::TEXT_COLOR_PORTER).into(),
+                        text("DTZxPorter")
+                            .color(palette::TEXT_COLOR_PORTER)
+                            .into(),
                     ])
                     .spacing(4.0)
                     .into(),
@@ -113,9 +115,9 @@ impl SplashWindow {
                             .size(14.0)
                             .color(palette::TEXT_COLOR_MUTED)
                             .into(),
-                        vertical_space().height(10.0).into(),
+                        space().height(10.0).into(),
                         text(strings::PORTER_COPYRIGHT).into(),
-                        vertical_space().height(20.0).into(),
+                        space().height(20.0).into(),
                     ]))
                     .width(Length::Fill)
                     .height(Length::Fill)

@@ -46,6 +46,8 @@ pub const BACKGROUND_COLOR_LIGHT_050: Color = lighten(BACKGROUND_COLOR_DEFAULT, 
 pub const BACKGROUND_COLOR_LIGHT_100: Color = lighten(BACKGROUND_COLOR_DEFAULT, 0.100);
 /// Light 0.150 background color.
 pub const BACKGROUND_COLOR_LIGHT_150: Color = lighten(BACKGROUND_COLOR_DEFAULT, 0.150);
+// Semi-transparent background color
+pub const BACKGROUND_COLOR_SEMI_TRANSPARENT: Color = Color::from_rgba8(0, 0, 0, 0.25);
 
 /// Default text color.
 pub const TEXT_COLOR_DEFAULT: Color = Color::from_rgb8(0xFF, 0xFF, 0xFF);

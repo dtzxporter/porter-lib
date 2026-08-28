@@ -12,6 +12,7 @@ use iced::advanced::text::Paragraph;
 use iced::advanced::widget::Tree;
 use iced::advanced::widget::tree;
 
+use iced::widget::text::Ellipsis;
 use iced::widget::text::LineHeight;
 use iced::widget::text::Shaping;
 use iced::widget::text::Wrapping;
@@ -137,11 +138,15 @@ where
         Size::new(Length::Shrink, Length::Shrink)
     }
 
-    fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
         let state = tree.state.downcast_mut::<State>();
 
-        let size = self.size.unwrap_or_else(|| renderer.default_size());
-        let font = self.font.unwrap_or_else(|| renderer.default_font());
+        let size = self
+            .size
+            .unwrap_or_else(|| renderer.default_size());
+        let font = self
+            .font
+            .unwrap_or_else(|| renderer.default_font());
 
         let rows = self.buffer.len().div_ceil(16) + 1; // Plus one for the header, which is fixed to the top.
 
@@ -160,12 +165,14 @@ where
             content: OFFSET_CONTENT,
             size,
             line_height: LineHeight::default(),
-            bounds: Size::INFINITY,
+            bounds: Size::INFINITE,
             font,
             align_x: Alignment::Left,
             align_y: Vertical::Top,
             shaping: Shaping::Basic,
             wrapping: Wrapping::None,
+            ellipsis: Ellipsis::None,
+            hint_factor: None,
         };
 
         let paragraph = <Renderer as advanced::text::Renderer>::Paragraph::with_text(text);
@@ -177,12 +184,14 @@ where
             content: HEX_CONTENT,
             size,
             line_height: LineHeight::default(),
-            bounds: Size::INFINITY,
+            bounds: Size::INFINITE,
             font,
             align_x: Alignment::Left,
             align_y: Vertical::Top,
             shaping: Shaping::Basic,
             wrapping: Wrapping::None,
+            ellipsis: Ellipsis::None,
+            hint_factor: None,
         };
 
         let paragraph = <Renderer as advanced::text::Renderer>::Paragraph::with_text(text);
@@ -194,12 +203,14 @@ where
             content: TEXT_CONTENT,
             size,
             line_height: LineHeight::default(),
-            bounds: Size::INFINITY,
+            bounds: Size::INFINITE,
             font,
             align_x: Alignment::Left,
             align_y: Vertical::Top,
             shaping: Shaping::Basic,
             wrapping: Wrapping::None,
+            ellipsis: Ellipsis::None,
+            hint_factor: None,
         };
 
         let paragraph = <Renderer as advanced::text::Renderer>::Paragraph::with_text(text);
@@ -241,7 +252,13 @@ where
 
         let mut buffer = String::with_capacity((16 * 2) + 16);
 
-        for (index, row) in self.buffer.chunks(16).enumerate().skip(skip).take(take) {
+        for (index, row) in self
+            .buffer
+            .chunks(16)
+            .enumerate()
+            .skip(skip)
+            .take(take)
+        {
             let shift = index * row_height;
 
             let text = advanced::Text {
@@ -254,6 +271,8 @@ where
                 align_y: Vertical::Top,
                 shaping: Shaping::Basic,
                 wrapping: Wrapping::None,
+                ellipsis: Ellipsis::None,
+                hint_factor: None,
             };
 
             renderer.fill_text(
@@ -284,6 +303,8 @@ where
                 align_y: Vertical::Top,
                 shaping: Shaping::Basic,
                 wrapping: Wrapping::None,
+                ellipsis: Ellipsis::None,
+                hint_factor: None,
             };
 
             renderer.fill_text(
@@ -330,6 +351,8 @@ where
                 align_y: Vertical::Top,
                 shaping: Shaping::Basic,
                 wrapping: Wrapping::None,
+                ellipsis: Ellipsis::None,
+                hint_factor: None,
             };
 
             renderer.fill_text(
@@ -366,6 +389,8 @@ where
                 align_y: Vertical::Top,
                 shaping: Shaping::Basic,
                 wrapping: Wrapping::None,
+                ellipsis: Ellipsis::None,
+                hint_factor: None,
             };
 
             renderer.fill_text(

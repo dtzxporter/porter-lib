@@ -1,7 +1,7 @@
 use std::fmt;
 use std::ops;
 
-use static_assertions::assert_eq_size;
+use porter_macros::assert_size;
 
 use crate::Matrix4x4;
 
@@ -12,7 +12,7 @@ pub struct RMatrix4x4 {
     data: [f32; 16],
 }
 
-assert_eq_size!([u8; 64], RMatrix4x4);
+assert_size!(RMatrix4x4, 64);
 
 impl RMatrix4x4 {
     /// Constructs a new identity matrix.
@@ -43,21 +43,21 @@ impl RMatrix4x4 {
     /// Access a single matrix value.
     /// `m[X][Y]`
     #[inline]
-    pub fn mat<const X: usize, const Y: usize>(&self) -> f32 {
+    pub const fn mat<const X: usize, const Y: usize>(&self) -> f32 {
         self.data[X * 4 + Y]
     }
 
     /// Mutably access a single matrix value.
     /// `m[X][Y]`
     #[inline]
-    pub fn mat_mut<const X: usize, const Y: usize>(&mut self) -> &mut f32 {
+    pub const fn mat_mut<const X: usize, const Y: usize>(&mut self) -> &mut f32 {
         &mut self.data[X * 4 + Y]
     }
 
     /// Reverses the byte order of the matrix.
     #[inline]
     #[unroll::unroll_for_loops]
-    pub fn swap_bytes(self) -> RMatrix4x4 {
+    pub const fn swap_bytes(self) -> RMatrix4x4 {
         let mut result = RMatrix4x4::new();
 
         for i in 0..16 {
@@ -70,7 +70,7 @@ impl RMatrix4x4 {
     /// Converts this row major matrix to column matrix order.
     #[inline]
     #[unroll::unroll_for_loops]
-    pub fn to_column_major(&self) -> Matrix4x4 {
+    pub const fn to_column_major(&self) -> Matrix4x4 {
         let mut result = Matrix4x4::new();
 
         for i in 0..4 {

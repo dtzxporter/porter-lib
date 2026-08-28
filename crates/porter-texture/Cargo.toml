@@ -7,8 +7,9 @@ edition = "2024"
 porter-utils = { path = "../porter-utils" }
 porter-gpu = { path = "../porter-gpu" }
 porter-math = { path = "../porter-math" }
+porter-macros = { path = "../porter-macros" }
 
 wgpu.workspace = true
 png.workspace = true
 tiff.workspace = true
-bincode.workspace = true
+miniserde.workspace = true

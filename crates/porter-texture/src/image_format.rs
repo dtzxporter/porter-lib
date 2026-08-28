@@ -527,6 +527,36 @@ impl ImageFormat {
         }
     }
 
+    /// Returns the linear colorspace version of this image format if one exists, otherwise returns itself.
+    pub const fn to_linear(&self) -> Self {
+        match self {
+            Self::R8G8B8A8UnormSrgb => Self::R8G8B8A8Unorm,
+            Self::Bc1UnormSrgb => Self::Bc1Unorm,
+            Self::Bc2UnormSrgb => Self::Bc2Unorm,
+            Self::Bc3UnormSrgb => Self::Bc3Unorm,
+            Self::B8G8R8A8UnormSrgb => Self::B8G8R8A8Unorm,
+            Self::B8G8R8X8UnormSrgb => Self::B8G8R8X8Unorm,
+            Self::Bc7UnormSrgb => Self::Bc7Unorm,
+            _ => *self,
+        }
+    }
+
+    /// Returns the signed normalized version of this image format if one exists, otherwise returns itself.
+    pub const fn to_snorm(&self) -> Self {
+        match self {
+            Self::R16G16B16A16Unorm => Self::R16G16B16A16Snorm,
+            Self::R8G8B8A8Unorm => Self::R8G8B8A8Snorm,
+            Self::R16G16Unorm => Self::R16G16Snorm,
+            Self::R8G8Unorm => Self::R8G8Snorm,
+            Self::R16Unorm => Self::R16Snorm,
+            Self::R8Unorm => Self::R8Snorm,
+            Self::Bc4Unorm => Self::Bc4Snorm,
+            Self::Bc5Unorm => Self::Bc5Snorm,
+            Self::Bc6HUf16 => Self::Bc6HSf16,
+            _ => *self,
+        }
+    }
+
     /// Returns the wgpu version of this image format if one exists, otherwise returns an error.
     pub const fn to_wgpu(&self) -> Result<TextureFormat, TextureError> {
         Ok(match self {

@@ -1,7 +1,7 @@
-use static_assertions::assert_eq_size;
+use porter_macros::assert_size;
 
 /// Represents one face or triangle indices for a polygon mesh.
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Face {
     /// The first index for this face.
@@ -12,17 +12,16 @@ pub struct Face {
     pub i3: u32,
 }
 
-assert_eq_size!([u8; 0xC], Face);
+assert_size!(Face, 12);
 
 impl Face {
     /// Constructs a new face.
-    pub fn new(i1: u32, i2: u32, i3: u32) -> Self {
+    pub const fn new(i1: u32, i2: u32, i3: u32) -> Self {
         Self { i1, i2, i3 }
     }
 
     /// Swaps the winding order of the face in place.
-    #[allow(clippy::manual_swap)]
-    pub fn swap_order(&mut self) {
+    pub const fn swap_order(&mut self) {
         let tmp = self.i3;
 
         self.i3 = self.i1;
@@ -30,8 +29,7 @@ impl Face {
     }
 
     /// Swaps the winding order of the face, returning the new face.
-    #[allow(clippy::manual_swap)]
-    pub fn swapped_order(mut self) -> Self {
+    pub const fn swapped_order(mut self) -> Self {
         let tmp = self.i3;
 
         self.i3 = self.i1;

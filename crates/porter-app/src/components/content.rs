@@ -24,6 +24,7 @@ pub struct Content {
 pub enum ContentMessage {
     Preview(PreviewMessage),
     PreviewToggle,
+    PreviewOpen,
     PreviewWindow,
     VirtualList(VirtualListMessage),
 }
@@ -55,6 +56,7 @@ impl Content {
                 .as_mut()
                 .map(|x| x.update(state, message))
                 .unwrap_or(Task::none()),
+            PreviewOpen => self.on_preview_open(state),
             PreviewToggle => self.on_preview_toggle(state),
             PreviewWindow => self.on_preview_window(state),
             VirtualList(message) => self
@@ -91,6 +93,15 @@ impl Content {
                 .padding(8.0)
                 .into(),
         }
+    }
+
+    /// Occurs when the user wants to open the preview.
+    fn on_preview_open(&mut self, _: &mut AppState) -> Task<Message> {
+        if self.preview.is_none() {
+            self.preview = Some(Preview::new());
+        }
+
+        Task::none()
     }
 
     /// Occurs when the user toggles the preview.

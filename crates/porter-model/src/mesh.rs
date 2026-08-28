@@ -36,7 +36,7 @@ pub struct Mesh {
 
 impl Mesh {
     /// Constructs a new mesh instance.
-    pub fn new(faces: FaceBuffer, vertices: VertexBuffer) -> Self {
+    pub const fn new(faces: FaceBuffer, vertices: VertexBuffer) -> Self {
         Self {
             name: None,
             material: None,
@@ -48,7 +48,7 @@ impl Mesh {
     }
 
     /// Constructs a new mesh instance with the given skinning method.
-    pub fn with_skinning_method(
+    pub const fn with_skinning_method(
         faces: FaceBuffer,
         vertices: VertexBuffer,
         skinning_method: SkinningMethod,
@@ -151,13 +151,22 @@ impl Mesh {
 
     /// Transforms the mesh by the given matrix.
     pub fn transform(&mut self, matrix: &Matrix4x4) {
-        let normal = matrix.to_3x3().to_4x4().inverse().transpose();
+        let normal = matrix
+            .to_3x3()
+            .to_4x4()
+            .inverse()
+            .transpose();
 
         for i in 0..self.vertices.len() {
             let mut vertex = self.vertices.vertex_mut(i);
 
             vertex.set_position(vertex.position().transform(matrix));
-            vertex.set_normal(vertex.normal().transform(&normal).normalized());
+            vertex.set_normal(
+                vertex
+                    .normal()
+                    .transform(&normal)
+                    .normalized(),
+            );
         }
 
         for blend_shape in &mut self.blend_shapes {
@@ -185,9 +194,15 @@ impl Mesh {
 
         for face in &self.faces {
             let normal = face_normal(
-                self.vertices.vertex(face.i1 as usize).position(),
-                self.vertices.vertex(face.i2 as usize).position(),
-                self.vertices.vertex(face.i3 as usize).position(),
+                self.vertices
+                    .vertex(face.i1 as usize)
+                    .position(),
+                self.vertices
+                    .vertex(face.i2 as usize)
+                    .position(),
+                self.vertices
+                    .vertex(face.i3 as usize)
+                    .position(),
             );
 
             normals[face.i1 as usize] += normal;
@@ -202,7 +217,9 @@ impl Mesh {
                 normal = normal.normalized();
             }
 
-            self.vertices.vertex_mut(i).set_normal(normal);
+            self.vertices
+                .vertex_mut(i)
+                .set_normal(normal);
         }
 
         Ok(())
@@ -238,7 +255,10 @@ impl Mesh {
                 let transform_normal = transform.to_3x3().to_4x4();
 
                 position += vertex.position().transform(&transform) * weight.value;
-                normal += vertex.normal().transform(&transform_normal) * weight.value;
+                normal += vertex
+                    .normal()
+                    .transform(&transform_normal)
+                    * weight.value;
             }
 
             vertex.set_position(position);

@@ -27,30 +27,45 @@ impl Controller {
 
     /// Requests the given files be loaded by the app.
     pub fn load_files(&self, files: Vec<PathBuf>) {
-        let result = self.channel.unbounded_send(Message::LoadFiles(files));
+        let result = self
+            .channel
+            .unbounded_send(Message::LoadFiles(files));
 
         debug_assert!(result.is_ok());
     }
 
     /// Requests that dropped files be loaded.
     pub fn load_files_dropped(&self) {
-        let result = self.channel.unbounded_send(Message::LoadFilesDropped);
+        let result = self
+            .channel
+            .unbounded_send(Message::LoadFilesDropped);
 
         debug_assert!(result.is_ok());
     }
 
     /// Notifies the app of a load result.
-    pub fn load_update(&self, result: Result<(), String>) {
-        let result = self.channel.unbounded_send(Message::LoadUpdate(result));
+    pub fn load_update(&self, result: Result<(), String>, files: Option<Vec<PathBuf>>) {
+        let result = self
+            .channel
+            .unbounded_send(Message::LoadUpdate(result, files));
 
         debug_assert!(result.is_ok());
     }
 
     /// Notifies the app of progress being made during an operation.
-    pub fn progress_update(&self, finished: bool, progress: u32) {
+    pub fn progress_update(&self, progress: u32) {
         let result = self
             .channel
-            .unbounded_send(Message::ProgressUpdate(finished, progress));
+            .unbounded_send(Message::ProgressUpdate(false, progress));
+
+        debug_assert!(result.is_ok());
+    }
+
+    /// Notifies the app of progress being finished during an operation.
+    pub fn progress_finish(&self) {
+        let result = self
+            .channel
+            .unbounded_send(Message::ProgressUpdate(true, 100));
 
         debug_assert!(result.is_ok());
     }

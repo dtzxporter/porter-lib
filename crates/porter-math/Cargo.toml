@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+porter-macros = { path = "../porter-macros" }
+
 unroll.workspace = true
-static_assertions.workspace = true
 half.workspace = true

@@ -4,8 +4,8 @@ use wgpu::TextureFormat;
 
 use porter_utils::AsAligned;
 
-/// Extensions for the TextureFormat.
-pub trait TextureExtensions {
+/// Extensions for wgpu texture format.
+pub trait GpuExt {
     /// Size of the buffer for the given width and height.
     fn buffer_size(&self, width: u32, height: u32) -> u64;
     /// Size of the buffer for the given width and height aligned.
@@ -18,7 +18,7 @@ pub trait TextureExtensions {
     fn is_snorm(&self) -> bool;
 }
 
-impl TextureExtensions for TextureFormat {
+impl GpuExt for TextureFormat {
     fn buffer_size(&self, width: u32, height: u32) -> u64 {
         let bytes_per_row = self.bytes_per_row(width) as u64;
         let (_, block_y) = self.block_dimensions();
@@ -38,7 +38,9 @@ impl TextureExtensions for TextureFormat {
     }
 
     fn bytes_per_row(&self, width: u32) -> u32 {
-        let block_size = self.block_copy_size(None).unwrap_or_default();
+        let block_size = self
+            .block_copy_size(None)
+            .unwrap_or_default();
         let block_dims = self.block_dimensions();
 
         let nbw = width.div_ceil(block_dims.0);

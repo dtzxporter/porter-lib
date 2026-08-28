@@ -13,6 +13,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use porter_utils::BufferWriteExt;
+use porter_utils::VecExt;
 
 use windows_sys::Win32::Foundation::GetLastError;
 use windows_sys::Win32::Networking::WinHttp::*;
@@ -46,7 +47,7 @@ pub fn download_memory(client: HttpClient) -> Result<(Vec<u8>, String), io::Erro
 
     while let Some(buffer) = read_request(&request, &mut temp)? {
         result.try_reserve(buffer.len())?;
-        result.extend_from_slice(buffer);
+        result.extend(buffer);
 
         now += buffer.len() as f64;
 
@@ -160,7 +161,7 @@ fn create_request(
         dwHostNameLength: u32::MAX,
         dwUrlPathLength: u32::MAX,
         dwExtraInfoLength: u32::MAX,
-        ..unsafe { std::mem::zeroed() }
+        ..Default::default()
     };
 
     let url: Vec<u16> = OsString::from(client.url)
@@ -321,7 +322,9 @@ fn create_request(
             session,
         },
         client.progress,
-        client.timeout.map(|ms| Duration::from_millis(ms as _)),
+        client
+            .timeout
+            .map(|ms| Duration::from_millis(ms as _)),
     ))
 }
 
@@ -452,12 +455,7 @@ fn read_request<'a>(
         return Ok(None);
     }
 
-    if size > temp.len() {
-        temp.try_reserve_exact(size - temp.len())?;
-        temp.resize(size, 0);
-    } else {
-        temp.resize(size, 0);
-    }
+    temp.try_resize(size, 0)?;
 
     let mut size_read: u32 = 0;
 
@@ -474,7 +472,9 @@ fn read_request<'a>(
         return Err(handle_last_error());
     }
 
-    Ok(Some(&temp[0..size_read as usize]))
+    temp.truncate(size_read as _);
+
+    Ok(Some(temp))
 }
 
 /// Handles the last os error.

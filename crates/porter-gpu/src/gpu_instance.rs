@@ -8,13 +8,14 @@ use wgpu::Features;
 use wgpu::Instance;
 use wgpu::InstanceDescriptor;
 use wgpu::InstanceFlags;
+use wgpu::Limits;
+use wgpu::MemoryHints;
 use wgpu::PowerPreference;
 use wgpu::Queue;
 use wgpu::RequestAdapterOptionsBase;
 use wgpu::ShaderModule;
 
 /// Stores an active GPU device, queue, and compiled shaders.
-#[derive(Clone)]
 pub struct GPUInstance {
     instance: Instance,
     device: Device,
@@ -24,23 +25,6 @@ pub struct GPUInstance {
 }
 
 impl GPUInstance {
-    /// Creates a new instance of the GPU instance.
-    pub fn new(
-        instance: Instance,
-        device: Device,
-        queue: Queue,
-        gpu_converter_shader: ShaderModule,
-        gpu_preview_shader: ShaderModule,
-    ) -> Self {
-        Self {
-            instance,
-            device,
-            queue,
-            gpu_converter_shader,
-            gpu_preview_shader,
-        }
-    }
-
     /// Returns the device.
     pub fn device(&self) -> &Device {
         &self.device
@@ -69,14 +53,14 @@ impl GPUInstance {
 
 /// Async initialization routine required for `wgpu`.
 async fn initialize() -> GPUInstance {
-    let instance = Instance::new(&InstanceDescriptor {
-        backends: Backends::all() & !Backends::GL,
+    let instance = Instance::new(InstanceDescriptor {
+        backends: Backends::VULKAN | Backends::METAL | Backends::DX12,
         flags: if cfg!(debug_assertions) {
             InstanceFlags::debugging()
         } else {
             InstanceFlags::empty()
         },
-        ..Default::default()
+        ..InstanceDescriptor::new_without_display_handle()
     });
 
     let adapter = instance
@@ -88,17 +72,32 @@ async fn initialize() -> GPUInstance {
         .await
         .unwrap();
 
+    let adapter_limits = adapter.limits();
+
     let descriptor = DeviceDescriptor {
         required_features: Features::TEXTURE_COMPRESSION_BC
             | Features::TEXTURE_FORMAT_16BIT_NORM
             | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | Features::POLYGON_MODE_LINE
             | Features::FLOAT32_FILTERABLE,
-        required_limits: adapter.limits(),
+        required_limits: Limits {
+            // Ensure we take the largest texture size that the device can support, so we can convert larger textures.
+            max_texture_dimension_1d: adapter_limits.max_texture_dimension_1d,
+            max_texture_dimension_2d: adapter_limits.max_texture_dimension_2d,
+            max_texture_dimension_3d: adapter_limits.max_texture_dimension_3d,
+            max_texture_array_layers: adapter_limits.max_texture_array_layers,
+            // Ensure we take the largest buffer size that the device can support, so we can allocate large enough buffers.
+            max_buffer_size: adapter_limits.max_buffer_size,
+            ..Limits::defaults()
+        },
+        memory_hints: MemoryHints::MemoryUsage,
         ..Default::default()
     };
 
-    let (device, queue) = adapter.request_device(&descriptor).await.unwrap();
+    let (device, queue) = adapter
+        .request_device(&descriptor)
+        .await
+        .unwrap();
 
     let gpu_converter_shader =
         device.create_shader_module(wgpu::include_wgsl!("../shaders/gpu_converter.wgsl"));
@@ -106,13 +105,13 @@ async fn initialize() -> GPUInstance {
     let gpu_preview_shader =
         device.create_shader_module(wgpu::include_wgsl!("../shaders/gpu_preview.wgsl"));
 
-    GPUInstance::new(
+    GPUInstance {
         instance,
         device,
         queue,
         gpu_converter_shader,
         gpu_preview_shader,
-    )
+    }
 }
 
 /// Global GPU instance, device, queue, and shaders.
