@@ -28,9 +28,11 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
 
     let meta_node = root.create(CastId::Metadata);
 
-    meta_node
-        .create_property(CastPropertyId::String, "a")
-        .push("DTZxPorter");
+    if !cfg!(feature = "debrand") {
+        meta_node
+            .create_property(CastPropertyId::String, "a")
+            .push("DTZxPorter");
+    }
 
     meta_node
         .create_property(CastPropertyId::String, "s")
@@ -268,7 +270,7 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             let file_hash = file.hash();
 
             material_node
-                .create_property(CastPropertyId::Integer64, slot)
+                .create_property(CastPropertyId::Integer64, &slot)
                 .push(file_hash);
         }
 
@@ -315,7 +317,7 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
             }
 
             material_node
-                .create_property(CastPropertyId::Integer64, slot)
+                .create_property(CastPropertyId::Integer64, &slot)
                 .push(hash);
         }
 
@@ -369,7 +371,7 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
 
         for cl in 0..mesh.vertices.colors() {
             let color_layer = mesh_node
-                .create_property(CastPropertyId::Integer32, format!("c{}", cl))
+                .create_property(CastPropertyId::Integer32, &format!("c{}", cl))
                 .try_reserve_exact(vertex_count)?;
 
             for i in 0..vertex_count {
@@ -379,7 +381,7 @@ pub fn to_cast<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
 
         for uv in 0..mesh.vertices.uv_layers() {
             let uv_layer = mesh_node
-                .create_property(CastPropertyId::Vector2, format!("u{}", uv))
+                .create_property(CastPropertyId::Vector2, &format!("u{}", uv))
                 .try_reserve_exact(vertex_count)?;
 
             for i in 0..vertex_count {

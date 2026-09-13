@@ -1,7 +1,5 @@
 use std::collections::HashSet;
 
-use porter_utils::SanitizeExt;
-
 use crate::MaterialTexture;
 use crate::MaterialUsage;
 
@@ -34,27 +32,12 @@ pub enum MaterialParameterValue {
 /// A material which has a name, and is a collection of textures.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Material {
-    /// The sanitized name for this material.
+    /// The name for this material.
     pub name: String,
-    /// Used to differentiate between materials when remapping models.
-    pub source_name: String,
     /// A collection of texture references for this material.
     pub textures: Vec<MaterialTexture>,
     /// A collection of parameters for this material.
     pub parameters: Vec<MaterialParameter>,
-}
-
-/// Cleans a material name.
-fn sanitize_material_name(name: &str) -> String {
-    let mut name = name.replace(' ', "_").sanitized();
-
-    if name == "default" || name.is_empty() {
-        name = String::from("_default");
-    } else if name.as_bytes()[0].is_ascii_digit() {
-        name = format!("_{}", name);
-    }
-
-    name
 }
 
 impl Material {
@@ -63,19 +46,10 @@ impl Material {
         let name: String = name.into();
 
         Self {
-            name: sanitize_material_name(&name),
-            source_name: name,
+            name,
             textures: Vec::with_capacity(16),
             parameters: Vec::new(),
         }
-    }
-
-    /// Constructs a new material instance with a specific source name.
-    pub fn with_source_name<N: Into<String>>(name: N, source_name: String) -> Self {
-        let mut result = Self::new(name);
-
-        result.source_name = source_name;
-        result
     }
 
     /// Adds a texture to the material.

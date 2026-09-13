@@ -250,7 +250,11 @@ macro_rules! write_image_data {
 
         let directory = frame_encoder.encoder();
 
-        directory.write_tag(Tag::Artist, "DTZxPorter")?;
+        directory.write_tag(Tag::Software, "Exported by PorterLib")?;
+
+        if !cfg!(feature = "debrand") {
+            directory.write_tag(Tag::Artist, "DTZxPorter")?;
+        }
 
         if $srgb {
             directory.write_tag(Tag::Unknown(0x8773), IccProfileValue)?;

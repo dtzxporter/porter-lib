@@ -21,15 +21,19 @@ use crate::Executor;
 use crate::Settings;
 use crate::Sort;
 use crate::palette;
-use crate::panic_hook;
+use crate::strings;
 use crate::system;
 
 /// Shared application state information.
 #[derive(Clone)]
 pub struct AppState {
     pub(crate) name: &'static str,
+    pub(crate) author: &'static str,
     pub(crate) version: &'static str,
     pub(crate) description: &'static str,
+    pub(crate) copyright: &'static str,
+    pub(crate) site_url: &'static str,
+    pub(crate) donate_url: &'static str,
     pub(crate) file_filters: Vec<(&'static str, Vec<&'static str>)>,
     pub(crate) last_load: Option<Vec<PathBuf>>,
     pub(crate) files_dropped: Vec<PathBuf>,
@@ -53,8 +57,12 @@ impl AppState {
     pub(crate) fn new<T: AssetManager + 'static>(asset_manager: T) -> Self {
         AppState {
             name: "<unset>",
+            author: strings::PORTER_AUTHOR,
             version: "<unset>",
             description: "<unset>",
+            copyright: strings::PORTER_COPYRIGHT,
+            site_url: strings::PORTER_SITE_URL,
+            donate_url: strings::PORTER_DONATE_URL,
             file_filters: Vec::new(),
             last_load: None,
             files_dropped: Vec::new(),
@@ -90,6 +98,12 @@ impl AppState {
         self
     }
 
+    /// The author of the application.
+    pub const fn author(mut self, author: &'static str) -> Self {
+        self.author = author;
+        self
+    }
+
     /// The version of the program.
     pub const fn version(mut self, version: &'static str) -> Self {
         self.version = version;
@@ -99,6 +113,24 @@ impl AppState {
     /// The description of the program.
     pub const fn description(mut self, description: &'static str) -> Self {
         self.description = description;
+        self
+    }
+
+    /// The copyright of the program.
+    pub const fn copyright(mut self, copyright: &'static str) -> Self {
+        self.copyright = copyright;
+        self
+    }
+
+    /// The site url of the program.
+    pub const fn site_url(mut self, site_url: &'static str) -> Self {
+        self.site_url = site_url;
+        self
+    }
+
+    /// The donate url of the program.
+    pub const fn donate_url(mut self, donate_url: &'static str) -> Self {
+        self.donate_url = donate_url;
         self
     }
 
@@ -132,8 +164,8 @@ impl AppState {
 
     /// Runs the app until the main window is closed.
     pub fn run(mut self) {
-        // Install global panic hook, as early as possible.
-        panic_hook::install(self.name, self.version);
+        // Empty panic hook, we will use crash dumps instead.
+        std::panic::set_hook(Box::new(|_| {}));
 
         // Load user settings if possible.
         self.settings = Settings::load(self.name);

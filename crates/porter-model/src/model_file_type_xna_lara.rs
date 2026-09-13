@@ -28,8 +28,9 @@ pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelEr
             xna,
             "{}\n{}\n{:.6} {:.6} {:.6}",
             bone.name
-                .as_ref()
-                .unwrap_or(&format!("porter_bone_{}", bone_index)),
+                .as_deref()
+                .map(sanitize_xna_str)
+                .unwrap_or_else(|| format!("porter_bone_{}", bone_index)),
             bone.parent,
             world_position.x,
             world_position.y,
@@ -42,15 +43,19 @@ pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelEr
     for (mesh_index, mesh) in model.meshes.iter().enumerate() {
         writeln!(
             xna,
-            "PorterMesh{}\n{}\n{}",
-            mesh_index,
+            "{}\n{}\n{}",
+            mesh.name
+                .as_deref()
+                .map(sanitize_xna_str)
+                .unwrap_or_else(|| format!("PorterMesh{}", mesh_index)),
             mesh.vertices.uv_layers(),
             mesh.vertices.uv_layers()
         )?;
 
         for i in 0..mesh.vertices.uv_layers() {
             if let Some(material_index) = mesh.material
-                && let Some(diffuse) = model.materials[material_index].base_color_texture()
+                && let Some(material) = model.materials.get(material_index)
+                && let Some(diffuse) = material.base_color_texture()
             {
                 writeln!(xna, "{}\n{}", diffuse.file_path, i)?;
             } else {
@@ -129,4 +134,17 @@ pub fn to_xna_lara<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelEr
     }
 
     Ok(())
+}
+
+/// Sanitizes a xna lara string.
+fn sanitize_xna_str(str: &str) -> String {
+    // Ascii plugins read one full line as the string, but, split the string on '#' characters for comments.
+    // For sanity, we will filter out '#' characters and newline characters.
+    str.trim()
+        .chars()
+        .map(|ch| match ch {
+            '#' | '\r' | '\n' => '_',
+            _ => ch,
+        })
+        .collect()
 }

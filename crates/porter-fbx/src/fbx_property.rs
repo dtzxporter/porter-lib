@@ -130,26 +130,28 @@ impl FbxProperty {
         }
 
         for property_value in &self.property_values {
+            use FbxPropertyValue::*;
+
             match property_value {
-                FbxPropertyValue::Boolean(bool) => {
+                Boolean(bool) => {
                     writer.write_all(&(*bool as u8).to_le_bytes())?;
                 }
-                FbxPropertyValue::Byte(byte) => {
+                Byte(byte) => {
                     writer.write_all(&byte.to_le_bytes())?;
                 }
-                FbxPropertyValue::Integer16(integer16) => {
+                Integer16(integer16) => {
                     writer.write_all(&integer16.to_le_bytes())?;
                 }
-                FbxPropertyValue::Integer32(integer32) => {
+                Integer32(integer32) => {
                     writer.write_all(&integer32.to_le_bytes())?;
                 }
-                FbxPropertyValue::Integer64(integer64) => {
+                Integer64(integer64) => {
                     writer.write_all(&integer64.to_le_bytes())?;
                 }
-                FbxPropertyValue::Float32(float32) => {
+                Float32(float32) => {
                     writer.write_all(&float32.to_le_bytes())?;
                 }
-                FbxPropertyValue::Float64(float64) => {
+                Float64(float64) => {
                     writer.write_all(&float64.to_le_bytes())?;
                 }
             }
@@ -174,47 +176,50 @@ impl FbxProperty {
 
     /// Gets the length of this property in bytes.
     pub(crate) fn length(&self) -> u32 {
+        use FbxPropertyType::*;
+
         let mut result = size_of::<u8>() as u32;
 
         const SIZE_OF_ARRAY: u32 =
             size_of::<u32>() as u32 + size_of::<u32>() as u32 + size_of::<u32>() as u32;
 
         match self.property_type {
-            FbxPropertyType::Byte => result += size_of::<u8>() as u32,
-            FbxPropertyType::Bool => result += size_of::<bool>() as u32,
-            FbxPropertyType::Integer16 => result += size_of::<u16>() as u32,
-            FbxPropertyType::Integer32 => result += size_of::<u32>() as u32,
-            FbxPropertyType::Integer64 => result += size_of::<u64>() as u32,
-            FbxPropertyType::Float32 => result += size_of::<f32>() as u32,
-            FbxPropertyType::Float64 => result += size_of::<f64>() as u32,
-            FbxPropertyType::String | FbxPropertyType::Raw => {
-                result += self.property_string.len() as u32 + size_of::<u32>() as u32
+            Byte => result += size_of::<u8>() as u32,
+            Bool => result += size_of::<bool>() as u32,
+            Integer16 => result += size_of::<u16>() as u32,
+            Integer32 => result += size_of::<u32>() as u32,
+            Integer64 => result += size_of::<u64>() as u32,
+            Float32 => result += size_of::<f32>() as u32,
+            Float64 => result += size_of::<f64>() as u32,
+            String | Raw => {
+                result += self.property_string.len() as u32;
+                result += size_of::<u32>() as u32
             }
-            FbxPropertyType::ByteArray => {
+            ByteArray => {
                 result += self.property_values.len() as u32 * size_of::<u8>() as u32;
                 result += SIZE_OF_ARRAY;
             }
-            FbxPropertyType::BoolArray => {
+            BoolArray => {
                 result += self.property_values.len() as u32 * size_of::<bool>() as u32;
                 result += SIZE_OF_ARRAY;
             }
-            FbxPropertyType::Integer16Array => {
+            Integer16Array => {
                 result += self.property_values.len() as u32 * size_of::<u16>() as u32;
                 result += SIZE_OF_ARRAY;
             }
-            FbxPropertyType::Integer32Array => {
+            Integer32Array => {
                 result += self.property_values.len() as u32 * size_of::<u32>() as u32;
                 result += SIZE_OF_ARRAY;
             }
-            FbxPropertyType::Integer64Array => {
+            Integer64Array => {
                 result += self.property_values.len() as u32 * size_of::<u64>() as u32;
                 result += SIZE_OF_ARRAY;
             }
-            FbxPropertyType::Float32Array => {
+            Float32Array => {
                 result += self.property_values.len() as u32 * size_of::<f32>() as u32;
                 result += SIZE_OF_ARRAY;
             }
-            FbxPropertyType::Float64Array => {
+            Float64Array => {
                 result += self.property_values.len() as u32 * size_of::<f64>() as u32;
                 result += SIZE_OF_ARRAY;
             }
@@ -226,35 +231,16 @@ impl FbxProperty {
 
 impl PartialEq<FbxPropertyValue> for FbxPropertyType {
     fn eq(&self, other: &FbxPropertyValue) -> bool {
+        use FbxPropertyType::*;
+
         match other {
-            FbxPropertyValue::Byte(_) => {
-                matches!(self, FbxPropertyType::Byte | FbxPropertyType::ByteArray)
-            }
-            FbxPropertyValue::Boolean(_) => {
-                matches!(self, FbxPropertyType::Bool | FbxPropertyType::BoolArray)
-            }
-            FbxPropertyValue::Float32(_) => {
-                matches!(
-                    self,
-                    FbxPropertyType::Float32 | FbxPropertyType::Float32Array
-                )
-            }
-            FbxPropertyValue::Float64(_) => matches!(
-                self,
-                FbxPropertyType::Float64 | FbxPropertyType::Float64Array
-            ),
-            FbxPropertyValue::Integer16(_) => matches!(
-                self,
-                FbxPropertyType::Integer16 | FbxPropertyType::Integer16Array
-            ),
-            FbxPropertyValue::Integer32(_) => matches!(
-                self,
-                FbxPropertyType::Integer32 | FbxPropertyType::Integer32Array
-            ),
-            FbxPropertyValue::Integer64(_) => matches!(
-                self,
-                FbxPropertyType::Integer64 | FbxPropertyType::Integer64Array
-            ),
+            FbxPropertyValue::Byte(_) => matches!(self, Byte | ByteArray),
+            FbxPropertyValue::Boolean(_) => matches!(self, Bool | BoolArray),
+            FbxPropertyValue::Float32(_) => matches!(self, Float32 | Float32Array),
+            FbxPropertyValue::Float64(_) => matches!(self, Float64 | Float64Array),
+            FbxPropertyValue::Integer16(_) => matches!(self, Integer16 | Integer16Array),
+            FbxPropertyValue::Integer32(_) => matches!(self, Integer32 | Integer32Array),
+            FbxPropertyValue::Integer64(_) => matches!(self, Integer64 | Integer64Array),
         }
     }
 }

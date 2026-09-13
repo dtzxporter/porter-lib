@@ -7,10 +7,13 @@ use claxon::FlacReader;
 
 use flacenc::bitsink::ByteSink;
 use flacenc::component::BitRepr;
+use flacenc::component::MetadataBlockData;
+use flacenc::component::Stream;
 use flacenc::config::Encoder;
 use flacenc::encode_with_fixed_block_size;
 use flacenc::error::SourceError;
 use flacenc::error::Verify;
+use flacenc::error::VerifyError;
 use flacenc::source::Fill;
 use flacenc::source::Source;
 
@@ -77,6 +80,31 @@ fn convert_sample_i32(bits: u32, sample: i32) -> i32 {
     sample as i32
 }
 
+/// Adds metadata to a flac stream.
+fn add_metadata(stream: &mut Stream) -> Result<(), VerifyError> {
+    let mut metadata: Vec<u8> = Vec::with_capacity(256);
+
+    let vendor = "Exported by PorterLib";
+
+    metadata.extend_from_slice(&(vendor.len() as u32).to_le_bytes());
+    metadata.extend_from_slice(vendor.as_bytes());
+
+    if !cfg!(feature = "debrand") {
+        metadata.extend_from_slice(&1u32.to_le_bytes());
+
+        let artist = "ARTIST=DTZxPorter";
+
+        metadata.extend_from_slice(&(artist.len() as u32).to_le_bytes());
+        metadata.extend_from_slice(artist.as_bytes());
+    } else {
+        metadata.extend_from_slice(&0u32.to_le_bytes());
+    }
+
+    stream.add_metadata_block(MetadataBlockData::new_unknown(4, &metadata)?);
+
+    Ok(())
+}
+
 impl Source for FlacSource<'_> {
     #[inline(always)]
     fn channels(&self) -> usize {
@@ -139,7 +167,9 @@ pub fn to_flac<O: Write + Seek>(audio: &Audio, output: &mut O) -> Result<(), Aud
 
     let source = FlacSource::new(audio);
 
-    let stream = encode_with_fixed_block_size(&config, source, config.block_size)?;
+    let mut stream = encode_with_fixed_block_size(&config, source, config.block_size)?;
+
+    add_metadata(&mut stream)?;
 
     let bits = stream.count_bits();
     let mut bv = ByteSink::with_capacity(bits);

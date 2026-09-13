@@ -3,13 +3,6 @@ name = "porter-audio"
 version = "0.1.0"
 edition = "2024"
 
-[features]
-ms-adpcm = []
-wwise-vorbis = ["dep:lewton"]
-raw-flac = []
-ogg = ["dep:lewton", "lewton/ogg"]
-debug = []
-
 [dependencies]
 porter-utils = { path = "../porter-utils" }
 porter-macros = { path = "../porter-macros" }
@@ -18,3 +11,17 @@ claxon.workspace = true
 flacenc.workspace = true
 miniserde.workspace = true
 lewton = { workspace = true, optional = true }
+
+[features]
+# Enables reading ms adpcm wav files.
+ms-adpcm = []
+# Enables reading wwise vorbis wem files.
+wwise-vorbis = ["dep:lewton"]
+# Enabled reading headerless flac files.
+raw-flac = []
+# Enables reading ogg files.
+ogg = ["dep:lewton", "lewton/ogg"]
+# Enables extra debug logging.
+debug = []
+# Removes 'DTZxPorter' branding.
+debrand = []

@@ -15,299 +15,12 @@ use porter_math::Angles;
 use porter_math::Matrix4x4;
 
 use porter_utils::BufferWriteExt;
+use porter_utils::SanitizeExt;
 
 use crate::MaterialTexture;
 use crate::MaterialUsage;
 use crate::Model;
 use crate::ModelError;
-
-/// Adds an object connection from->to.
-fn add_object_connection<F: Into<FbxPropertyValue>, T: Into<FbxPropertyValue>>(
-    connection_node: &mut FbxNode,
-    from: F,
-    to: T,
-) {
-    let connection = connection_node.create("C");
-
-    connection
-        .create_property(FbxPropertyType::String)
-        .push_string("OO");
-    connection
-        .create_property(FbxPropertyType::Integer64)
-        .push(from);
-    connection
-        .create_property(FbxPropertyType::Integer64)
-        .push(to);
-}
-
-/// Adds an object property connection from->to[property].
-fn add_object_property_connection<
-    F: Into<FbxPropertyValue>,
-    T: Into<FbxPropertyValue>,
-    P: Into<String>,
->(
-    connection_node: &mut FbxNode,
-    from: F,
-    to: T,
-    property: P,
-) {
-    let connection = connection_node.create("C");
-
-    connection
-        .create_property(FbxPropertyType::String)
-        .push_string("OP");
-    connection
-        .create_property(FbxPropertyType::Integer64)
-        .push(from);
-    connection
-        .create_property(FbxPropertyType::Integer64)
-        .push(to);
-    connection
-        .create_property(FbxPropertyType::String)
-        .push_string(property);
-}
-
-/// Creates and connects a texture node to a material.
-fn initialize_texture_node(
-    root: &mut FbxDocument,
-    texture: &MaterialTexture,
-    material_hash: FbxPropertyValue,
-    connection: &str,
-) {
-    let texture_node = root.objects_node().create("Texture");
-    let texture_name = PathBuf::from(texture.file_path.as_str())
-        .file_stem()
-        .map(|x| x.to_string_lossy().into_owned())
-        .unwrap_or_else(|| String::from("not_found"));
-
-    texture_node.create_hash();
-    texture_node
-        .create_property(FbxPropertyType::String)
-        .push_string(format!("{}\u{0000}\u{0001}Texture", texture_name));
-    texture_node
-        .create_property(FbxPropertyType::String)
-        .push_string("");
-
-    texture_node
-        .create("Type")
-        .create_property(FbxPropertyType::String)
-        .push_string("TextureVideoClip");
-    texture_node
-        .create("Version")
-        .create_property(FbxPropertyType::Integer32)
-        .push(202u32);
-    texture_node
-        .create("TextureName")
-        .create_property(FbxPropertyType::String)
-        .push_string(format!("{}\u{0000}\u{0001}Texture", texture_name));
-
-    let properties = texture_node.create("Properties70");
-
-    {
-        let props = properties.create("P");
-
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("CurrentTextureBlendMode");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("enum");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("");
-        props
-            .create_property(FbxPropertyType::Integer32)
-            .push(0u32);
-    }
-
-    {
-        let props = properties.create("P");
-
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("UVSet");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("KString");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("map1");
-    }
-
-    {
-        let props = properties.create("P");
-
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("UseMaterial");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("bool");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("");
-        props
-            .create_property(FbxPropertyType::Integer32)
-            .push(1u32);
-    }
-
-    texture_node
-        .create("Media")
-        .create_property(FbxPropertyType::String)
-        .push_string(format!("{}\u{0000}\u{0001}Video", texture_name));
-
-    texture_node
-        .create("FileName")
-        .create_property(FbxPropertyType::String)
-        .push_string(texture.file_path.replace('\\', "/"));
-    texture_node
-        .create("RelativeFilename")
-        .create_property(FbxPropertyType::String)
-        .push_string(texture.file_path.as_str());
-
-    let texture_hash = FbxPropertyValue::from(texture_node);
-
-    add_object_property_connection(
-        root.connections_node(),
-        texture_hash,
-        material_hash,
-        connection,
-    );
-}
-
-/// Adds basic properties to the model and skeleton root nodes.
-fn initialize_root_node(root_node: &mut FbxNode) {
-    root_node
-        .create("Version")
-        .create_property(FbxPropertyType::Integer32)
-        .push(232u32);
-
-    let properties = root_node.create("Properties70");
-
-    {
-        let props = properties.create("P");
-
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("PreRotation");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("Vector3D");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("Vector");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("");
-        props
-            .create_property(FbxPropertyType::Float64)
-            .push(-90.0f64);
-        props
-            .create_property(FbxPropertyType::Float64)
-            .push(0.0f64);
-        props
-            .create_property(FbxPropertyType::Float64)
-            .push(0.0f64);
-    }
-
-    {
-        let props = properties.create("P");
-
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("RotationActive");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("bool");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("");
-        props
-            .create_property(FbxPropertyType::Integer32)
-            .push(1u32);
-    }
-
-    {
-        let props = properties.create("P");
-
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("InheritType");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("enum");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("");
-        props
-            .create_property(FbxPropertyType::Integer32)
-            .push(1u32);
-    }
-
-    {
-        let props = properties.create("P");
-
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("ScalingMax");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("Vector3D");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("Vector");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("");
-        props
-            .create_property(FbxPropertyType::Float64)
-            .push(0.0);
-        props
-            .create_property(FbxPropertyType::Float64)
-            .push(0.0);
-        props
-            .create_property(FbxPropertyType::Float64)
-            .push(0.0);
-    }
-
-    {
-        let props = properties.create("P");
-
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("DefaultAttributeIndex");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("int");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("Integer");
-        props
-            .create_property(FbxPropertyType::String)
-            .push_string("");
-        props
-            .create_property(FbxPropertyType::Integer32)
-            .push(0u32);
-    }
-}
 
 /// Writes a model in fbx format to the given path.
 pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> {
@@ -383,7 +96,8 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
                     "{}\u{0000}\u{0001}Model",
                     bone.name
                         .as_deref()
-                        .unwrap_or(&format!("porter_bone_{}", bone_index))
+                        .map(sanitize_fbx_str)
+                        .unwrap_or_else(|| format!("porter_bone_{}", bone_index))
                 ));
             joint
                 .create_property(FbxPropertyType::String)
@@ -611,7 +325,10 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
         material_node.create_hash();
         material_node
             .create_property(FbxPropertyType::String)
-            .push_string(format!("{}\u{0000}\u{0001}Material", material.name));
+            .push_string(format!(
+                "{}\u{0000}\u{0001}Material",
+                sanitize_fbx_str(&material.name)
+            ));
         material_node
             .create_property(FbxPropertyType::String)
             .push_string("");
@@ -1222,4 +939,318 @@ pub fn to_fbx<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
     root.write(writer)?;
 
     Ok(())
+}
+
+/// Sanitizes a fbx str.
+fn sanitize_fbx_str(str: &str) -> String {
+    // Fbx node names follow file sanitization however they also can not contain spaces.
+    let mut result = str.trim().sanitized().replace(' ', "_");
+
+    // Fbx reserved words need to be sanitized as well as strings can't begin with a digit.
+    if result.eq_ignore_ascii_case("default")
+        || result.eq_ignore_ascii_case("if")
+        || result.eq_ignore_ascii_case("else")
+        || result.eq_ignore_ascii_case("do")
+        || result.eq_ignore_ascii_case("while")
+        || result.eq_ignore_ascii_case("switch")
+        || result.eq_ignore_ascii_case("case")
+        || result.eq_ignore_ascii_case("global")
+        || result
+            .as_bytes()
+            .first()
+            .is_some_and(|ch| ch.is_ascii_digit())
+    {
+        result.insert(0, '_');
+        result
+    } else {
+        result
+    }
+}
+
+/// Adds an object connection from->to.
+fn add_object_connection<F: Into<FbxPropertyValue>, T: Into<FbxPropertyValue>>(
+    connection_node: &mut FbxNode,
+    from: F,
+    to: T,
+) {
+    let connection = connection_node.create("C");
+
+    connection
+        .create_property(FbxPropertyType::String)
+        .push_string("OO");
+    connection
+        .create_property(FbxPropertyType::Integer64)
+        .push(from);
+    connection
+        .create_property(FbxPropertyType::Integer64)
+        .push(to);
+}
+
+/// Adds an object property connection from->to[property].
+fn add_object_property_connection<
+    F: Into<FbxPropertyValue>,
+    T: Into<FbxPropertyValue>,
+    P: Into<String>,
+>(
+    connection_node: &mut FbxNode,
+    from: F,
+    to: T,
+    property: P,
+) {
+    let connection = connection_node.create("C");
+
+    connection
+        .create_property(FbxPropertyType::String)
+        .push_string("OP");
+    connection
+        .create_property(FbxPropertyType::Integer64)
+        .push(from);
+    connection
+        .create_property(FbxPropertyType::Integer64)
+        .push(to);
+    connection
+        .create_property(FbxPropertyType::String)
+        .push_string(property);
+}
+
+/// Creates and connects a texture node to a material.
+fn initialize_texture_node(
+    root: &mut FbxDocument,
+    texture: &MaterialTexture,
+    material_hash: FbxPropertyValue,
+    connection: &str,
+) {
+    let texture_node = root.objects_node().create("Texture");
+    let texture_name = PathBuf::from(texture.file_path.as_str())
+        .file_stem()
+        .map(|x| x.to_string_lossy().into_owned())
+        .unwrap_or_else(|| String::from("not_found"));
+
+    texture_node.create_hash();
+    texture_node
+        .create_property(FbxPropertyType::String)
+        .push_string(format!("{}\u{0000}\u{0001}Texture", texture_name));
+    texture_node
+        .create_property(FbxPropertyType::String)
+        .push_string("");
+
+    texture_node
+        .create("Type")
+        .create_property(FbxPropertyType::String)
+        .push_string("TextureVideoClip");
+    texture_node
+        .create("Version")
+        .create_property(FbxPropertyType::Integer32)
+        .push(202u32);
+    texture_node
+        .create("TextureName")
+        .create_property(FbxPropertyType::String)
+        .push_string(format!("{}\u{0000}\u{0001}Texture", texture_name));
+
+    let properties = texture_node.create("Properties70");
+
+    {
+        let props = properties.create("P");
+
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("CurrentTextureBlendMode");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("enum");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("");
+        props
+            .create_property(FbxPropertyType::Integer32)
+            .push(0u32);
+    }
+
+    {
+        let props = properties.create("P");
+
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("UVSet");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("KString");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("map1");
+    }
+
+    {
+        let props = properties.create("P");
+
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("UseMaterial");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("bool");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("");
+        props
+            .create_property(FbxPropertyType::Integer32)
+            .push(1u32);
+    }
+
+    texture_node
+        .create("Media")
+        .create_property(FbxPropertyType::String)
+        .push_string(format!("{}\u{0000}\u{0001}Video", texture_name));
+
+    texture_node
+        .create("FileName")
+        .create_property(FbxPropertyType::String)
+        .push_string(texture.file_path.replace('\\', "/"));
+    texture_node
+        .create("RelativeFilename")
+        .create_property(FbxPropertyType::String)
+        .push_string(texture.file_path.as_str());
+
+    let texture_hash = FbxPropertyValue::from(texture_node);
+
+    add_object_property_connection(
+        root.connections_node(),
+        texture_hash,
+        material_hash,
+        connection,
+    );
+}
+
+/// Adds basic properties to the model and skeleton root nodes.
+fn initialize_root_node(root_node: &mut FbxNode) {
+    root_node
+        .create("Version")
+        .create_property(FbxPropertyType::Integer32)
+        .push(232u32);
+
+    let properties = root_node.create("Properties70");
+
+    {
+        let props = properties.create("P");
+
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("PreRotation");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("Vector3D");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("Vector");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("");
+        props
+            .create_property(FbxPropertyType::Float64)
+            .push(-90.0f64);
+        props
+            .create_property(FbxPropertyType::Float64)
+            .push(0.0f64);
+        props
+            .create_property(FbxPropertyType::Float64)
+            .push(0.0f64);
+    }
+
+    {
+        let props = properties.create("P");
+
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("RotationActive");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("bool");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("");
+        props
+            .create_property(FbxPropertyType::Integer32)
+            .push(1u32);
+    }
+
+    {
+        let props = properties.create("P");
+
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("InheritType");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("enum");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("");
+        props
+            .create_property(FbxPropertyType::Integer32)
+            .push(1u32);
+    }
+
+    {
+        let props = properties.create("P");
+
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("ScalingMax");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("Vector3D");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("Vector");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("");
+        props
+            .create_property(FbxPropertyType::Float64)
+            .push(0.0);
+        props
+            .create_property(FbxPropertyType::Float64)
+            .push(0.0);
+        props
+            .create_property(FbxPropertyType::Float64)
+            .push(0.0);
+    }
+
+    {
+        let props = properties.create("P");
+
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("DefaultAttributeIndex");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("int");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("Integer");
+        props
+            .create_property(FbxPropertyType::String)
+            .push_string("");
+        props
+            .create_property(FbxPropertyType::Integer32)
+            .push(0u32);
+    }
 }

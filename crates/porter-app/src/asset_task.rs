@@ -309,7 +309,7 @@ where
         };
 
         let mut material = callback(asset, output_path.clone(), extract)
-            .unwrap_or_else(|_| Material::with_source_name("failed_to_export", asset.name()));
+            .unwrap_or_else(|_| Material::new(asset.name()));
 
         if let Some(base_path) = options.override_path
             && let Some(output_path) = output_path

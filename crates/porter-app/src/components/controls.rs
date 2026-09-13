@@ -1,5 +1,4 @@
 use iced::widget::container;
-use iced::widget::row;
 use iced::widget::stack;
 use iced::widget::text;
 
@@ -46,93 +45,96 @@ impl Controls {
 
     /// Handles rendering for the controls component.
     pub fn view(&self, state: &AppState) -> Element<'_, Message> {
-        let mut row = row(Vec::with_capacity(8))
-            .spacing(8.0)
-            .align_y(Alignment::Center);
+        let mut row: Vec<_> = Vec::with_capacity(8);
 
         if state.asset_manager.supports_games() {
-            row = row.push(
+            row.push(
                 widgets::button("Load Game")
                     .padding([6.0, 10.0])
                     .on_press_maybe(if state.is_busy() {
                         None
                     } else {
                         Some(Message::from(ControlsMessage::LoadGame))
-                    }),
+                    })
+                    .into(),
             );
         }
 
         if state.asset_manager.supports_files() {
-            row = row.push(
+            row.push(
                 widgets::button("Load File")
                     .padding([6.0, 10.0])
                     .on_press_maybe(if state.is_busy() {
                         None
                     } else {
                         Some(Message::from(ControlsMessage::LoadFile))
-                    }),
+                    })
+                    .into(),
             );
         }
 
-        row = row
-            .push(
-                widgets::button("Export Selected")
-                    .padding([6.0, 10.0])
-                    .on_press_maybe(if state.assets_selected.is_empty() || state.is_busy() {
-                        None
-                    } else {
-                        Some(Message::from(ControlsMessage::ExportSelected))
-                    }),
-            )
-            .push(
-                widgets::button("Export All")
-                    .padding([6.0, 10.0])
-                    .on_press_maybe(if state.asset_manager.assets_empty() || state.is_busy() {
-                        None
-                    } else {
-                        Some(Message::from(ControlsMessage::ExportAll))
-                    }),
-            );
+        row.extend([
+            widgets::button("Export Selected")
+                .padding([6.0, 10.0])
+                .on_press_maybe(if state.assets_selected.is_empty() || state.is_busy() {
+                    None
+                } else {
+                    Some(Message::from(ControlsMessage::ExportSelected))
+                })
+                .into(),
+            widgets::button("Export All")
+                .padding([6.0, 10.0])
+                .on_press_maybe(if state.asset_manager.assets_empty() || state.is_busy() {
+                    None
+                } else {
+                    Some(Message::from(ControlsMessage::ExportAll))
+                })
+                .into(),
+        ]);
 
         if state.exporting {
-            row = row
-                .push(
-                    widgets::button(if state.export_canceled {
-                        "Canceling..."
-                    } else {
-                        "Cancel"
-                    })
-                    .padding([6.0, 10.0])
-                    .on_press_maybe(if state.export_canceled {
-                        None
-                    } else {
-                        Some(Message::from(ControlsMessage::ExportCancel))
-                    }),
-                )
-                .push(
-                    container(stack([
-                        widgets::progress_bar(0.0..=100.0, state.progress as f32)
-                            .length(200.0)
-                            .girth(32.0)
-                            .into(),
-                        text(format!("{}%", state.progress))
-                            .width(Length::Fill)
-                            .height(Length::Fill)
-                            .align_x(Alignment::Center)
-                            .align_y(Alignment::Center)
-                            .into(),
-                    ]))
-                    .width(Length::Fill)
-                    .height(Length::Shrink)
-                    .align_x(Alignment::End)
-                    .align_y(Alignment::Center),
-                );
+            row.extend([
+                widgets::button(if state.export_canceled {
+                    "Canceling..."
+                } else {
+                    "Cancel"
+                })
+                .padding([6.0, 10.0])
+                .on_press_maybe(if state.export_canceled {
+                    None
+                } else {
+                    Some(Message::from(ControlsMessage::ExportCancel))
+                })
+                .into(),
+                container(stack([
+                    widgets::progress_bar(0.0..=100.0, state.progress as f32)
+                        .length(200.0)
+                        .girth(32.0)
+                        .into(),
+                    text(format!("{}%", state.progress))
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .align_x(Alignment::Center)
+                        .align_y(Alignment::Center)
+                        .into(),
+                ]))
+                .width(Length::Fill)
+                .height(Length::Shrink)
+                .align_x(Alignment::End)
+                .align_y(Alignment::Center)
+                .into(),
+            ]);
         }
 
-        container(row)
-            .width(Length::Fill)
-            .height(Length::Shrink)
-            .padding([10.0, 8.0])
-            .into()
+        container(
+            widgets::row(row)
+                .spacing(8.0)
+                .width(Length::Fill)
+                .align_y(Alignment::Center),
+        )
+        .width(Length::Fill)
+        .height(Length::Shrink)
+        .padding([10.0, 8.0])
+        .into()
     }
 }

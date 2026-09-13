@@ -8,6 +8,7 @@ use porter_math::Angles;
 
 use porter_utils::BufferWriteExt;
 use porter_utils::HashExt;
+use porter_utils::SanitizeExt;
 
 use crate::Model;
 use crate::ModelError;
@@ -23,12 +24,18 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
 
     let mut maya = File::create(path.with_extension("ma"))?.buffer_write();
 
+    writeln!(maya, "//Maya ASCII 8.5 scene\n")?;
+    writeln!(maya, "// Exported by PorterLib")?;
+
+    if !cfg!(feature = "debrand") {
+        writeln!(maya, "// Please credit DTZxPorter for use of this asset!\n")?;
+    } else {
+        writeln!(maya)?;
+    }
+
     writeln!(
         maya,
         concat!(
-            "//Maya ASCII 8.5 scene\n\n",
-            "// Exported by PorterLib\n",
-            "// Please credit DTZxPorter for use of this asset!\n\n",
             "requires maya \"8.5\";\n",
             "currentUnit -l centimeter -a degree -t film;\n",
             "fileInfo \"application\" \"maya\";\n",
@@ -395,6 +402,8 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
     }
 
     for material in &model.materials {
+        let name = sanitize_maya_str(&material.name);
+
         writeln!(
             maya,
             concat!(
@@ -405,7 +414,7 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 "createNode lambert -n \"{}\";\n",
                 "createNode place2dTexture -n \"{}P2DT\";"
             ),
-            material.name, material.name, material.name, material.name
+            name, name, name, name
         )?;
 
         if let Some(diffuse) = material.base_color_texture() {
@@ -415,13 +424,15 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                     "createNode file -n \"{}FILE\";\n",
                     "\tsetAttr \".ftn\" -type \"string\" \"{}\";",
                 ),
-                material.name,
-                diffuse.file_path.replace('\\', "\\\\")
+                name,
+                diffuse.file_path.replace('\\', "/")
             )?;
         }
     }
 
     for (light_connection_index, material) in (2..).zip(&model.materials) {
+        let name = sanitize_maya_str(&material.name);
+
         writeln!(
             maya,
             concat!(
@@ -434,17 +445,17 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 "connectAttr \"{}.msg\" \"{}MI.m\";",
             ),
             light_connection_index,
-            material.name,
+            name,
             light_connection_index,
             light_connection_index,
-            material.name,
+            name,
             light_connection_index,
-            material.name,
-            material.name,
-            material.name,
-            material.name,
-            material.name,
-            material.name,
+            name,
+            name,
+            name,
+            name,
+            name,
+            name,
         )?;
 
         let has_diffuse = material.base_color_texture().is_some();
@@ -474,46 +485,46 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                     "connectAttr \"{}P2DT.o\" \"{}FILE.uv\";\n",
                     "connectAttr \"{}P2DT.ofs\" \"{}FILE.fs\";",
                 ),
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
-                material.name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
+                name,
             )?;
         }
 
@@ -525,18 +536,20 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 "connectAttr \"{}P2DT.msg\" \":defaultRenderUtilityList1.u\" -na;\n",
                 "connectAttr \"{}FILE.msg\" \":defaultTextureList1.tx\" -na;"
             ),
-            material.name, material.name, material.name, material.name
+            name, name, name, name
         )?;
     }
 
     for (mesh_index, mesh) in model.meshes.iter().enumerate() {
         if mesh.vertices.uv_layers() > 0
             && let Some(material_index) = mesh.material
+            && let Some(material) = model.materials.get(material_index)
         {
             writeln!(
                 maya,
                 "connectAttr \"MeshShape_{}.iog\" \"{}SG.dsm\" -na;",
-                mesh_index, model.materials[material_index].name
+                mesh_index,
+                sanitize_maya_str(&material.name)
             )?;
         }
     }
@@ -560,7 +573,8 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 "createNode joint -n \"{}\" -p \"Joints\";",
                 bone.name
                     .as_deref()
-                    .unwrap_or(&format!("porter_bone_{}", bone_index))
+                    .map(sanitize_maya_str)
+                    .unwrap_or_else(|| format!("porter_bone_{}", bone_index))
             )?;
         } else {
             writeln!(
@@ -568,11 +582,13 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                 "createNode joint -n \"{}\" -p \"{}\";",
                 bone.name
                     .as_deref()
-                    .unwrap_or(&format!("porter_bone_{}", bone_index)),
+                    .map(sanitize_maya_str)
+                    .unwrap_or_else(|| format!("porter_bone_{}", bone_index)),
                 model.skeleton.bones[bone.parent as usize]
                     .name
                     .as_deref()
-                    .unwrap_or(&format!("porter_bone_{}", bone.parent))
+                    .map(sanitize_maya_str)
+                    .unwrap_or_else(|| format!("porter_bone_{}", bone.parent))
             )?;
         }
 
@@ -651,7 +667,8 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
                     bone_names.push(
                         model.skeleton.bones[weight.bone as usize]
                             .name
-                            .clone()
+                            .as_deref()
+                            .map(sanitize_maya_str)
                             .unwrap_or_else(|| format!("porter_bone_{}", { weight.bone })),
                     );
 
@@ -767,6 +784,32 @@ pub fn to_maya<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError>
     )?;
 
     Ok(())
+}
+
+/// Sanitizes a maya str.
+fn sanitize_maya_str(str: &str) -> String {
+    // Maya node names follow file sanitization however they also can not contain spaces.
+    let mut result = str.trim().sanitized().replace(' ', "_");
+
+    // Maya reserved words need to be sanitized as well as strings can't begin with a digit.
+    if result.eq_ignore_ascii_case("default")
+        || result.eq_ignore_ascii_case("if")
+        || result.eq_ignore_ascii_case("else")
+        || result.eq_ignore_ascii_case("do")
+        || result.eq_ignore_ascii_case("while")
+        || result.eq_ignore_ascii_case("switch")
+        || result.eq_ignore_ascii_case("case")
+        || result.eq_ignore_ascii_case("global")
+        || result
+            .as_bytes()
+            .first()
+            .is_some_and(|ch| ch.is_ascii_digit())
+    {
+        result.insert(0, '_');
+        result
+    } else {
+        result
+    }
 }
 
 /// Utility method to format a maya range.

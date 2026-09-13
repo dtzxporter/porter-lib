@@ -56,7 +56,7 @@ impl RenderSkeleton {
                 vertex: VertexState {
                     module: instance.gpu_preview_shader(),
                     entry_point: Some("vs_bone_main"),
-                    buffers: &[VertexBufferLayout {
+                    buffers: &[Some(VertexBufferLayout {
                         array_stride: size_of::<Vector3>() as BufferAddress,
                         step_mode: VertexStepMode::Vertex,
                         attributes: &[VertexAttribute {
@@ -64,7 +64,7 @@ impl RenderSkeleton {
                             shader_location: 0,
                             format: VertexFormat::Float32x3,
                         }],
-                    }],
+                    })],
                     compilation_options: Default::default(),
                 },
                 primitive: PrimitiveState {

@@ -13,3 +13,7 @@ wgpu.workspace = true
 png.workspace = true
 tiff.workspace = true
 miniserde.workspace = true
+
+[features]
+# Removes 'DTZxPorter' branding.
+debrand = []

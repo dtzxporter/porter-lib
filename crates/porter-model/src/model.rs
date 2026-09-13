@@ -150,7 +150,7 @@ impl Model {
             let material_index = self
                 .materials
                 .iter()
-                .position(|x| x.source_name == material);
+                .position(|x| x.name == material);
 
             for (mesh, verts) in opcodes {
                 let old_mesh = &old_meshes[mesh];
@@ -289,7 +289,7 @@ impl Model {
             let material_index = self
                 .materials
                 .iter()
-                .position(|x| x.source_name == material);
+                .position(|x| x.name == material);
 
             for (mesh, faces) in opcodes {
                 let old_mesh = &old_meshes[mesh];

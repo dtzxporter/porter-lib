@@ -80,7 +80,9 @@ impl App {
             UI(event, id) => self.on_ui(event, id),
             WindowOpened(id) => self.on_window_opened(id),
             Controller(controller) => self.on_controller(controller),
-            Splash(message) => self.splash_window.update(message),
+            Splash(message) => self
+                .splash_window
+                .update(&mut self.state, message),
             Main(message) => self
                 .main_window
                 .update(&mut self.state, message),
@@ -205,7 +207,7 @@ impl App {
                 .update(&mut self.state, MainMessage::UI(event))
         } else if id == self.splash_window.id {
             self.splash_window
-                .update(SplashMessage::UI(event))
+                .update(&mut self.state, SplashMessage::UI(event))
         } else if let Some(preview_window) = &mut self.preview_window
             && preview_window.id == id
         {

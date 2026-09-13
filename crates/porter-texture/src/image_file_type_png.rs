@@ -129,7 +129,11 @@ pub fn to_png<O: Write + Seek>(image: &Image, output: &mut O) -> Result<(), Text
         encoder.set_source_srgb(SrgbRenderingIntent::Perceptual);
     }
 
-    encoder.add_text_chunk("Author".into(), "DTZxPorter".into())?;
+    encoder.add_text_chunk("Software".into(), "Exported by PorterLib".into())?;
+
+    if !cfg!(feature = "debrand") {
+        encoder.add_text_chunk("Author".into(), "DTZxPorter".into())?;
+    }
 
     let mut encoder = encoder.write_header()?;
     let mut writer = encoder.stream_writer_with_size(MAXIMUM_PNG_BUFFER)?;

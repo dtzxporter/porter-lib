@@ -440,6 +440,7 @@ impl GPUConverter {
         if size_truncated >= size_aligned {
             return Ok(output_slice
                 .get_mapped_range()
+                .map_err(|_| TextureError::ConversionError)?
                 .try_to_vec_truncated(size_truncated)?);
         }
 
@@ -450,6 +451,7 @@ impl GPUConverter {
             .zip(
                 output_slice
                     .get_mapped_range()
+                    .map_err(|_| TextureError::ConversionError)?
                     .chunks_exact(bytes_per_row_aligned),
             )
         {

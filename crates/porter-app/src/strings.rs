@@ -1,9 +1,12 @@
+/// Program author.
+pub const PORTER_AUTHOR: &str = "DTZxPorter";
 /// Program copyright date string.
 pub const PORTER_COPYRIGHT: &str = "Copyright © 2026 DTZxPorter";
 /// Program website url.
 pub const PORTER_SITE_URL: &str = "https://dtzxporter.com";
 /// Program donate url.
 pub const PORTER_DONATE_URL: &str = "https://dtzxporter.com/donate";
+
 /// Program disclaimer.
 pub const PORTER_DISCLAIMER: &str =
     "This software is provided \"as-is\" and without warranty of any kind. Use at your own risk.";
@@ -13,6 +16,7 @@ pub const PORTER_THANKS: &str =
 /// Program bugs.
 pub const PORTER_BUG_REPORT: &str =
     "Please report all bugs or crashes to me on twitter/discord @DTZxPorter.";
+
 /// Custom scale factor message.
 pub const CUSTOM_SCALE_FACTOR_ERROR: &str =
     "Custom scale value must be a valid floating point number!";

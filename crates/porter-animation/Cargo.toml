@@ -9,3 +9,7 @@ porter-utils = { path = "../porter-utils" }
 porter-cast = { path = "../porter-cast" }
 
 miniserde.workspace = true
+
+[features]
+# Removes 'DTZxPorter' branding.
+debrand = []

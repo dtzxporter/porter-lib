@@ -1,6 +1,6 @@
 use crate::AnimationError;
-use crate::Keyframe;
 use crate::KeyframeValue;
+use crate::Keyframes;
 
 /// The attribute of the node a curve is animating.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -8,7 +8,7 @@ pub enum CurveAttribute {
     /// Animates the translation of this node as a vector.
     Translate,
     /// Animates the rotation of this node as a quaternion.
-    Rotation,
+    Rotate,
     /// Animates the scale of this node as a vector.
     Scale,
     /// Animates the visibility of this node as a bool.
@@ -34,9 +34,8 @@ pub enum CurveDataType {
 #[derive(Debug, Clone)]
 pub struct Curve {
     name: String,
-    attribute: CurveAttribute,
     data_type: CurveDataType,
-    keyframes: Vec<Keyframe>,
+    keyframes: Keyframes,
 }
 
 impl Curve {
@@ -48,9 +47,8 @@ impl Curve {
     ) -> Self {
         Self {
             name: name.into(),
-            attribute,
             data_type,
-            keyframes: Vec::new(),
+            keyframes: Keyframes::new(attribute),
         }
     }
 
@@ -61,7 +59,7 @@ impl Curve {
 
     /// Returns the attribute of the node this curve targets.
     pub const fn attribute(&self) -> CurveAttribute {
-        self.attribute
+        self.keyframes.attribute()
     }
 
     /// Returns the data type of the keyframes.
@@ -75,47 +73,28 @@ impl Curve {
     }
 
     /// Returns the keyframes of this curve.
-    pub const fn keyframes(&self) -> &[Keyframe] {
-        self.keyframes.as_slice()
+    pub const fn keyframes(&self) -> &Keyframes {
+        &self.keyframes
     }
 
     /// Returns the keyframes mutable of this curve.
-    pub const fn keyframes_mut(&mut self) -> &mut [Keyframe] {
-        self.keyframes.as_mut_slice()
+    pub const fn keyframes_mut(&mut self) -> &mut Keyframes {
+        &mut self.keyframes
     }
 
     /// Returns the largest frame time in this curve.
     pub fn largest_frame_time(&self) -> u32 {
-        let mut result = 0;
-
-        for keyframe in self.keyframes() {
-            result = result.max(keyframe.time);
-        }
-
-        result
+        self.keyframes.largest_frame_time()
     }
 
     /// Sorts the curve's keyframes in order by time.
     pub fn sort(&mut self) {
-        self.keyframes
-            .sort_by_key(|keyframe| keyframe.time);
+        self.keyframes.sort();
     }
 
     /// Insert a keyframe at the given time with the given value.
-    pub fn insert<T: Into<KeyframeValue>>(&mut self, time: u32, value: T) {
-        let value = value.into();
-
-        debug_assert!(match self.attribute {
-            CurveAttribute::Translate => matches!(value, KeyframeValue::Vector3(_)),
-            CurveAttribute::Rotation => matches!(value, KeyframeValue::Quaternion(_)),
-            CurveAttribute::Scale => matches!(value, KeyframeValue::Vector3(_)),
-            CurveAttribute::Visibility => matches!(value, KeyframeValue::Bool(_)),
-            CurveAttribute::Notetrack => matches!(value, KeyframeValue::None),
-            CurveAttribute::BlendShape => matches!(value, KeyframeValue::Float(_)),
-        });
-
-        self.keyframes
-            .push(Keyframe { time, value });
+    pub fn insert<V: KeyframeValue>(&mut self, time: u32, value: V) {
+        value.insert(time, &mut self.keyframes);
     }
 
     /// Returns the number of keyframes in this curve.
@@ -136,7 +115,7 @@ impl Curve {
     /// # Errors
     /// If the capacity overflows, or the allocator reports a failure, then an error is returned.
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), AnimationError> {
-        Ok(self.keyframes.try_reserve(additional)?)
+        self.keyframes.try_reserve(additional)
     }
 
     /// Tries to reserve the minimum capacity for at least `additional` keyframes to be inserted in the given `Curve`.
@@ -150,8 +129,7 @@ impl Curve {
     /// # Errors
     /// If the capacity overflows, or the allocator reports a failure, then an error is returned.
     pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), AnimationError> {
-        Ok(self
-            .keyframes
-            .try_reserve_exact(additional)?)
+        self.keyframes
+            .try_reserve_exact(additional)
     }
 }

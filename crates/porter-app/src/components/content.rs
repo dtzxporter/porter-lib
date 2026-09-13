@@ -1,5 +1,4 @@
 use iced::widget::container;
-use iced::widget::row;
 
 use iced::Element;
 use iced::Length;
@@ -7,6 +6,7 @@ use iced::Task;
 
 use crate::AppState;
 use crate::Message;
+use crate::widgets;
 
 use super::Preview;
 use super::PreviewMessage;
@@ -70,24 +70,36 @@ impl Content {
     /// Handles rendering for the content component.
     pub fn view(&self, state: &AppState) -> Element<'_, Message> {
         match (&self.preview, &self.virtual_list) {
-            (Some(preview), Some(virtual_list)) => {
-                container(row([virtual_list.view(state), preview.view(state, true)]).spacing(4.0))
+            (Some(preview), Some(virtual_list)) => container(
+                widgets::row([virtual_list.view(state), preview.view(state, true)])
+                    .spacing(4.0)
                     .width(Length::Fill)
-                    .height(Length::Fill)
-                    .padding([0.0, 8.0])
-                    .into()
-            }
-            (None, Some(virtual_list)) => container(row([virtual_list.view(state)]).spacing(4.0))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .padding([0.0, 8.0])
-                .into(),
-            (Some(preview), None) => container(row([preview.view(state, false)]))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .padding(8.0)
-                .into(),
-            (None, None) => container(row([]))
+                    .height(Length::Fill),
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding([0.0, 8.0])
+            .into(),
+            (None, Some(virtual_list)) => container(
+                widgets::row([virtual_list.view(state)])
+                    .spacing(4.0)
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding([0.0, 8.0])
+            .into(),
+            (Some(preview), None) => container(
+                widgets::row([preview.view(state, false)])
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding(8.0)
+            .into(),
+            (None, None) => container(widgets::row([]))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .padding(8.0)

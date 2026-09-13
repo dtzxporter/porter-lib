@@ -44,7 +44,7 @@ pub struct CastProperty {
 
 impl CastProperty {
     /// Constructs a new instance of cast property.
-    pub fn new<N: AsRef<str>>(property_type: CastPropertyId, name: N) -> Self {
+    pub fn new(property_type: CastPropertyId, name: &str) -> Self {
         Self {
             property_type,
             property_values: if matches!(property_type, CastPropertyId::String) {
@@ -52,7 +52,7 @@ impl CastProperty {
             } else {
                 CastPropertyValues::ByteBuffer(Vec::new())
             },
-            property_name: name.as_ref().to_lowercase(),
+            property_name: name.to_lowercase(),
         }
     }
 

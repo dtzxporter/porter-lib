@@ -69,13 +69,33 @@ impl CastNode {
     }
 
     /// Creates a new property with the given type and name.
-    pub fn create_property<N: AsRef<str>>(
+    pub fn create_property(
         &mut self,
         property_type: CastPropertyId,
-        name: N,
+        name: &str,
     ) -> &mut CastProperty {
         self.properties
             .push_mut(CastProperty::new(property_type, name))
+    }
+
+    /// Creates multiple properties from the given types and names.
+    pub fn create_properties<const N: usize>(
+        &mut self,
+        properties: [(CastPropertyId, &str); N],
+    ) -> [&mut CastProperty; N] {
+        let index = self.properties.len();
+
+        for (property_type, name) in properties {
+            self.properties
+                .push(CastProperty::new(property_type, name));
+        }
+
+        let mut iter = self.properties[index..index + N].iter_mut();
+
+        std::array::from_fn(|_| {
+            // This can not fail because we inserted N elements above.
+            iter.next().unwrap()
+        })
     }
 
     /// Returns the identifier of this node.

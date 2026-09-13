@@ -1,6 +1,5 @@
 pub(crate) mod components;
 pub(crate) mod fonts;
-pub(crate) mod panic_hook;
 pub(crate) mod strings;
 pub(crate) mod system;
 pub(crate) mod widgets;

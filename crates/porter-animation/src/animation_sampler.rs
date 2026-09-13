@@ -4,15 +4,14 @@ use porter_math::Angles;
 use porter_math::Quaternion;
 use porter_math::Vector3;
 
-use porter_utils::HashExt;
-
 use crate::Animation;
 use crate::AnimationError;
 use crate::Constraint;
-use crate::CurveAttribute;
 use crate::IkSolver;
 use crate::Joint;
+use crate::Keyframe;
 use crate::KeyframeValue;
+use crate::Keyframes;
 
 /// Maximum number of joints the sampler supports.
 const MAXIMUM_JOINTS: usize = 2048;
@@ -25,38 +24,15 @@ struct BindPose {
     scale: Vector3,
 }
 
-/// Key used for the sampler frame cache.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[repr(transparent)]
-struct SampleKey(u64);
-
-impl SampleKey {
-    /// Constructs a new instance of sample key with the given name and attribute.
-    pub fn new<N: AsRef<str>>(name: N, attribute: CurveAttribute) -> Self {
-        let mut hash: [u8; 16] = [0; 16];
-
-        hash[0..8].copy_from_slice(
-            &name
-                .as_ref()
-                .hash_murmura64()
-                .to_le_bytes(),
-        );
-        hash[8..16].copy_from_slice(&(attribute as u64).to_le_bytes());
-
-        Self((&hash[0..]).hash_murmura64())
-    }
-}
-
 /// A animation sampler that can evaluate joints and individual attributes.
 #[derive(Debug)]
 pub struct AnimationSampler {
     animation: Animation,
     frame_count: u32,
     frame_current: u32,
-    frame_cache: HashMap<SampleKey, KeyframeValue>,
     constraints: Vec<Constraint>,
     joints: Vec<Joint>,
-    joint_names: Vec<Option<String>>,
+    joint_names: HashMap<String, usize>,
     joint_binds: Vec<BindPose>,
 }
 
@@ -69,10 +45,9 @@ impl AnimationSampler {
             animation,
             frame_count,
             frame_current: u32::MAX,
-            frame_cache: HashMap::new(),
             constraints: Vec::new(),
             joints: Vec::new(),
-            joint_names: Vec::new(),
+            joint_names: HashMap::new(),
             joint_binds: Vec::new(),
         }
     }
@@ -98,80 +73,50 @@ impl AnimationSampler {
 
     /// Step to the next frame, wrapping back to 0 when at the end.
     pub fn step(&mut self) -> Result<(), AnimationError> {
+        let mut reset_all_to_bind = false;
+
         if self.frame_current == u32::MAX || self.frame_current + 1 > self.frame_count {
-            self.reset_all_to_bind();
+            reset_all_to_bind = true;
             self.frame_current = 0;
         } else {
             self.frame_current += 1;
         }
 
-        for curve in &self.animation.curves {
-            debug_assert!(
-                curve
-                    .keyframes()
-                    .is_sorted_by_key(|curve| curve.time)
-            );
-
-            let Some(mut keyframe) = curve
-                .keyframes()
-                .last()
-                // We need at least one keyframe to start at.
-                .cloned()
-            else {
-                continue;
-            };
-
-            for window in curve.keyframes().windows(2) {
-                let keyframe0 = window[0];
-                let keyframe1 = window[1];
-
-                if !(keyframe0.time..keyframe1.time).contains(&self.frame_current) {
-                    continue;
-                }
-
-                keyframe = keyframe0.lerp(&keyframe1, self.frame_current);
-                break;
-            }
-
-            self.frame_cache.insert(
-                SampleKey::new(curve.name(), curve.attribute()),
-                keyframe.value,
-            );
-        }
-
-        for ((joint, joint_name), bind_pose) in self
+        for (joint, bind_pose) in self
             .joints
             .iter_mut()
-            .zip(self.joint_names.iter())
             .zip(self.joint_binds.iter())
         {
-            if joint.reset_to_bind {
+            if joint.reset_to_bind || reset_all_to_bind {
                 joint.local_position = bind_pose.position;
                 joint.local_rotation = bind_pose.rotation;
                 joint.local_scale = bind_pose.scale;
             }
+        }
 
-            if let Some(name) = joint_name {
-                if let Some(translation) = self
-                    .frame_cache
-                    .get(&SampleKey::new(name, CurveAttribute::Translate))
-                {
-                    joint.local_position = translation.to_owned().try_into()?;
-                }
+        let current_frame = self.frame_current;
 
-                if let Some(rotation) = self
-                    .frame_cache
-                    .get(&SampleKey::new(name, CurveAttribute::Rotation))
-                {
-                    joint.local_rotation = rotation.to_owned().try_into()?;
-                }
+        for curve in &self.animation.curves {
+            let Some(joint_index) = self.find_joint_index(curve.name()) else {
+                continue;
+            };
 
-                if let Some(scale) = self
-                    .frame_cache
-                    .get(&SampleKey::new(name, CurveAttribute::Scale))
-                {
-                    joint.local_scale = scale.to_owned().try_into()?;
-                }
+            let Some(joint) = self.joints.get_mut(joint_index) else {
+                continue;
+            };
+
+            if let Keyframes::Translate(keyframes) = curve.keyframes()
+                && let Some(keyframe) = interpolate(current_frame, keyframes)
+            {
+                joint.local_position = keyframe.value;
+            } else if let Keyframes::Rotate(keyframes) = curve.keyframes()
+                && let Some(keyframe) = interpolate(current_frame, keyframes)
+            {
+                joint.local_rotation = keyframe.value;
+            } else if let Keyframes::Scale(keyframes) = curve.keyframes()
+                && let Some(keyframe) = interpolate(current_frame, keyframes)
+            {
+                joint.local_scale = keyframe.value;
             }
         }
 
@@ -183,7 +128,9 @@ impl AnimationSampler {
 
     /// Appends a joint to this sampler.
     pub fn push_joint(&mut self, name: Option<String>, joint: Joint) -> Result<(), AnimationError> {
-        if self.joints.len() == MAXIMUM_JOINTS {
+        let index = self.joints.len();
+
+        if index == MAXIMUM_JOINTS {
             return Err(AnimationError::JointsOverflow);
         }
 
@@ -193,7 +140,10 @@ impl AnimationSampler {
             scale: joint.local_scale,
         });
 
-        self.joint_names.push(name);
+        if let Some(name) = name {
+            self.joint_names.insert(name, index);
+        }
+
         self.joints.push(joint);
 
         Ok(())
@@ -202,14 +152,8 @@ impl AnimationSampler {
     /// Finds the index of a join in this sampler by name.
     pub fn find_joint_index<N: AsRef<str>>(&self, name: N) -> Option<usize> {
         self.joint_names
-            .iter()
-            .position(|joint_name| {
-                if let Some(joint_name) = joint_name {
-                    joint_name == name.as_ref()
-                } else {
-                    false
-                }
-            })
+            .get(name.as_ref())
+            .copied()
     }
 
     /// Evaluates a given joint by it's name at the current time.
@@ -229,33 +173,9 @@ impl AnimationSampler {
         self.constraints.push(constraint);
     }
 
-    /// Evaulates a named attribute at the current time.
-    pub fn evaulate<N: AsRef<str>>(
-        &self,
-        name: N,
-        attribute: CurveAttribute,
-    ) -> Option<KeyframeValue> {
-        self.frame_cache
-            .get(&SampleKey::new(name, attribute))
-            .copied()
-    }
-
     /// Consumes the sampler, returning the inner animation.
     pub fn into_animation(self) -> Animation {
         self.animation
-    }
-
-    /// Resets all joints to their bind position.
-    fn reset_all_to_bind(&mut self) {
-        for (joint, bind_pose) in self
-            .joints
-            .iter_mut()
-            .zip(self.joint_binds.iter())
-        {
-            joint.local_position = bind_pose.position;
-            joint.local_rotation = bind_pose.rotation;
-            joint.local_scale = bind_pose.scale;
-        }
     }
 
     /// Calculates and applies constraints for each joint.
@@ -485,4 +405,24 @@ impl AnimationSampler {
 
         computed[index] = true;
     }
+}
+
+/// Interpolates the keyframe for the given frame time.
+#[inline]
+fn interpolate<V: KeyframeValue>(frame: u32, keyframes: &[Keyframe<V>]) -> Option<Keyframe<V>> {
+    let mut keyframe = keyframes.last().cloned()?;
+
+    for window in keyframes.windows(2) {
+        let keyframe0 = window[0];
+        let keyframe1 = window[1];
+
+        if !(keyframe0.time..keyframe1.time).contains(&frame) {
+            continue;
+        }
+
+        keyframe = keyframe0.interpolate(&keyframe1, frame);
+        break;
+    }
+
+    Some(keyframe)
 }

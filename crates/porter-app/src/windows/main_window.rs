@@ -5,7 +5,6 @@ use iced::keyboard::Key;
 use iced::keyboard::Modifiers;
 use iced::keyboard::key::Named;
 
-use iced::widget::Column;
 use iced::widget::container;
 
 use iced::window;
@@ -42,6 +41,7 @@ use crate::components::Settings;
 use crate::components::SettingsMessage;
 use crate::components::VirtualListMessage;
 use crate::palette;
+use crate::widgets;
 
 /// Main window handler.
 pub struct MainWindow {
@@ -136,7 +136,7 @@ impl MainWindow {
         }
 
         container(
-            Column::from_vec(columns)
+            widgets::column(columns)
                 .width(Length::Fill)
                 .height(Length::Fill),
         )

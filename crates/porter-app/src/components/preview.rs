@@ -3,12 +3,9 @@ use std::time::Duration;
 use iced::border::Radius;
 use iced::border::rounded;
 
-use iced::widget::Column;
 use iced::widget::Container;
 use iced::widget::Id;
-use iced::widget::column;
 use iced::widget::container;
-use iced::widget::row;
 use iced::widget::scrollable;
 use iced::widget::space;
 use iced::widget::stack;
@@ -137,7 +134,7 @@ impl Preview {
     /// Handles rendering for the preview component.
     pub fn view(&self, state: &AppState, embedded: bool) -> Element<'_, Message> {
         let header = container(
-            row([
+            widgets::row([
                 text("Asset Preview")
                     .width(Length::Fill)
                     .height(Length::Fill)
@@ -193,10 +190,11 @@ impl Preview {
             .padding(1.0)
             .style(preview_content_style);
 
-        #[allow(unused_mut)]
-        let mut tab_row = row([
+        let mut tab_row: Vec<_> = Vec::with_capacity(8);
+
+        tab_row.extend([
             widgets::tab(
-                row([
+                widgets::row([
                     text("\u{F1B2}")
                         .size(16.0)
                         .font(fonts::ICON_FONT)
@@ -209,7 +207,6 @@ impl Preview {
                         .align_y(Alignment::Center)
                         .into(),
                 ])
-                .height(Length::Shrink)
                 .spacing(8.0),
                 matches!(self.tab, PreviewTab::Viewport),
             )
@@ -224,7 +221,7 @@ impl Preview {
             )
             .into(),
             widgets::tab(
-                row([
+                widgets::row([
                     text("\u{F0F6}")
                         .size(16.0)
                         .font(fonts::ICON_FONT)
@@ -237,7 +234,6 @@ impl Preview {
                         .align_y(Alignment::Center)
                         .into(),
                 ])
-                .height(Length::Shrink)
                 .spacing(8.0),
                 matches!(self.tab, PreviewTab::Text),
             )
@@ -254,7 +250,7 @@ impl Preview {
             )
             .into(),
             widgets::tab(
-                row([
+                widgets::row([
                     text("\u{F1C9}")
                         .size(16.0)
                         .font(fonts::ICON_FONT)
@@ -267,7 +263,6 @@ impl Preview {
                         .align_y(Alignment::Center)
                         .into(),
                 ])
-                .height(Length::Shrink)
                 .spacing(8.0),
                 matches!(self.tab, PreviewTab::Binary),
             )
@@ -287,9 +282,9 @@ impl Preview {
 
         #[cfg(feature = "sounds-convertible")]
         {
-            tab_row = tab_row.push(
+            tab_row.push(
                 widgets::tab(
-                    row([
+                    widgets::row([
                         text("\u{F1CD}")
                             .size(16.0)
                             .font(fonts::ICON_FONT)
@@ -302,7 +297,6 @@ impl Preview {
                             .align_y(Alignment::Center)
                             .into(),
                     ])
-                    .height(Length::Shrink)
                     .spacing(8.0),
                     matches!(self.tab, PreviewTab::Audio),
                 )
@@ -314,11 +308,12 @@ impl Preview {
                     } else {
                         None
                     },
-                ),
+                )
+                .into(),
             );
         }
 
-        let tab_row = tab_row
+        let tab_row = widgets::row(tab_row)
             .width(Length::Fill)
             .height(Length::Shrink)
             .spacing(4.0);
@@ -330,7 +325,7 @@ impl Preview {
             Some(
                 container(
                     container(
-                        row([
+                        widgets::row([
                             container(
                                 text(format!(
                                     "Name: {}",
@@ -383,6 +378,8 @@ impl Preview {
                             .height(Length::Shrink)
                             .into(),
                         ])
+                        .width(Length::Fill)
+                        .height(Length::Shrink)
                         .spacing(8.0),
                     )
                     .padding([2.0, 4.0])
@@ -395,26 +392,28 @@ impl Preview {
             None
         };
 
-        let view = if embedded {
-            column(
-                [Element::from(header), Element::from(content)]
-                    .into_iter()
-                    .chain(footer.map(Into::into))
-                    .chain([Element::from(tab_row)]),
-            )
-        } else {
-            column(
-                [Element::from(content)]
-                    .into_iter()
-                    .chain(footer.map(Into::into))
-                    .chain([Element::from(tab_row)]),
-            )
-        };
+        let mut view: Vec<_> = Vec::with_capacity(4);
 
-        container(view)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+        if embedded {
+            view.push(header.into());
+        }
+
+        view.push(content.into());
+
+        if let Some(footer) = footer {
+            view.push(footer.into());
+        }
+
+        view.push(tab_row.into());
+
+        container(
+            widgets::column(view)
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
     }
 
     /// Handles rendering the viewport tab.
@@ -429,7 +428,7 @@ impl Preview {
 
         if self.error || self.unsupported {
             columns.push(
-                row([
+                widgets::row([
                     text("Status")
                         .size(16.0)
                         .width(75.0)
@@ -451,7 +450,6 @@ impl Preview {
                     .font(fonts::MONOSPACE_BOLD_FONT)
                     .into(),
                 ])
-                .width(Length::Shrink)
                 .padding(2.0)
                 .spacing(8.0)
                 .into(),
@@ -461,7 +459,7 @@ impl Preview {
 
             for (stat_header, stat_value) in renderer.statistics() {
                 columns.push(
-                    row([
+                    widgets::row([
                         text(stat_header)
                             .size(16.0)
                             .width(75.0)
@@ -479,7 +477,6 @@ impl Preview {
                             .font(fonts::MONOSPACE_BOLD_FONT)
                             .into(),
                     ])
-                    .width(Length::Shrink)
                     .padding(2.0)
                     .spacing(8.0)
                     .into(),
@@ -489,7 +486,7 @@ impl Preview {
 
         let columns = container(
             container(
-                Column::from_vec(columns)
+                widgets::column(columns)
                     .width(Length::Shrink)
                     .height(Length::Shrink)
                     .spacing(2.0),
@@ -506,7 +503,7 @@ impl Preview {
 
         for (control_name, control) in PREVIEW_CONTROLS {
             controls.push(
-                row([
+                widgets::row([
                     text(*control_name)
                         .size(16.0)
                         .color(palette::TEXT_COLOR_INFO)
@@ -518,7 +515,6 @@ impl Preview {
                         .font(fonts::MONOSPACE_BOLD_FONT)
                         .into(),
                 ])
-                .width(Length::Shrink)
                 .padding(2.0)
                 .spacing(8.0)
                 .into(),
@@ -527,7 +523,7 @@ impl Preview {
 
         let controls = container(
             container(
-                Column::from_vec(controls)
+                widgets::column(controls)
                     .width(Length::Shrink)
                     .height(Length::Shrink)
                     .spacing(2.0),
@@ -554,11 +550,11 @@ impl Preview {
                 .align_x(Alignment::Center)
                 .align_y(Alignment::Center);
 
-            column([columns.into(), loading.into(), controls])
+            widgets::column([columns.into(), loading.into(), controls])
                 .width(Length::Fill)
                 .height(Length::Fill)
         } else {
-            column([columns.into(), controls])
+            widgets::column([columns.into(), controls])
                 .width(Length::Fill)
                 .height(Length::Fill)
         };
@@ -643,9 +639,9 @@ impl Preview {
             stack([waveform]).into()
         };
 
-        column([
+        widgets::column([
             content,
-            row([
+            widgets::row([
                 widgets::icon_button(
                     text(if is_playing { "\u{F1CF}" } else { "\u{F1CE}" })
                         .size(18.0)

@@ -1,6 +1,4 @@
-use iced::widget::Column;
 use iced::widget::container;
-use iced::widget::row;
 use iced::widget::space;
 use iced::widget::text;
 
@@ -142,7 +140,7 @@ impl Settings {
         ]);
 
         let categories = container(
-            Column::from_vec(buttons)
+            widgets::column(buttons)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .spacing(4.0),
@@ -175,7 +173,7 @@ impl Settings {
         .height(Length::Fill)
         .padding(16.0);
 
-        row([categories.into(), settings.into()])
+        widgets::row([categories.into(), settings.into()])
             .spacing(8.0)
             .padding(8.0)
             .width(Length::Fill)
@@ -342,7 +340,7 @@ impl Settings {
                 .color(palette::TEXT_COLOR_SECONDARY)
                 .into(),
             space().height(0.0).into(),
-            row(vec![
+            widgets::row(vec![
                 widgets::text_input(
                     "Exported files directory",
                     state
@@ -388,7 +386,7 @@ impl Settings {
                 .size(18.0)
                 .into(),
             space().height(0.0).into(),
-            row([
+            widgets::row([
                 widgets::checkbox("Custom scale:", state.settings.custom_scale().is_some())
                     .on_toggle_maybe(if state.settings.auto_scale() {
                         Some(move |value: bool| {
@@ -402,7 +400,7 @@ impl Settings {
                         None
                     })
                     .into(),
-                row([
+                widgets::row([
                     widgets::text_input(
                         "",
                         &self
@@ -446,7 +444,7 @@ impl Settings {
             .into(),
         ]);
 
-        Column::from_vec(settings)
+        widgets::column(settings)
             .spacing(8.0)
             .padding(0.0)
             .width(Length::Fill)
@@ -575,7 +573,7 @@ impl Settings {
             ]);
         }
 
-        Column::from_vec(settings)
+        widgets::column(settings)
             .spacing(8.0)
             .padding(0.0)
             .width(Length::Fill)
@@ -688,7 +686,7 @@ impl Settings {
             ]);
         }
 
-        Column::from_vec(settings)
+        widgets::column(settings)
             .spacing(8.0)
             .padding(0.0)
             .width(Length::Fill)
@@ -756,7 +754,7 @@ impl Settings {
             ]);
         }
 
-        Column::from_vec(settings)
+        widgets::column(settings)
             .spacing(8.0)
             .padding(0.0)
             .width(Length::Fill)
@@ -767,8 +765,6 @@ impl Settings {
     /// Handles rendering the sounds settings view.
     #[cfg(all(feature = "sounds", feature = "sounds-convertible"))]
     pub fn view_sounds<'a>(&'a self, state: &'a AppState) -> Element<'a, Message> {
-        use iced::widget::column;
-
         use porter_audio::AudioFileType;
 
         let save_message =
@@ -776,7 +772,7 @@ impl Settings {
         let audio_formats = state.settings.audio_file_types();
         let audio_format_enabled = |format: AudioFileType| audio_formats.contains(&format);
 
-        column([
+        widgets::column([
             text("Sound Settings")
                 .size(24.0)
                 .color(palette::TEXT_COLOR_DEFAULT)
@@ -887,7 +883,7 @@ impl Settings {
                 .color(palette::TEXT_COLOR_SECONDARY)
                 .into(),
             space().height(0.0).into(),
-            row([
+            widgets::row([
                 widgets::slider(10000..=1000000, state.settings.far_clip(), move |value| {
                     save_message(
                         state
@@ -903,7 +899,6 @@ impl Settings {
                     .color(palette::TEXT_COLOR_SECONDARY)
                     .into(),
             ])
-            .width(Length::Shrink)
             .spacing(8.0)
             .into(),
         ]);
@@ -917,7 +912,7 @@ impl Settings {
                     .color(palette::TEXT_COLOR_SECONDARY)
                     .into(),
                 space().height(0.0).into(),
-                row([
+                widgets::row([
                     widgets::slider(0..=50, state.settings.volume(), move |value| {
                         save_message(
                             state
@@ -933,13 +928,12 @@ impl Settings {
                         .color(palette::TEXT_COLOR_SECONDARY)
                         .into(),
                 ])
-                .width(Length::Shrink)
                 .spacing(8.0)
                 .into(),
             ]);
         }
 
-        Column::from_vec(settings)
+        widgets::column(settings)
             .spacing(8.0)
             .padding(0.0)
             .width(Length::Fill)
@@ -1003,7 +997,7 @@ impl Settings {
                 .color(palette::TEXT_COLOR_SECONDARY)
                 .into(),
             space().height(0.0).into(),
-            row([
+            widgets::row([
                 widgets::button("Reset Settings")
                     .on_press(save_message(crate::Settings::default()))
                     .into(),
@@ -1016,7 +1010,7 @@ impl Settings {
             .into(),
         ]);
 
-        Column::from_vec(settings)
+        widgets::column(settings)
             .spacing(8.0)
             .padding(0.0)
             .width(Length::Fill)

@@ -2,21 +2,6 @@ use porter_math::Matrix4x4;
 use porter_math::Quaternion;
 use porter_math::Vector3;
 
-use porter_utils::SanitizeExt;
-
-/// Cleans a bone name.
-fn sanitize_bone_name(name: String) -> String {
-    let mut name = name.replace(' ', "_").sanitized();
-
-    if name == "default" || name.is_empty() {
-        name = String::from("_default");
-    } else if name.as_bytes()[0].is_ascii_digit() {
-        name = format!("_{}", name);
-    }
-
-    name
-}
-
 /// Represents a bone in a skeleton of a model.
 #[derive(Debug, Clone)]
 pub struct Bone {
@@ -35,7 +20,7 @@ impl Bone {
     /// Constructs a new instance of a bone.
     pub fn new(name: Option<String>, parent: i32) -> Self {
         Self {
-            name: name.map(sanitize_bone_name),
+            name,
             parent,
             segment_scale_compensate: true,
             local_position: Vector3::zero(),
@@ -50,7 +35,7 @@ impl Bone {
     /// Sets the name.
     #[inline]
     pub fn name(mut self, name: Option<String>) -> Self {
-        self.name = name.map(sanitize_bone_name);
+        self.name = name;
         self
     }
 

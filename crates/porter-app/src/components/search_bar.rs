@@ -1,6 +1,5 @@
 use iced::widget::Id;
 use iced::widget::container;
-use iced::widget::row;
 use iced::widget::text;
 
 use iced::widget::operation::focus;
@@ -60,58 +59,70 @@ impl SearchBar {
 
     /// Handles rendering the search bar component.
     pub fn view(&self, state: &AppState) -> Element<'_, Message> {
-        let mut row = row([widgets::text_input("Search for assets...", &self.search)
-            .id(self.search_id.clone())
-            .on_input_maybe(if state.is_busy() {
-                None
-            } else {
-                Some(|input| Message::from(SearchBarMessage::Input(input)))
-            })
-            .on_submit_maybe(if self.search.is_empty() || state.is_busy() {
-                None
-            } else {
-                Some(Message::from(SearchBarMessage::Submit))
-            })
-            .width(Length::Fixed(350.0))
-            .into()]);
+        let mut row: Vec<_> = Vec::with_capacity(4);
 
-        if state.asset_manager.assets_total() > SEARCH_REALTIME_MAX {
-            row = row.push(widgets::button("Search").on_press_maybe(
-                if self.search.is_empty() || state.is_busy() {
+        row.push(
+            widgets::text_input("Search for assets...", &self.search)
+                .id(self.search_id.clone())
+                .on_input_maybe(if state.is_busy() {
+                    None
+                } else {
+                    Some(|input| Message::from(SearchBarMessage::Input(input)))
+                })
+                .on_submit_maybe(if self.search.is_empty() || state.is_busy() {
                     None
                 } else {
                     Some(Message::from(SearchBarMessage::Submit))
-                },
-            ));
+                })
+                .width(Length::Fixed(350.0))
+                .into(),
+        );
+
+        if state.asset_manager.assets_total() > SEARCH_REALTIME_MAX {
+            row.push(
+                widgets::button("Search")
+                    .on_press_maybe(if self.search.is_empty() || state.is_busy() {
+                        None
+                    } else {
+                        Some(Message::from(SearchBarMessage::Submit))
+                    })
+                    .into(),
+            );
         }
 
-        row = row.push(widgets::button("Clear").on_press_maybe(
-            if self.search.is_empty() || state.is_busy() {
-                None
+        row.push(
+            widgets::button("Clear")
+                .on_press_maybe(if self.search.is_empty() || state.is_busy() {
+                    None
+                } else {
+                    Some(Message::from(SearchBarMessage::Clear))
+                })
+                .into(),
+        );
+
+        row.push(
+            text(if state.loading {
+                String::from("Loading...")
+            } else if self.search.is_empty() {
+                format!("{} assets loaded", state.asset_manager.assets_visible())
             } else {
-                Some(Message::from(SearchBarMessage::Clear))
-            },
-        ));
+                format!(
+                    "Showing {} assets out of {} loaded",
+                    state.asset_manager.assets_visible(),
+                    state.asset_manager.assets_total()
+                )
+            })
+            .width(Length::Fill)
+            .align_x(Alignment::End)
+            .color(palette::TEXT_COLOR_SECONDARY)
+            .into(),
+        );
 
         container(
-            row.push(
-                text(if state.loading {
-                    String::from("Loading...")
-                } else if self.search.is_empty() {
-                    format!("{} assets loaded", state.asset_manager.assets_visible())
-                } else {
-                    format!(
-                        "Showing {} assets out of {} loaded",
-                        state.asset_manager.assets_visible(),
-                        state.asset_manager.assets_total()
-                    )
-                })
+            widgets::row(row)
                 .width(Length::Fill)
-                .align_x(Alignment::End)
-                .color(palette::TEXT_COLOR_SECONDARY),
-            )
-            .align_y(Alignment::Center)
-            .spacing(4.0),
+                .align_y(Alignment::Center)
+                .spacing(4.0),
         )
         .width(Length::Fill)
         .height(Length::Shrink)

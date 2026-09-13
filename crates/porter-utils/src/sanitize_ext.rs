@@ -100,7 +100,8 @@ fn sanitize_str(string: &str) -> String {
             || global.eq_ignore_ascii_case("aux")
             || global.eq_ignore_ascii_case("nul")
         {
-            format!("_{global}")
+            global.insert(0, '_');
+            global
         } else {
             global
         }

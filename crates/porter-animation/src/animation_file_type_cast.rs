@@ -14,7 +14,7 @@ use crate::Animation;
 use crate::AnimationError;
 use crate::CurveAttribute;
 use crate::CurveDataType;
-use crate::KeyframeValue;
+use crate::Keyframes;
 
 /// Writes an animation in cast format to the given path.
 pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), AnimationError> {
@@ -22,9 +22,11 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
 
     let meta_node = root.create(CastId::Metadata);
 
-    meta_node
-        .create_property(CastPropertyId::String, "a")
-        .push("DTZxPorter");
+    if !cfg!(feature = "debrand") {
+        meta_node
+            .create_property(CastPropertyId::String, "a")
+            .push("DTZxPorter");
+    }
 
     meta_node
         .create_property(CastPropertyId::String, "s")
@@ -50,19 +52,25 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
         .push(animation.looping);
 
     for curve in &animation.curves {
-        let (num_curves, curve_props) = match curve.attribute() {
-            CurveAttribute::Rotation => (1, ["rq", "", ""]),
-            CurveAttribute::Scale => (3, ["sx", "sy", "sz"]),
-            CurveAttribute::Translate => (3, ["tx", "ty", "tz"]),
-            CurveAttribute::Visibility => (1, ["vb", "", ""]),
+        let largest_frame_time = curve.largest_frame_time();
+
+        let (num_curves, curve_properties, property_type) = match curve.attribute() {
+            CurveAttribute::Translate => (3, ["tx", "ty", "tz"], CastPropertyId::Float),
+            CurveAttribute::Rotate => (1, ["rq", "", ""], CastPropertyId::Vector4),
+            CurveAttribute::Scale => (3, ["sx", "sy", "sz"], CastPropertyId::Float),
+            CurveAttribute::Visibility => (1, ["vb", "", ""], CastPropertyId::Byte),
             CurveAttribute::Notetrack => {
                 // Handled separately via notification tracks.
                 continue;
             }
-            CurveAttribute::BlendShape => (1, ["bs", "", ""]),
+            CurveAttribute::BlendShape => (1, ["bs", "", ""], CastPropertyId::Float),
         };
 
-        for i in 0..num_curves {
+        for (i, curve_property) in curve_properties
+            .into_iter()
+            .enumerate()
+            .take(num_curves)
+        {
             let curve_node = animation_node.create(CastId::Curve);
 
             curve_node
@@ -89,61 +97,57 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
 
             curve_node
                 .create_property(CastPropertyId::String, "kp")
-                .push(curve_props[i]);
+                .push(curve_property);
 
-            let largest_frame_time = curve.largest_frame_time();
-
-            let keyframe_buffer = if largest_frame_time <= 0xFF {
-                curve_node.create_property(CastPropertyId::Byte, "kb")
+            let [kb, kv] = if largest_frame_time <= 0xFF {
+                curve_node.create_properties([(CastPropertyId::Byte, "kb"), (property_type, "kv")])
             } else if largest_frame_time <= 0xFFFF {
-                curve_node.create_property(CastPropertyId::Short, "kb")
+                curve_node.create_properties([(CastPropertyId::Short, "kb"), (property_type, "kv")])
             } else {
-                curve_node.create_property(CastPropertyId::Integer32, "kb")
+                curve_node
+                    .create_properties([(CastPropertyId::Integer32, "kb"), (property_type, "kv")])
             };
 
-            let keyframes = curve.keyframes();
+            kb.try_reserve_exact(curve.len())?;
+            kv.try_reserve_exact(curve.len())?;
 
-            keyframe_buffer.try_reserve_exact(keyframes.len())?;
-
-            for keyframe in keyframes {
+            let mut push_frame_time = |time: u32| {
                 if largest_frame_time <= 0xFF {
-                    keyframe_buffer.push(keyframe.time as u8);
+                    kb.push(time as u8);
                 } else if largest_frame_time <= 0xFFFF {
-                    keyframe_buffer.push(keyframe.time as u16);
+                    kb.push(time as u16);
                 } else {
-                    keyframe_buffer.push(keyframe.time);
+                    kb.push(time);
                 }
-            }
-
-            let property_type = match curve.attribute() {
-                CurveAttribute::Rotation => CastPropertyId::Vector4,
-                CurveAttribute::Translate => CastPropertyId::Float,
-                CurveAttribute::Scale => CastPropertyId::Float,
-                CurveAttribute::Visibility => CastPropertyId::Byte,
-                CurveAttribute::Notetrack => unreachable!(),
-                CurveAttribute::BlendShape => CastPropertyId::Float,
             };
 
-            let keyvalue_buffer = curve_node
-                .create_property(property_type, "kv")
-                .try_reserve_exact(keyframes.len())?;
-
-            for keyframe in keyframes {
-                match keyframe.value {
-                    KeyframeValue::Bool(bool) => {
-                        keyvalue_buffer.push(bool);
+            match curve.keyframes() {
+                Keyframes::Translate(keyframes) | Keyframes::Scale(keyframes) => {
+                    for keyframe in keyframes {
+                        push_frame_time(keyframe.time);
+                        kv.push(keyframe.value[i]);
                     }
-                    KeyframeValue::Quaternion(rotation) => {
-                        keyvalue_buffer.push(rotation);
+                }
+                Keyframes::Rotate(keyframes) => {
+                    for keyframe in keyframes {
+                        push_frame_time(keyframe.time);
+                        kv.push(keyframe.value);
                     }
-                    KeyframeValue::Vector3(vector) => {
-                        keyvalue_buffer.push(vector[i]);
+                }
+                Keyframes::Visibility(keyframes) => {
+                    for keyframe in keyframes {
+                        push_frame_time(keyframe.time);
+                        kv.push(keyframe.value);
                     }
-                    KeyframeValue::Float(float) => {
-                        keyvalue_buffer.push(float);
-                    }
-                    KeyframeValue::None => {
-                        // No value.
+                }
+                Keyframes::Notetrack(_) => {
+                    // Handled separately via notification tracks.
+                    continue;
+                }
+                Keyframes::BlendShape(keyframes) => {
+                    for keyframe in keyframes {
+                        push_frame_time(keyframe.time);
+                        kv.push(keyframe.value);
                     }
                 }
             }
@@ -151,17 +155,15 @@ pub fn to_cast<P: AsRef<Path>>(path: P, animation: &Animation) -> Result<(), Ani
     }
 
     for curve in &animation.curves {
-        if !matches!(curve.attribute(), CurveAttribute::Notetrack) {
+        let Keyframes::Notetrack(keyframes) = curve.keyframes() else {
             continue;
-        }
+        };
 
         let track_node = animation_node.create(CastId::NotificationTrack);
 
         track_node
             .create_property(CastPropertyId::String, "n")
             .push(curve.name());
-
-        let keyframes = curve.keyframes();
 
         let key_buffer = track_node
             .create_property(CastPropertyId::Integer32, "kb")

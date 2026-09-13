@@ -68,6 +68,7 @@ async fn initialize() -> GPUInstance {
             power_preference: PowerPreference::HighPerformance,
             force_fallback_adapter: false,
             compatible_surface: None,
+            apply_limit_buckets: false,
         })
         .await
         .unwrap();

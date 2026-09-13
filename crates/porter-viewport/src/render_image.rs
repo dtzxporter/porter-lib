@@ -139,7 +139,7 @@ impl RenderImage {
                 vertex: VertexState {
                     module: instance.gpu_preview_shader(),
                     entry_point: Some("vs_image_main"),
-                    buffers: &[VertexBufferLayout {
+                    buffers: &[Some(VertexBufferLayout {
                         array_stride: (size_of::<Vector3>() + size_of::<Vector2>())
                             as BufferAddress,
                         step_mode: VertexStepMode::Vertex,
@@ -155,7 +155,7 @@ impl RenderImage {
                                 format: VertexFormat::Float32x2,
                             },
                         ],
-                    }],
+                    })],
                     compilation_options: Default::default(),
                 },
                 primitive: PrimitiveState {

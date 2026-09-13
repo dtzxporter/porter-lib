@@ -95,17 +95,16 @@ impl NameDatabase {
     pub fn save<P: AsRef<Path>>(&self, file: P) -> Result<(), io::Error> {
         let mut file = File::create(file.as_ref())?;
 
-        let mut keys: Vec<u64> = Vec::try_with_exact_capacity(self.inner.len())?;
-
+        let mut entries: Vec<(&u64, &String)> = self.inner.iter().collect();
         let mut decompressed: Cursor<Vec<u8>> = Cursor::new(Vec::new());
 
-        for entry in self.inner.iter() {
-            keys.push(*entry.0);
+        entries.sort_unstable_by(|a, b| a.1.cmp(b.1));
 
-            decompressed.write_null_terminated_string(entry.1)?;
+        for (_, value) in &entries {
+            decompressed.write_null_terminated_string(value)?;
         }
 
-        for key in keys.into_iter() {
+        for (key, _) in &entries {
             decompressed.write_all(&key.to_le_bytes())?;
         }
 

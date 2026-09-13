@@ -20,9 +20,11 @@ use iced::border::rounded;
 use iced::widget;
 use iced::widget::Button;
 use iced::widget::Checkbox;
+use iced::widget::Column;
 use iced::widget::Container;
 use iced::widget::PickList;
 use iced::widget::ProgressBar;
+use iced::widget::Row;
 use iced::widget::Rule;
 use iced::widget::Scrollable;
 use iced::widget::Slider;
@@ -479,7 +481,6 @@ where
 {
     use widget::button;
     use widget::container;
-    use widget::row;
     use widget::space;
 
     let mut options: Vec<_> = options
@@ -872,4 +873,26 @@ where
     D: Fn(f32) -> Message,
 {
     header_divider::HeaderDivider::new(on_drag, on_press, on_release)
+}
+
+/// Optimized row creation.
+#[inline]
+pub fn row<'a, Message, Theme, Renderer>(
+    content: impl Into<Vec<Element<'a, Message, Theme, Renderer>>>,
+) -> Row<'a, Message, Theme, Renderer>
+where
+    Renderer: iced::advanced::Renderer,
+{
+    Row::from_vec(content.into())
+}
+
+/// Optimized column creation.
+#[inline]
+pub fn column<'a, Message, Theme, Renderer>(
+    content: impl Into<Vec<Element<'a, Message, Theme, Renderer>>>,
+) -> Column<'a, Message, Theme, Renderer>
+where
+    Renderer: iced::advanced::Renderer,
+{
+    Column::from_vec(content.into())
 }

@@ -46,7 +46,7 @@ impl AnimationCompiler {
 
                 match curve.attribute() {
                     CurveAttribute::Translate => curve.insert(frame, joint.local_position),
-                    CurveAttribute::Rotation => curve.insert(frame, joint.local_rotation),
+                    CurveAttribute::Rotate => curve.insert(frame, joint.local_rotation),
                     CurveAttribute::Scale => curve.insert(frame, joint.local_scale),
                     _ => {
                         // Not supported yet.

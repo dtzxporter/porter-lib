@@ -142,10 +142,10 @@ pub struct Settings {
 
 impl Settings {
     /// Loads the settings from the disk at the given path, or returns new ones.
-    pub fn load<S: Into<String>>(name: S) -> Settings {
+    pub fn load(name: &str) -> Settings {
         std::fs::read_to_string(
             system::config_dir()
-                .join(name.into().to_lowercase())
+                .join(name.to_lowercase())
                 .with_extension("dat"),
         )
         .map_or(Default::default(), |buffer| {
@@ -154,7 +154,7 @@ impl Settings {
     }
 
     /// Saves the settings to the disk at the given path.
-    pub fn save<S: Into<String>>(&self, name: S) {
+    pub fn save(&self, name: &str) {
         let result = miniserde::json::to_string(&self);
 
         let dirs = std::fs::create_dir_all(system::config_dir());
@@ -163,7 +163,7 @@ impl Settings {
 
         let result = std::fs::write(
             system::config_dir()
-                .join(name.into().to_lowercase())
+                .join(name.to_lowercase())
                 .with_extension("dat"),
             result,
         );

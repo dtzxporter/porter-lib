@@ -98,7 +98,7 @@ impl RenderMesh {
             vertex: VertexState {
                 module: instance.gpu_preview_shader(),
                 entry_point: Some("vs_main"),
-                buffers: &[VertexBufferLayout {
+                buffers: &[Some(VertexBufferLayout {
                     array_stride: vertex_stride as BufferAddress,
                     step_mode: VertexStepMode::Vertex,
                     attributes: &[
@@ -118,7 +118,7 @@ impl RenderMesh {
                             format: VertexFormat::Float32x2,
                         },
                     ],
-                }],
+                })],
                 compilation_options: Default::default(),
             },
             primitive: PrimitiveState {

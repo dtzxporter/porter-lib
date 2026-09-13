@@ -51,10 +51,14 @@ macro_rules! write_face_vertex {
 pub fn to_smd<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> {
     let mut smd = File::create(path.as_ref().with_extension("smd"))?.buffer_write();
 
-    writeln!(
-        smd,
-        "version 1\n// Exported by PorterLib\n// Please credit DTZxPorter for use of this asset!\nnodes"
-    )?;
+    writeln!(smd, "version 1")?;
+    writeln!(smd, "// Exported by PorterLib")?;
+
+    if !cfg!(feature = "debrand") {
+        writeln!(smd, "// Please credit DTZxPorter for use of this asset!")?;
+    }
+
+    writeln!(smd, "nodes")?;
 
     for (bone_index, bone) in model.skeleton.bones.iter().enumerate() {
         writeln!(
@@ -62,8 +66,9 @@ pub fn to_smd<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
             "{} \"{}\" {}",
             bone_index,
             bone.name
-                .as_ref()
-                .unwrap_or(&format!("porter_bone_{}", bone_index)),
+                .as_deref()
+                .map(sanitize_smd_bone_str)
+                .unwrap_or_else(|| format!("porter_bone_{}", bone_index)),
             bone.parent
         )?;
     }
@@ -94,9 +99,12 @@ pub fn to_smd<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
     for mesh in &model.meshes {
         writeln!(smd, "triangles")?;
 
-        let material = match mesh.material {
-            Some(index) => model.materials[index].name.as_str(),
-            None => "default_material",
+        let material = if let Some(material_index) = mesh.material
+            && let Some(material) = model.materials.get(material_index)
+        {
+            &sanitize_smd_mat_str(&material.name)
+        } else {
+            "default_material"
         };
 
         for face in &mesh.faces {
@@ -111,4 +119,32 @@ pub fn to_smd<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
     }
 
     Ok(())
+}
+
+/// Sanitizes a smd bone string.
+fn sanitize_smd_bone_str(str: &str) -> String {
+    // Smd bones are string quoted, so we can allow spaces and some symbols.
+    // But we need to make sure we don't allow path chars.
+    str.trim()
+        .chars()
+        .map(|ch| match ch {
+            '/' | '?' | '<' | '>' | '\\' | ':' | '*' | '|' | '"' | '\r' | '\n' => '_',
+            _ => ch,
+        })
+        .collect()
+}
+
+/// Sanitizes a smd mat string.
+fn sanitize_smd_mat_str(str: &str) -> String {
+    // Smd materials are regular Ascii strings to only allow those characters.
+    str.trim()
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }

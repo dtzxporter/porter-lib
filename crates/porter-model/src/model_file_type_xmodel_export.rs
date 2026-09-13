@@ -67,10 +67,11 @@ pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), Mo
     )?
     .buffer_write();
 
-    writeln!(
-        xmodel,
-        "// Exported by PorterLib\n// Please credit DTZxPorter for use of this asset!"
-    )?;
+    writeln!(xmodel, "// Exported by PorterLib")?;
+
+    if !cfg!(feature = "debrand") {
+        writeln!(xmodel, "// Please credit DTZxPorter for use of this asset!")?;
+    }
 
     writeln!(
         xmodel,
@@ -85,8 +86,9 @@ pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), Mo
             bone_index,
             bone.parent,
             bone.name
-                .as_ref()
-                .unwrap_or(&format!("porter_bone_{}", bone_index))
+                .as_deref()
+                .map(sanitize_xmodel_str)
+                .unwrap_or_else(|| format!("porter_bone_{}", bone_index))
         )?;
     }
 
@@ -168,15 +170,15 @@ pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), Mo
     writeln!(xmodel, "NUMFACES {}", face_count)?;
 
     for (mesh_index, mesh) in model.meshes.iter().enumerate() {
-        for face in &mesh.faces {
-            let material_index = match mesh.material {
-                Some(index) => index,
-                None => {
-                    needs_default_material = true;
-                    model.materials.len()
-                }
-            };
+        let material_index = match mesh.material {
+            Some(index) => index,
+            None => {
+                needs_default_material = true;
+                model.materials.len()
+            }
+        };
 
+        for face in &mesh.faces {
             if mesh_index > u8::MAX as usize {
                 writeln!(xmodel, "TRI16 {} {} 0 0", mesh_index, material_index)?;
             } else {
@@ -193,8 +195,16 @@ pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), Mo
 
     writeln!(xmodel, "NUMOBJECTS {}", model.meshes.len())?;
 
-    for i in 0..model.meshes.len() {
-        writeln!(xmodel, "OBJECT {} \"PorterMesh_{}\"", i, i)?;
+    for (mesh_index, mesh) in model.meshes.iter().enumerate() {
+        writeln!(
+            xmodel,
+            "OBJECT {} \"{}\"",
+            mesh_index,
+            mesh.name
+                .as_deref()
+                .map(sanitize_xmodel_str)
+                .unwrap_or_else(|| format!("PorterMesh{}", mesh_index))
+        )?;
     }
 
     if needs_default_material {
@@ -207,7 +217,8 @@ pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), Mo
         write!(
             xmodel,
             "MATERIAL {} \"{}\" \"Phong\" \"",
-            material_index, material.name
+            material_index,
+            sanitize_xmodel_str(&material.name)
         )?;
 
         // Ensure path isn't longer than 128 characters minus the size of "color:"
@@ -232,4 +243,20 @@ pub fn to_xmodel_export<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), Mo
     }
 
     Ok(())
+}
+
+/// Sanitizes a xmodel str.
+fn sanitize_xmodel_str(str: &str) -> String {
+    // CoD has varying levels of support for this, it may sanitize internally, but to be safe
+    // We will only permit Ascii and separator chars in our strings.
+    str.trim()
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }

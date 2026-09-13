@@ -4,9 +4,7 @@ use iced::window::Settings;
 use iced::window::settings::PlatformSpecific;
 
 use iced::widget::canvas;
-use iced::widget::column;
 use iced::widget::container;
-use iced::widget::row;
 use iced::widget::space;
 use iced::widget::text;
 
@@ -74,13 +72,13 @@ impl SplashWindow {
     }
 
     /// Handles updates for the splash screen.
-    pub fn update(&mut self, message: SplashMessage) -> Task<Message> {
+    pub fn update(&mut self, state: &mut AppState, message: SplashMessage) -> Task<Message> {
         use SplashMessage::*;
 
         match message {
             UI(event) => self.on_ui(event),
             Close => self.on_close(),
-            Website => self.on_website(),
+            Website => self.on_website(state),
         }
     }
 
@@ -88,9 +86,9 @@ impl SplashWindow {
     pub fn view(&self, state: &AppState) -> Element<'_, Message> {
         use SplashMessage::*;
 
-        let splash = row([
+        let splash = widgets::row([
             container(
-                column([
+                widgets::column([
                     space().height(20.0).into(),
                     text(state.name.to_uppercase())
                         .size(32.0)
@@ -99,24 +97,24 @@ impl SplashWindow {
                     text(state.description).into(),
                     space().height(42.0).into(),
                     text(format!("Version {}", state.version)).into(),
-                    row([
+                    widgets::row([
                         text("Developed by:").into(),
-                        text("DTZxPorter")
+                        text(state.author)
                             .color(palette::TEXT_COLOR_PORTER)
                             .into(),
                     ])
                     .spacing(4.0)
                     .into(),
-                    widgets::link(strings::PORTER_SITE_URL)
+                    widgets::link(state.site_url)
                         .on_press(Message::from(Website))
                         .into(),
-                    container(column([
+                    container(widgets::column([
                         text(strings::PORTER_DISCLAIMER)
                             .size(14.0)
                             .color(palette::TEXT_COLOR_MUTED)
                             .into(),
                         space().height(10.0).into(),
-                        text(strings::PORTER_COPYRIGHT).into(),
+                        text(state.copyright).into(),
                         space().height(20.0).into(),
                     ]))
                     .width(Length::Fill)
@@ -139,12 +137,16 @@ impl SplashWindow {
                 .into(),
         ]);
 
-        container(splash)
-            .padding(1.0)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(splash_background_style)
-            .into()
+        container(
+            splash
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .padding(1.0)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(splash_background_style)
+        .into()
     }
 
     /// Occurs when a ui event has fired.
@@ -185,8 +187,8 @@ impl SplashWindow {
     }
 
     /// Opens the website url.
-    fn on_website(&mut self) -> Task<Message> {
-        system::open_url(strings::PORTER_SITE_URL);
+    fn on_website(&mut self, state: &AppState) -> Task<Message> {
+        system::open_url(state.site_url);
 
         Task::none()
     }

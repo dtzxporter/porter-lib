@@ -46,7 +46,7 @@ const HEADER_EXTENSION_TIME_PROPERTIES: [(&str, u32); 8] = [
 ];
 
 /// Header creator info.
-const HEADER_EXTENSION_CREATOR_PROPERTY: (&str, &str) = ("Creator", "Exported by DTZxPorter");
+const HEADER_EXTENSION_CREATOR_PROPERTY: (&str, &str) = ("Creator", "Exported by PorterLib");
 
 /// Header file node type.
 const HEADER_FILE_ID_NODE: (&str, [u8; 16]) = (

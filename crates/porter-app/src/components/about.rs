@@ -1,4 +1,3 @@
-use iced::widget::column;
 use iced::widget::container;
 use iced::widget::space;
 use iced::widget::text;
@@ -11,6 +10,7 @@ use crate::AppState;
 use crate::Message;
 use crate::palette;
 use crate::strings;
+use crate::widgets;
 
 /// About component handler.
 pub struct About;
@@ -24,7 +24,7 @@ impl About {
     /// Handles rendering for the about component.
     pub fn view(&self, state: &AppState) -> Element<'_, Message> {
         container(
-            column([
+            widgets::column([
                 text(strings::PORTER_THANKS)
                     .size(20.0)
                     .color(palette::TEXT_COLOR_WARN)
@@ -41,7 +41,7 @@ impl About {
                 text(format!(
                     "\"{}\" {}.",
                     state.name.to_uppercase(),
-                    strings::PORTER_COPYRIGHT
+                    state.copyright,
                 ))
                 .color(palette::TEXT_COLOR_MUTED)
                 .into(),

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -17,18 +18,18 @@ pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
     let mut obj = File::create(path.with_extension("obj"))?.buffer_write();
     let mut mtl = File::create(path.with_extension("mtl"))?.buffer_write();
 
-    writeln!(
-        obj,
-        "# Exported by PorterLib\n# Please credit DTZxPorter for use of this asset!\n"
-    )?;
+    writeln!(obj, "# Exported by PorterLib")?;
+
+    if !cfg!(feature = "debrand") {
+        writeln!(obj, "# Please credit DTZxPorter for use of this asset!\n")?;
+    }
 
     writeln!(
         obj,
-        "\nmtllib {}\n",
+        "\nmtllib {}.mtl\n",
         path.file_stem()
             .unwrap_or_default()
-            .to_str()
-            .unwrap_or_default()
+            .to_string_lossy()
     )?;
 
     for mesh in &model.meshes {
@@ -111,15 +112,24 @@ pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
 
     let mut global_face_index = 1;
 
-    for mesh in &model.meshes {
-        if let Some(material_index) = mesh.material {
+    for (i, mesh) in model.meshes.iter().enumerate() {
+        let name = mesh
+            .name
+            .as_deref()
+            .map(sanitize_obj_str)
+            .unwrap_or_else(|| format!("PorterMesh{}", i));
+
+        if let Some(material_index) = mesh.material
+            && let Some(material) = model.materials.get(material_index)
+        {
             writeln!(
                 obj,
                 "g {}\nusemtl {}",
-                model.materials[material_index].name, model.materials[material_index].name
+                name,
+                sanitize_obj_str(&material.name)
             )?;
         } else {
-            writeln!(obj, "g default_material\nusemtl default_material")?;
+            writeln!(obj, "g {}\nusemtl default_material", name)?;
         }
 
         let use_tex_coords = mesh.vertices.uv_layers() > 0;
@@ -180,21 +190,41 @@ pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
         writeln!(
             mtl,
             "newmtl {}\nillium 4\nKd 0.00 0.00 0.00\nKa 0.00 0.00 0.00\nKs 0.50 0.50 0.50",
-            material.name
+            sanitize_obj_str(&material.name)
         )?;
+
+        let mut used_slots: HashSet<&str> = HashSet::new();
 
         for texture in &material.textures {
             if texture.is_empty() {
                 continue;
             }
 
-            writeln!(
-                mtl,
-                "{} {}",
-                MATERIAL_MAPPINGS[texture.usage as usize], texture.file_path
-            )?;
+            let slot = MATERIAL_MAPPINGS[texture.usage as usize];
+
+            if !used_slots.insert(slot) {
+                continue;
+            }
+
+            writeln!(mtl, "{} {}", slot, texture.file_path)?;
         }
     }
 
     Ok(())
+}
+
+/// Sanitizes a obj str.
+fn sanitize_obj_str(str: &str) -> String {
+    // Obj is such an old format, it's impossible to verify the logic of all importers
+    // So to be safe, only allow Ascii and separator characters.
+    str.trim()
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }

@@ -192,7 +192,7 @@ fn create_grid_render(
             vertex: VertexState {
                 module: instance.gpu_preview_shader(),
                 entry_point: Some("vs_grid_main"),
-                buffers: &[VertexBufferLayout {
+                buffers: &[Some(VertexBufferLayout {
                     array_stride: (size_of::<Vector3>() * 2) as BufferAddress,
                     step_mode: VertexStepMode::Vertex,
                     attributes: &[
@@ -207,7 +207,7 @@ fn create_grid_render(
                             format: VertexFormat::Float32x3,
                         },
                     ],
-                }],
+                })],
                 compilation_options: Default::default(),
             },
             primitive: PrimitiveState {
@@ -756,7 +756,9 @@ impl ViewportRenderer {
             return (0, 0, Vec::new());
         }
 
-        let buffer = output_slice.get_mapped_range();
+        let Ok(buffer) = output_slice.get_mapped_range() else {
+            return (0, 0, Vec::new());
+        };
 
         let nbh = (self.height as usize).div_ceil(block_dimensions.1 as usize);
 

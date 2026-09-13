@@ -3,7 +3,6 @@ use iced::border::Radius;
 use iced::widget::Image;
 use iced::widget::container;
 use iced::widget::image::Handle;
-use iced::widget::row;
 use iced::widget::space;
 use iced::widget::stack;
 use iced::widget::text;
@@ -22,7 +21,6 @@ use crate::Icon;
 use crate::Message;
 use crate::fonts;
 use crate::palette;
-use crate::strings;
 use crate::system;
 use crate::widgets;
 
@@ -60,7 +58,7 @@ impl Header {
         use HeaderMessage::*;
 
         match message {
-            Donate => self.on_donate(),
+            Donate => self.on_donate(state),
             About => self.on_about(state),
             Settings => self.on_settings(state),
             UpdateIcon(icon) => self.on_update_icon(icon),
@@ -81,18 +79,20 @@ impl Header {
             self.show_settings,
         );
 
-        let mut row = row([
+        let mut row: Vec<_> = Vec::with_capacity(8);
+
+        row.extend([
             widgets::button("Donate")
                 .on_press(Message::from(HeaderMessage::Donate))
                 .into(),
             container(
-                row([
+                widgets::row([
                     text(state.name.to_uppercase())
                         .font(fonts::TITLE_FONT)
                         .size(32.0)
                         .into(),
                     text("by").size(12.0).into(),
-                    text("DTZxPorter")
+                    text(state.author)
                         .color(palette::TEXT_COLOR_PORTER)
                         .size(14.0)
                         .into(),
@@ -111,7 +111,7 @@ impl Header {
         ]);
 
         if let Some(handle) = &self.icon {
-            row = row.extend([
+            row.extend([
                 space().width(4.0).into(),
                 stack([
                     widgets::laser()
@@ -137,11 +137,15 @@ impl Header {
         }
 
         container(
-            container(row.align_y(Alignment::Center))
-                .width(Length::Fill)
-                .height(Length::Shrink)
-                .padding([4.0, 8.0])
-                .style(header_background_style),
+            container(
+                widgets::row(row)
+                    .width(Length::Fill)
+                    .align_y(Alignment::Center),
+            )
+            .width(Length::Fill)
+            .height(Length::Shrink)
+            .padding([4.0, 8.0])
+            .style(header_background_style),
         )
         .padding([0.0, 8.0])
         .width(Length::Fill)
@@ -150,14 +154,14 @@ impl Header {
     }
 
     /// Opens the donation url.
-    fn on_donate(&mut self) -> Task<Message> {
-        system::open_url(strings::PORTER_DONATE_URL);
+    fn on_donate(&mut self, state: &AppState) -> Task<Message> {
+        system::open_url(state.donate_url);
 
         Task::none()
     }
 
     /// Toggles the about view.
-    fn on_about(&mut self, _: &mut AppState) -> Task<Message> {
+    fn on_about(&mut self, _: &AppState) -> Task<Message> {
         self.show_about = !self.show_about;
         self.show_settings = false;
 
@@ -165,7 +169,7 @@ impl Header {
     }
 
     /// Toggles the settings view.
-    fn on_settings(&mut self, _: &mut AppState) -> Task<Message> {
+    fn on_settings(&mut self, _: &AppState) -> Task<Message> {
         self.show_about = false;
         self.show_settings = !self.show_settings;
 

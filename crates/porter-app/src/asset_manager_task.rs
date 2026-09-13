@@ -258,8 +258,9 @@ where
 
         let file_name = PathBuf::from(asset.name())
             .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
 
         let context = AssetContext::new(settings, controller, state.clone());
 

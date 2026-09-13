@@ -3,10 +3,7 @@ use std::cmp::Ordering;
 use iced::border::Radius;
 use iced::border::rounded;
 
-use iced::widget::Column;
 use iced::widget::Id;
-use iced::widget::Row;
-use iced::widget::column;
 use iced::widget::container;
 use iced::widget::mouse_area;
 use iced::widget::scrollable;
@@ -59,7 +56,6 @@ pub struct VirtualList {
     scroll_overflow: bool,
     dragging: bool,
     dragging_min_width: Option<f32>,
-    scrolling: bool,
 }
 
 /// Messages produced by the virtual list component.
@@ -90,7 +86,6 @@ impl VirtualList {
             scroll_overflow: false,
             dragging: false,
             dragging_min_width: None,
-            scrolling: true,
         }
     }
 
@@ -158,7 +153,7 @@ impl VirtualList {
                     );
                 }
 
-                Column::from_vec(rows)
+                widgets::column(rows)
                     .align_x(Alignment::Center)
                     .into()
             }
@@ -212,7 +207,7 @@ impl VirtualList {
 
                 let list_item = widgets::list_item(
                     mouse_area(
-                        Row::from_vec(columns)
+                        widgets::row(columns)
                             .clip(true)
                             .width(Length::Fill)
                             .height(Length::Fill)
@@ -227,8 +222,8 @@ impl VirtualList {
                 )
                 // We want events from the mouse area, not the list item.
                 // We want the list item to still respond to events.
-                // Only if we are not dragging or scrolling (looks janky).
-                .on_press_maybe(if self.dragging || self.scrolling {
+                // Only if we are not dragging (looks janky).
+                .on_press_maybe(if self.dragging {
                     None
                 } else {
                     Some(Message::from(VirtualListMessage::Noop))
@@ -276,8 +271,8 @@ impl VirtualList {
 
             rows.push(space().height(bottom_gap).into());
 
-            widgets::scrollable(Row::from_vec(vec![
-                Column::from_vec(rows)
+            widgets::scrollable(widgets::row([
+                widgets::column(rows)
                     .width(Length::Fixed(content_width))
                     .into(),
                 space().width(SCROLLBAR_WIDTH).into(),
@@ -332,7 +327,7 @@ impl VirtualList {
 
             headers.extend([
                 mouse_area(
-                    Row::from_vec(heading)
+                    widgets::row(heading)
                         .width(column.width.max(COLUMN_MIN))
                         .height(Length::Fill),
                 )
@@ -352,7 +347,7 @@ impl VirtualList {
 
         let header = container(
             scrollable::Scrollable::with_direction(
-                Row::from_vec(headers)
+                widgets::row(headers)
                     .width(Length::Fixed(content_width + SCROLLBAR_WIDTH))
                     .height(Length::Fill)
                     .align_y(Alignment::Center),
@@ -371,7 +366,7 @@ impl VirtualList {
         .height(Length::Fixed(HEADER_HEIGHT))
         .style(list_header_style);
 
-        column([
+        widgets::column([
             header.into(),
             container(content)
                 .width(Length::Fill)
