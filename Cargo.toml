@@ -27,7 +27,7 @@ resolver = "2"
 lyon_algorithms = { version = "1.0", default-features = false }
 raw-window-handle = { version = "0.6", default-features = false }
 rfd = { version = "0.17", default-features = false, features = ["gtk3", "common-controls-v6"] }
-iced = { git = "https://github.com/dtzxporter/iced", branch = "vello_cpu-release6", default-features = false, features = [
+iced = { git = "https://github.com/dtzxporter/iced", branch = "vello_cpu-release8", default-features = false, features = [
     "image-without-codecs",
     "thread-pool",
     "crisp",
@@ -76,7 +76,11 @@ lewton = { version = "0.10", default-features = false }
 
 # Compression
 gdeflate-sys = "0.4.1"
-lz4_flex = { version = "0.13", default-features = false, features = ["safe-encode", "safe-decode"] }
+lz4_flex = { version = "0.14", default-features = false, features = [
+    "std",
+    "safe-encode",
+    "safe-decode",
+] }
 
 # Utilities
 memchr = "2.8"
@@ -95,7 +99,12 @@ half = { version = "2.7", default-features = false, features = ["std"] }
 
 # Gpu
 pollster = "1.0"
-wgpu = { version = "29.0", default-features = false, features = ["std", "wgsl", "metal", "vulkan"] }
+wgpu = { version = "30.0.1", default-features = false, features = [
+    "std",
+    "wgsl",
+    "metal",
+    "vulkan",
+] }
 
 [profile.dev]
 opt-level = 2

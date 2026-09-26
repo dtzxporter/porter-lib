@@ -154,6 +154,7 @@ impl VirtualList {
                 }
 
                 widgets::column(rows)
+                    .spacing(4.0)
                     .align_x(Alignment::Center)
                     .into()
             }

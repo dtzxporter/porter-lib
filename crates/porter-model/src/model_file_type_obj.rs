@@ -22,11 +22,13 @@ pub fn to_obj<P: AsRef<Path>>(path: P, model: &Model) -> Result<(), ModelError> 
 
     if !cfg!(feature = "debrand") {
         writeln!(obj, "# Please credit DTZxPorter for use of this asset!\n")?;
+    } else {
+        writeln!(obj)?;
     }
 
     writeln!(
         obj,
-        "\nmtllib {}.mtl\n",
+        "mtllib {}.mtl\n",
         path.file_stem()
             .unwrap_or_default()
             .to_string_lossy()

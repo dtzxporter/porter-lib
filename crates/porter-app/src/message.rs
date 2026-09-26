@@ -39,6 +39,7 @@ pub enum Message {
     ExportSelected,
     ExportAll,
     ExportCancel,
+    ExportFolderUpdate(PathBuf),
     CopyColumn(usize, usize),
     LoadFiles(Vec<PathBuf>),
     LoadFilesDropped,

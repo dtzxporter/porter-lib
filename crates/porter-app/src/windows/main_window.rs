@@ -296,24 +296,30 @@ impl MainWindow {
 
     /// Occurs when the user wants to pick a new export folder.
     fn on_pick_export_folder(&mut self, state: &mut AppState) -> Task<Message> {
-        let mut settings = state.settings.clone();
+        let settings = state.settings.clone();
+        let controller = state.controller.clone();
 
         let title = format!("{} | Select an export directory", state.name.to_titlecase());
 
         window::run(self.id, move |handle| {
-            let path = FileDialog::new()
+            let dialog = FileDialog::new()
                 .set_directory(settings.output_directory())
                 .set_parent(&handle)
-                .set_title(title)
-                .pick_folder();
+                .set_title(title);
 
-            if let Some(path) = path {
-                settings.set_output_directory(path);
+            let dialog = move || {
+                if let Some(path) = dialog.pick_folder() {
+                    controller.export_folder_update(path);
+                }
+            };
 
-                Message::from(SettingsMessage::Save(settings))
-            } else {
-                Message::Noop
-            }
+            #[cfg(target_os = "windows")]
+            std::thread::spawn(dialog);
+
+            #[cfg(not(target_os = "windows"))]
+            dialog();
+
+            Message::Noop
         })
     }
 

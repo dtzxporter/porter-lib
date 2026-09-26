@@ -78,6 +78,15 @@ impl Controller {
 
         debug_assert!(result.is_ok());
     }
+
+    /// Notifies the app of the export folder changing.
+    pub fn export_folder_update(&self, path: PathBuf) {
+        let result = self
+            .channel
+            .unbounded_send(Message::ExportFolderUpdate(path));
+
+        debug_assert!(result.is_ok());
+    }
 }
 
 impl Default for Controller {

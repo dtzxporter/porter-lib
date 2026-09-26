@@ -104,6 +104,7 @@ impl App {
             ExportSelected => self.on_export_selected(),
             ExportAll => self.on_export_all(),
             ExportCancel => self.on_export_cancel(),
+            ExportFolderUpdate(path) => self.on_export_folder_update(path),
             CopyColumn(index, column_index) => self.on_copy_column(index, column_index),
             LoadFiles(files) => self.on_load_files(files),
             LoadFilesDropped => self.on_load_files_dropped(),
@@ -522,6 +523,16 @@ impl App {
         self.state.asset_manager.export_cancel();
 
         Task::none()
+    }
+
+    /// Occurs when the export folder has been updated.
+    fn on_export_folder_update(&mut self, path: PathBuf) -> Task<Message> {
+        let settings = self
+            .state
+            .settings
+            .update(|settings| settings.set_output_directory(path));
+
+        Task::done(Message::from(SettingsMessage::Save(settings)))
     }
 
     /// Occurs when the user wants to export the provided assets.
